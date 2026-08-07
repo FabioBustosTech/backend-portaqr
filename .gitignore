@@ -59,3 +59,7 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 *copy*
 !scripts/copy-assets.js
 .vscode
+# RSA keys (RS256 JWT)
+keys/
+*.pem
+

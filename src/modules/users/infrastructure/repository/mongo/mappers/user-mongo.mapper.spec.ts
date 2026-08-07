@@ -12,6 +12,7 @@ describe('UserMongoMapper', () => {
     maternalLastName: 'García',
     role: 'admin',
     isEmailVerified: true,
+    tokenVersion: 2,
     phone: '+56911111111',
     lastLogin: new Date('2024-08-01T12:00:00.000Z'),
     verificationCode: 'vc-1',
@@ -36,6 +37,7 @@ describe('UserMongoMapper', () => {
         maternalLastName: 'García',
         role: 'admin',
         isEmailVerified: true,
+        tokenVersion: 2,
         phone: '+56911111111',
         lastLogin: docCompleto.lastLogin,
         verificationCode: 'vc-1',
@@ -76,6 +78,7 @@ describe('UserMongoMapper', () => {
         maternalLastName: 'C',
         role: 'user',
         isEmailVerified: false,
+        tokenVersion: 0,
       });
 
       expect(entity.phone).toBeUndefined();
@@ -86,6 +89,7 @@ describe('UserMongoMapper', () => {
       expect(entity.passwordResetExpires).toBeUndefined();
       expect(entity.createdAt).toBeUndefined();
       expect(entity.updatedAt).toBeUndefined();
+      expect(entity.tokenVersion).toBe(0);
     });
   });
 
@@ -101,6 +105,7 @@ describe('UserMongoMapper', () => {
         maternalLastName: 'García',
         role: 'admin',
         isEmailVerified: true,
+        tokenVersion: 2,
         phone: '+56911111111',
         lastLogin: docCompleto.lastLogin,
         verificationCode: 'vc-1',
@@ -122,6 +127,7 @@ describe('UserMongoMapper', () => {
         maternalLastName: 'García',
         role: 'admin',
         isEmailVerified: true,
+        tokenVersion: 2,
         phone: '+56911111111',
         lastLogin: docCompleto.lastLogin,
         verificationCode: 'vc-1',
@@ -149,6 +155,7 @@ describe('UserMongoMapper', () => {
         password: undefined,
         role: undefined,
         isEmailVerified: undefined,
+        tokenVersion: undefined,
         phone: undefined,
         lastLogin: undefined,
         verificationCode: undefined,

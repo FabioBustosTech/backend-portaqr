@@ -180,6 +180,17 @@ export class MongoUserRepository
     }
   }
 
+  async incrementTokenVersion(userId: string, tracking: TrackingContext): Promise<void> {
+    try {
+      await this.userModel
+        .findByIdAndUpdate(userId, { $inc: { tokenVersion: 1 } })
+        .exec();
+    } catch (error) {
+      this.traceService.error(tracking, TraceLayer.REPOSITORY, 'incrementTokenVersion:error', error as Error);
+      throw error;
+    }
+  }
+
   async delete(id: string, tracking: TrackingContext): Promise<boolean> {
     try {
       const resultado = await this.userModel.findByIdAndDelete(id).exec();

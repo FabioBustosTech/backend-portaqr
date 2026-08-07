@@ -65,4 +65,18 @@ export class AuthController {
     });
     return this.authService.getProfile(req.user.id, tracking);
   }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Cerrar sesión (invalida todos los tokens del usuario)' })
+  @ApiResponse({ status: 200, description: 'Sesión cerrada exitosamente' })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  async logout(@Request() req, @Tracking() tracking: TrackingContext) {
+    this.traceService.log(tracking, TraceLayer.CONTROLLER, 'POST /auth/logout', {
+      id: req.user?.id,
+    });
+    return this.authService.logout(req.user.id, tracking);
+  }
 }

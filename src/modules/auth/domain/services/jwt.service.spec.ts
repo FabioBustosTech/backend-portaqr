@@ -4,6 +4,11 @@ import { ConfigService } from '@nestjs/config';
 import { UnauthorizedException } from '@nestjs/common';
 import { JwtAuthService } from './jwt.service';
 import type { User } from '../../../users/domain/entities/user.entity';
+import { loadJwtKeys } from '../../infrastructure/jwt-keys';
+
+jest.mock('../../infrastructure/jwt-keys', () => ({
+  loadJwtKeys: jest.fn(),
+}));
 
 describe('JwtAuthService', () => {
   let service: JwtAuthService;
@@ -19,6 +24,7 @@ describe('JwtAuthService', () => {
     maternalLastName: 'B',
     role: 'user',
     isEmailVerified: true,
+    tokenVersion: 0,
   };
 
   const mockPayload = {
@@ -27,9 +33,15 @@ describe('JwtAuthService', () => {
     userName: 'testuser',
     role: 'user',
     isEmailVerified: true,
+    tokenVersion: 0,
   };
 
   beforeEach(async () => {
+    (loadJwtKeys as jest.Mock).mockReturnValue({
+      privateKey: 'PRIVATE_PEM',
+      publicKey: 'PUBLIC_PEM',
+    });
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         JwtAuthService,
@@ -46,9 +58,9 @@ describe('JwtAuthService', () => {
           useValue: {
             get: jest.fn((key: string) => {
               const values = {
-                JWT_SECRET: 'secret',
-                JWT_EXPIRATION: '1h',
-                JWT_REFRESH_SECRET: 'refresh-secret',
+                JWT_PRIVATE_KEY: 'keys/jwt-private.pem',
+                JWT_PUBLIC_KEY: 'keys/jwt-public.pem',
+                JWT_EXPIRATION: '24h',
                 JWT_REFRESH_EXPIRATION: '7d',
               };
               return values[key];
@@ -68,7 +80,7 @@ describe('JwtAuthService', () => {
   });
 
   describe('generateTokens', () => {
-    it('debe generar access token y refresh token con los secretos y expiraciones configurados', async () => {
+    it('debe firmar con privateKey RS256, incluir tokenVersion y las expiraciones configuradas', async () => {
       jwtServiceCore.signAsync.mockResolvedValueOnce('access-token');
       jwtServiceCore.signAsync.mockResolvedValueOnce('refresh-token');
 
@@ -76,30 +88,47 @@ describe('JwtAuthService', () => {
 
       expect(jwtServiceCore.signAsync).toHaveBeenCalledTimes(2);
       expect(jwtServiceCore.signAsync).toHaveBeenNthCalledWith(1, mockPayload, {
-        secret: 'secret',
-        expiresIn: '1h',
+        privateKey: 'PRIVATE_PEM',
+        algorithm: 'RS256',
+        expiresIn: '24h',
       });
       expect(jwtServiceCore.signAsync).toHaveBeenNthCalledWith(2, mockPayload, {
-        secret: 'refresh-secret',
+        privateKey: 'PRIVATE_PEM',
+        algorithm: 'RS256',
         expiresIn: '7d',
       });
       expect(result).toEqual({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
       });
-      expect(configService.get).toHaveBeenCalledWith('JWT_SECRET');
-      expect(configService.get).toHaveBeenCalledWith('JWT_REFRESH_SECRET');
+      expect(loadJwtKeys).toHaveBeenCalledWith(configService);
+      expect(configService.get).toHaveBeenCalledWith('JWT_EXPIRATION');
+      expect(configService.get).toHaveBeenCalledWith('JWT_REFRESH_EXPIRATION');
+    });
+
+    it('debe usar tokenVersion 0 cuando el usuario no lo tiene definido', async () => {
+      jwtServiceCore.signAsync.mockResolvedValue('token');
+      const userSinVersion: User = { ...mockUser, tokenVersion: undefined };
+
+      await service.generateTokens(userSinVersion);
+
+      expect(jwtServiceCore.signAsync).toHaveBeenNthCalledWith(
+        1,
+        { ...mockPayload, tokenVersion: 0 },
+        expect.any(Object),
+      );
     });
   });
 
   describe('verifyToken', () => {
-    it('debe retornar el payload cuando el token es válido', () => {
+    it('debe verificar con la publicKey y el algoritmo RS256 cuando el token es válido', () => {
       jwtServiceCore.verify.mockReturnValue(mockPayload as never);
 
       const result = service.verifyToken('valid-token');
 
       expect(jwtServiceCore.verify).toHaveBeenCalledWith('valid-token', {
-        secret: 'secret',
+        publicKey: 'PUBLIC_PEM',
+        algorithms: ['RS256'],
       });
       expect(result).toEqual(mockPayload);
     });
@@ -114,14 +143,14 @@ describe('JwtAuthService', () => {
   });
 
   describe('verifyRefreshToken', () => {
-    it('debe verificar con el refresh secret y algoritmos HS256', () => {
+    it('debe verificar con la publicKey y el algoritmo RS256', () => {
       jwtServiceCore.verify.mockReturnValue(mockPayload as never);
 
       const result = service.verifyRefreshToken('valid-refresh');
 
       expect(jwtServiceCore.verify).toHaveBeenCalledWith('valid-refresh', {
-        secret: 'refresh-secret',
-        algorithms: ['HS256'],
+        publicKey: 'PUBLIC_PEM',
+        algorithms: ['RS256'],
       });
       expect(result).toEqual(mockPayload);
     });

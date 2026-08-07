@@ -6,6 +6,8 @@ export interface JwtPayload {
   userName: string;
   role: string;
   isEmailVerified: boolean;
+  /** Versión del token del usuario; se incrementa al hacer logout para invalidar tokens */
+  tokenVersion?: number;
 }
 
 export interface AuthTokenResponse {

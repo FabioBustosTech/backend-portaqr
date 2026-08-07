@@ -67,6 +67,10 @@ export class UserRepositoryAdapter
     return this.mongoRepository.updateLastLogin(userId, tracking);
   }
 
+  async incrementTokenVersion(userId: string, tracking: TrackingContext): Promise<void> {
+    return this.mongoRepository.incrementTokenVersion(userId, tracking);
+  }
+
   async delete(id: string, tracking: TrackingContext): Promise<boolean> {
     return this.mongoRepository.delete(id, tracking);
   }

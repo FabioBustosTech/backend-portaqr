@@ -65,6 +65,15 @@ export class UserSchema {
   isEmailVerified: boolean;
 
   @ApiProperty({
+    description: 'Versión del token JWT (invalida tokens al hacer logout)',
+    example: 0,
+    default: 0,
+    required: false,
+  })
+  @Prop({ type: Number, default: 0 })
+  tokenVersion: number;
+
+  @ApiProperty({
     description: 'TelÃ©fono del usuario',
     example: '+1234567890',
     required: false,

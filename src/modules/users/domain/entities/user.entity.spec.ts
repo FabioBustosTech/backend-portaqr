@@ -13,6 +13,7 @@ describe('UserEntity', () => {
       expect(entity.maternalLastName).toBe('');
       expect(entity.role).toBe('user');
       expect(entity.isEmailVerified).toBe(false);
+      expect(entity.tokenVersion).toBe(0);
       expect(entity.password).toBeUndefined();
       expect(entity.phone).toBeUndefined();
     });
@@ -28,6 +29,7 @@ describe('UserEntity', () => {
         maternalLastName: 'Gómez',
         role: 'admin',
         isEmailVerified: true,
+        tokenVersion: 3,
         phone: '123456789',
       });
 
@@ -35,6 +37,7 @@ describe('UserEntity', () => {
       expect(entity.email).toBe('a@test.com');
       expect(entity.role).toBe('admin');
       expect(entity.isEmailVerified).toBe(true);
+      expect(entity.tokenVersion).toBe(3);
       expect(entity.password).toBe('hash');
       expect(entity.phone).toBe('123456789');
     });

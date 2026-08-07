@@ -9,6 +9,8 @@ export interface User {
   maternalLastName: string;
   role: string;
   isEmailVerified: boolean;
+  /** Versión del token JWT; se incrementa al cerrar sesión para invalidar tokens emitidos */
+  tokenVersion?: number;
   phone?: string;
   lastLogin?: Date;
   verificationCode?: string;
@@ -29,6 +31,7 @@ export class UserEntity implements User {
   maternalLastName: string;
   role: string;
   isEmailVerified: boolean;
+  tokenVersion?: number;
   phone?: string;
   lastLogin?: Date;
   verificationCode?: string;
@@ -48,6 +51,7 @@ export class UserEntity implements User {
     this.maternalLastName = data.maternalLastName || '';
     this.role = data.role || 'user';
     this.isEmailVerified = data.isEmailVerified ?? false;
+    this.tokenVersion = data.tokenVersion ?? 0;
     this.phone = data.phone;
     this.lastLogin = data.lastLogin;
     this.verificationCode = data.verificationCode;
@@ -71,6 +75,7 @@ export class UserEntity implements User {
     if (data.role !== undefined) this.role = data.role;
     if (data.isEmailVerified !== undefined)
       this.isEmailVerified = data.isEmailVerified;
+    if (data.tokenVersion !== undefined) this.tokenVersion = data.tokenVersion;
     if (data.phone !== undefined) this.phone = data.phone;
     if (data.lastLogin !== undefined) this.lastLogin = data.lastLogin;
     if (data.verificationCode !== undefined)

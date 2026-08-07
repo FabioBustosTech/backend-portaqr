@@ -22,5 +22,7 @@ export interface IAuthService {
     tracking: TrackingContext,
   ): Promise<AuthTokenResponse>;
   getProfile(userId: string, tracking: TrackingContext): Promise<Omit<User, 'password'>>;
+  /** Cierra sesión incrementando tokenVersion (invalida todos los tokens del usuario) */
+  logout(userId: string, tracking: TrackingContext): Promise<{ success: boolean }>;
   validateUser(payload: JwtPayload): Promise<User | null>;
 }
