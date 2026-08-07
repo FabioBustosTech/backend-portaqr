@@ -26,10 +26,10 @@ export class WebpayController {
     private readonly webpayService: WebpayService,
     private readonly configService: ConfigService,
   ) {
-    this.basePathFront =this.configService.get<string>('FRONTEND_BASE_PATH');
-    this.successUrl =this.configService.get<string>('FRONTEND_BASE_PATH');
-    this.failUrl =this.configService.get<string>('FRONTEND_BASE_PATH');
-    this.errorUrl =this.configService.get<string>('FRONTEND_BASE_PATH');
+    this.basePathFront = this.configService.get<string>('FRONTEND_BASE_PATH') || 'http://localhost:3000';
+    this.successUrl = this.configService.get<string>('WEBPAY_SUCCESS_URL') || `${this.basePathFront}/dashboard/qr/pay/webpay?status=success`;
+    this.failUrl = this.configService.get<string>('WEBPAY_FAIL_URL') || `${this.basePathFront}/dashboard/qr/pay/webpay?status=failed`;
+    this.errorUrl = this.configService.get<string>('WEBPAY_ERROR_URL') || `${this.basePathFront}/dashboard/qr/pay/webpay?status=error`;
   }
 
   @Post('create')
@@ -75,15 +75,15 @@ export class WebpayController {
       this.logger.log(`TransacciÃ³n ${result.buyOrder} ${result.status}`, WebpayController.name, 'handleReturn', trackingId);
 
       if (result.status === 'AUTHORIZED') {
-        this.logger.log(`Redirigiendo a ${this.basePathFront}/${this.successUrl}`, WebpayController.name, 'handleReturn', trackingId);
-        res.redirect(`${this.basePathFront}/${this.failUrl}`);
+        this.logger.log(`Redirigiendo a ${this.successUrl}`, WebpayController.name, 'handleReturn', trackingId);
+        res.redirect(this.successUrl);
       } else {
-        this.logger.log(`Redirigiendo a ${this.basePathFront}/${this.errorUrl}`, WebpayController.name, 'handleReturn', trackingId);
-        res.redirect(`${this.basePathFront}/${this.successUrl}`);
+        this.logger.log(`Redirigiendo a ${this.failUrl}`, WebpayController.name, 'handleReturn', trackingId);
+        res.redirect(this.failUrl);
       }
     } catch (error) {
       this.logger.error(`Error al procesar respuesta de Webpay para token_ws ${token}`,  error.stack, WebpayController.name, 'handleReturn', error);
-      res.redirect(`${this.basePathFront}/${this.errorUrl}`);
+      res.redirect(this.errorUrl);
     }
   }
 
