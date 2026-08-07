@@ -1,13 +1,13 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+﻿import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 import { ApiProperty } from '@nestjs/swagger';
 
 export type UserDocument = HydratedDocument<UserSchema>;
 
-@Schema({ timestamps: true })
+@Schema({ timestamps: true, collection: 'users' })
 export class UserSchema {
   @ApiProperty({
-    description: 'Correo electrónico del usuario',
+    description: 'Correo electrÃ³nico del usuario',
     example: 'usuario@ejemplo.com',
   })
   @Prop({ required: true, unique: true, trim: true })
@@ -21,8 +21,8 @@ export class UserSchema {
   userName: string;
 
   @ApiProperty({
-    description: 'Contraseña del usuario',
-    example: 'Contraseña123!',
+    description: 'ContraseÃ±a del usuario',
+    example: 'ContraseÃ±a123!',
   })
   @Prop({ required: true })
   password: string;
@@ -36,14 +36,14 @@ export class UserSchema {
 
   @ApiProperty({
     description: 'Apellido paterno del usuario',
-    example: 'Pérez',
+    example: 'PÃ©rez',
   })
   @Prop({ required: true, trim: true })
   paternalLastName: string;
 
   @ApiProperty({
     description: 'Apellido materno del usuario',
-    example: 'García',
+    example: 'GarcÃ­a',
   })
   @Prop({ required: true, trim: true })
   maternalLastName: string;
@@ -57,7 +57,7 @@ export class UserSchema {
   role: string;
 
   @ApiProperty({
-    description: 'Estado de verificación del email',
+    description: 'Estado de verificaciÃ³n del email',
     example: false,
     default: false,
   })
@@ -65,7 +65,7 @@ export class UserSchema {
   isEmailVerified: boolean;
 
   @ApiProperty({
-    description: 'Teléfono del usuario',
+    description: 'TelÃ©fono del usuario',
     example: '+1234567890',
     required: false,
   })
@@ -73,7 +73,7 @@ export class UserSchema {
   phone?: string;
 
   @ApiProperty({
-    description: 'Fecha de último inicio de sesión',
+    description: 'Fecha de Ãºltimo inicio de sesiÃ³n',
     required: false,
   })
   @Prop()

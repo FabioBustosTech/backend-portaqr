@@ -14,7 +14,7 @@ interface DetailDuration {
   duration: number;
 }
 
-@Schema({ timestamps: true })
+@Schema({ timestamps: true, collection: 'plans' })
 export class PlanSchema {
   @Prop({ required: true, trim: true })
   name: string;

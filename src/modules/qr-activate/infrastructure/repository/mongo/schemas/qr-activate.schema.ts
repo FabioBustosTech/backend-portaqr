@@ -1,4 +1,4 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+﻿import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import {
   DocumentType,
@@ -9,7 +9,7 @@ import {
 
 export type QrActivateDocument = HydratedDocument<QrActivateSchema>;
 
-@Schema({ timestamps: true })
+@Schema({ timestamps: true, collection: 'qractivates' })
 export class QrActivateSchema {
   @Prop({ required: true, enum: MethodActivation })
   methodActivation: MethodActivation;
@@ -102,7 +102,7 @@ export class QrActivateSchema {
 
 export const QrActivateSchemaDefinition = SchemaFactory.createForClass(QrActivateSchema);
 
-// Índices
+// Ãndices
 QrActivateSchemaDefinition.index({ userId: 1 });
 QrActivateSchemaDefinition.index({ methodActivation: 1 });
 QrActivateSchemaDefinition.index({ state: 1 });

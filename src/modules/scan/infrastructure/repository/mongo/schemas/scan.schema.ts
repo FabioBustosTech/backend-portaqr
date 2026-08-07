@@ -1,9 +1,9 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+﻿import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 
 export type ScanDocument = HydratedDocument<ScanSchema>;
 
-@Schema({ timestamps: true })
+@Schema({ timestamps: true, collection: 'scans' })
 export class ScanSchema {
   @Prop({ required: true })
   idQr: string;
@@ -68,25 +68,25 @@ export class ScanSchema {
 
 export const ScanSchemaDefinition = SchemaFactory.createForClass(ScanSchema);
 
-// Agregando índices
+// Agregando Ã­ndices
 ScanSchemaDefinition.index({ idQr: 1 });
 ScanSchemaDefinition.index({ scanDate: 1 });
 ScanSchemaDefinition.index({ userId: 1 });
 ScanSchemaDefinition.index({ userIdScan: 1 });
 ScanSchemaDefinition.index({ successful: 1 });
 
-// Índice compuesto para búsquedas frecuentes
+// Ãndice compuesto para bÃºsquedas frecuentes
 ScanSchemaDefinition.index({ userId: 1, scanDate: -1 });
 ScanSchemaDefinition.index({ idQr: 1, scanDate: -1 });
 
-// Índice geoespacial para búsquedas por ubicación
+// Ãndice geoespacial para bÃºsquedas por ubicaciÃ³n
 ScanSchemaDefinition.index({ 'location.latitude': 1, 'location.longitude': 1 });
 
-// Índice para búsquedas por dispositivo
+// Ãndice para bÃºsquedas por dispositivo
 ScanSchemaDefinition.index({ 'device.platform': 1 });
 ScanSchemaDefinition.index({ 'device.browser': 1 });
 
-// Índices para fechas
+// Ãndices para fechas
 ScanSchemaDefinition.index({ createdAt: 1 });
 ScanSchemaDefinition.index({ updatedAt: 1 });
 

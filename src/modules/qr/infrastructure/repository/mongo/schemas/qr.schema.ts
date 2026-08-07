@@ -1,4 +1,4 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+﻿import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, SchemaTypes } from 'mongoose';
 import { ApiProperty } from '@nestjs/swagger';
 import { QrType } from '../../../../application/dto/create-qr.dto';
@@ -6,7 +6,7 @@ import { IsOptional } from 'class-validator';
 
 export type QrDocument = HydratedDocument<QrSchema>;
 
-@Schema({ timestamps: true })
+@Schema({ timestamps: true, collection: 'qrs' })
 export class QrSchema {
   @Prop({ required: true, unique: true, trim: true })
   idQr: string;
@@ -147,7 +147,7 @@ export class QrSchema {
     _id: false,
     validate: {
       validator: function(value: any) {
-        // Validar que los campos solo existan según el tipo
+        // Validar que los campos solo existan segÃºn el tipo
         switch(value.typeQr) {
           case 'dynamic':
           case 'static':
@@ -272,7 +272,7 @@ export class QrSchema {
 
 export const QrSchemaDefinition = SchemaFactory.createForClass(QrSchema);
 
-// Agregando índices
+// Agregando Ã­ndices
 QrSchemaDefinition.index({ userId: 1 });
 QrSchemaDefinition.index({ typeQr: 1 });
 QrSchemaDefinition.index({ userId: 1, typeQr: 1 });
