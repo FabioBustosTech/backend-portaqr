@@ -27,15 +27,15 @@ export class StorageService {
   private readonly publicBaseUrl: string;
 
   constructor(private readonly configService: ConfigService) {
-    const accountId = this.configService.get<string>('R2_ACCOUNT_ID') ?? '';
-    const accessKeyId = this.configService.get<string>('R2_ACCESS_KEY_ID') ?? '';
-    const secretAccessKey = this.configService.get<string>('R2_SECRET_ACCESS_KEY') ?? '';
-    this.bucket = this.configService.get<string>('R2_BUCKET_NAME') ?? 'portaqr-assets';
-    this.publicBaseUrl = (this.configService.get<string>('R2_PUBLIC_BASE_URL') ?? '').replace(/\/+$/, '');
+    const endpoint = (this.configService.get<string>('CLOUDFLARE_R2_ENDPOINT') ?? '').replace(/\/+$/, '');
+    const accessKeyId = this.configService.get<string>('CLOUDFLARE_R2_ACCESS_KEY_ID') ?? '';
+    const secretAccessKey = this.configService.get<string>('CLOUDFLARE_R2_SECRET_ACCESS_KEY') ?? '';
+    this.bucket = this.configService.get<string>('CLOUDFLARE_R2_BUCKET_NAME') ?? 'portaqr-assets';
+    this.publicBaseUrl = (this.configService.get<string>('CLOUDFLARE_R2_PUBLIC_URL') ?? '').replace(/\/+$/, '');
 
     this.r2 = new S3Client({
       region: 'auto',
-      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      endpoint,
       credentials: {
         accessKeyId,
         secretAccessKey,

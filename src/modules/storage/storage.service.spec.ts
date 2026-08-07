@@ -19,11 +19,11 @@ const mockedSend = () => {
 
 function createService(overrides: Record<string, string> = {}) {
   const config = new ConfigService({
-    R2_ACCOUNT_ID: 'acct-123',
-    R2_ACCESS_KEY_ID: 'key',
-    R2_SECRET_ACCESS_KEY: 'secret',
-    R2_BUCKET_NAME: 'portaqr-assets',
-    R2_PUBLIC_BASE_URL: 'https://images.portaqr.cl',
+    CLOUDFLARE_R2_ENDPOINT: 'https://acct-123.r2.cloudflarestorage.com',
+    CLOUDFLARE_R2_ACCESS_KEY_ID: 'key',
+    CLOUDFLARE_R2_SECRET_ACCESS_KEY: 'secret',
+    CLOUDFLARE_R2_BUCKET_NAME: 'portaqr-assets',
+    CLOUDFLARE_R2_PUBLIC_URL: 'https://images.portaqr.cl',
     ...overrides,
   });
   return new StorageService(config);
@@ -64,7 +64,7 @@ describe('StorageService', () => {
     });
 
     it('usa la URL pública sin slash final aunque venga con él', async () => {
-      const service = createService({ R2_PUBLIC_BASE_URL: 'https://pub-abc.r2.dev/' });
+      const service = createService({ CLOUDFLARE_R2_PUBLIC_URL: 'https://pub-abc.r2.dev/' });
       const result = await service.uploadImage({
         idQr: 'uuid-1',
         buffer: Buffer.from('x'),
