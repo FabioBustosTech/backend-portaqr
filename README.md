@@ -260,6 +260,16 @@ npm run test:e2e      # Tests end-to-end
 
 Los tests unitarios (`.spec.ts`) viven junto al código que prueban.
 
+## Repositorios
+
+Componentes activos de la plataforma PortaQR:
+
+| Componente | Repositorio | Descripción |
+| ---------- | ----------- | ----------- |
+| `qr-app` | [FabioBustosTech/qr-app](https://github.com/FabioBustosTech/qr-app) | Frontend Next.js de la plataforma |
+| `backend-portaqr` | [FabioBustosTech/backend-portaqr](https://github.com/FabioBustosTech/backend-portaqr) | Monolito modular NestJS (backend) |
+| `e2e-tests-portaqr` | [FabioBustosTech/e2e-tests-portaqr](https://github.com/FabioBustosTech/e2e-tests-portaqr) | Suite de tests E2E de la plataforma |
+
 ## Documentación relacionada
 
 - [SPEC-001: Migración de 3 microservicios a Monolito Modular](../../docs/spec/SPEC-001-migracion-monolito-modular.md) — contexto, decisiones y contrato de la API.
