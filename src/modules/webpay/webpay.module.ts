@@ -66,6 +66,10 @@ import {
   exports: [
     CommitTransactionUseCase,
     CreateTransactionUseCase,
+    TRANSACTION_CREATE_PORT,
+    TRANSACTION_GET_PORT,
+    TRANSACTION_UPDATE_PORT,
+    WEBPAY_GATEWAY_PORT,
   ],
 })
 export class WebpayModule {}
