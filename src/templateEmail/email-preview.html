@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>¡Bienvenido(a) a Porta QR! Verifica tu correo</title>
+  <style>
+    /* Reset para clientes de correo */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #4B5563; /* Gris oscuro para texto */
+      background-color: #E5E7EB; /* Fondo gris claro */
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 600px;
+      margin: 20px auto; /* Margen superior de 20px */
+    }
+    a {
+      color: #1E3A8A; /* Azul oscuro para enlaces */
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    /* Contenedor principal */
+    .container {
+      background-color: #F9FAFB; /* Fondo gris claro, casi blanco */
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    /* Encabezado */
+    .header {
+      text-align: center;
+      padding: 20px 0;
+    }
+    .header h1 {
+      font-size: 24px;
+      color: #1E3A8A; /* Azul oscuro para el título */
+      margin: 0;
+    }
+    /* Contenido */
+    .content {
+      padding: 20px;
+      text-align: center;
+    }
+    .code {
+      font-size: 28px;
+      font-weight: bold;
+      color: #1E3A8A; /* Azul oscuro para el código */
+      background-color: #E5E7EB; /* Fondo gris claro */
+      padding: 10px 20px;
+      border-radius: 5px;
+      display: inline-block;
+      margin: 10px 0;
+    }
+    .content p {
+      font-size: 16px;
+      color: #4B5563; /* Gris oscuro para texto */
+      margin: 10px 0;
+    }
+    /* Botón CTA */
+    .button {
+      display: inline-block;
+      padding: 12px 24px;
+      background-color: #1E3A8A; /* Azul oscuro para el botón */
+      color: #F9FAFB !important; /* Blanco grisáceo para texto del botón */
+      text-decoration: none;
+      border-radius: 5px;
+      font-size: 16px;
+      font-weight: bold;
+      margin: 20px 0;
+    }
+    .button:hover {
+      background-color: #1E40AF; /* Azul más claro para hover */
+    }
+    /* Pie de página */
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      color: #9CA3AF; /* Gris medio para pie de página */
+      padding: 20px;
+      border-top: 1px solid #D1D5DB; /* Gris claro para línea */
+    }
+    .footer a {
+      color: #9CA3AF; /* Gris medio para enlaces */
+    }
+    /* Responsividad */
+    @media only screen and (max-width: 600px) {
+      .container {
+        padding: 15px;
+      }
+      .header h1 {
+        font-size: 20px;
+      }
+      .code {
+        font-size: 24px;
+        padding: 8px 16px;
+      }
+      .content p {
+        font-size: 14px;
+      }
+      .button {
+        padding: 10px 20px;
+        font-size: 14px;
+      }
+    }
+    /* Soporte para modo oscuro */
+    @media (prefers-color-scheme: dark) {
+      body {
+        background-color: #111827; /* Gris muy oscuro */
+      }
+      .container {
+        background-color: #1F2A44; /* Gris oscuro */
+      }
+      .header h1,
+      .content p,
+      .code {
+        color: #F9FAFB; /* Blanco grisáceo */
+      }
+      .code {
+        background-color: #374151; /* Gris medio oscuro */
+      }
+      .footer {
+        color: #9CA3AF; /* Gris medio */
+        border-top: 1px solid #374151; /* Gris medio oscuro */
+      }
+      .footer a {
+        color: #9CA3AF; /* Gris medio */
+      }
+    }
+  </style>
+</head>
+<body>
+  <table role="presentation" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center">
+        <div class="container">
+          <div class="header">
+            <h1>¡Bienvenido(a) a Porta QR!</h1>
+          </div>
+          <div class="content">
+            <p>Estamos emocionados de tenerte con nosotros. Verifica tu correo para empezar a crear y gestionar tus códigos QR.</p>
+            <p>Tu código de verificación es:</p>
+            <div class="code">{{verificationCode}}</div>
+            <p>Este código expirará en 1 hora.</p>
+            <p>
+              <a href="https://portaqr.cl/verify?code={{verificationCode}}" class="button">Verificar ahora</a>
+            </p>
+            <p>Si no has solicitado este código, puedes ignorar este correo.</p>
+          </div>
+          <div class="footer">
+            <p>¿Necesitas ayuda? Contacta a <a href="mailto:soporte@portaqr.cl">soporte@portaqr.cl</a></p>
+            <p>Porta QR © 2025</p>
+          </div>
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
