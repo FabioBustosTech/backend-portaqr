@@ -51,6 +51,7 @@ export class QrSchema {
         required: false,
         default: undefined
       },
+      listImageUrl: { type: String, required: false, default: null }, // SPEC-002: portada QR multilink
       vcardData: {
         type: {
           fn: { type: String }, // Nombre completo
@@ -170,7 +171,9 @@ export class QrSchema {
                    !value.phoneUrl && !value.wifiData && !value.urlList && !value.vcardData && !value.petData;
           case 'list':
             return value.urlList && !value.url && !value.whatsappUrl && !value.emailUrl && 
-                   !value.phoneUrl && !value.wifiData && !value.text && !value.vcardData && !value.petData;
+                   !value.phoneUrl && !value.wifiData && !value.text && !value.vcardData && !value.petData
+                   && !value.mapUrl; // SPEC-002: fix bug preexistente (mapUrl no se excluía)
+            // listImageUrl se permite opcional — no figura en la exclusividad (RF-4)
           case 'vcard':
             return value.vcardData && !value.url && !value.whatsappUrl && !value.emailUrl && 
                    !value.phoneUrl && !value.wifiData && !value.text && !value.urlList && !value.petData;
@@ -205,6 +208,7 @@ export class QrSchema {
       url: string;
       typeUrl: string;
     }>;
+    listImageUrl?: string | null; // SPEC-002: portada QR multilink
     vcardData?: {
       lastName?: string;
       firstName?: string;

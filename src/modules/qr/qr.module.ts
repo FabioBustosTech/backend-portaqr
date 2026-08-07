@@ -1,6 +1,7 @@
 ﻿import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CommonModule } from 'src/common/common.module';
+import { StorageModule } from 'src/modules/storage/storage.module';
 import { QrController } from './presentation/controllers/qr.controller';
 
 import {
@@ -33,6 +34,7 @@ import {
 @Module({
   imports: [
     CommonModule,
+    StorageModule, // SPEC-002: R2 + procesamiento de imágenes
     MongooseModule.forFeature([
       { name: QrSchema.name, schema: QrSchemaDefinition },
       // Alias 'QR' para que los refs 'QR' de qr-activate resuelvan el populate

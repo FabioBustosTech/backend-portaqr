@@ -84,6 +84,7 @@ export interface QrData {
   vcardData?: QrVCardData;
   petData?: QrPetData;
   mapUrl?: string;
+  listImageUrl?: string | null; // SPEC-002: URL pública de portada (solo typeQr === 'list')
   typeQr: string;
 }
 
