@@ -58,6 +58,15 @@ const LIST_IMAGE_ALLOWED_MIME = [
   'image/heif',
 ];
 
+// RF-6: límite de entrada desde R2_MAX_UPLOAD_SIZE (default 5 MB).
+// Se evalúa al definir la clase (decorador), por lo que lee process.env directo:
+// en docker-compose (env_file) y Railway la variable está en el proceso desde el arranque.
+function getListImageMaxUploadSize(): number {
+  const raw = process.env.R2_MAX_UPLOAD_SIZE;
+  const parsed = raw ? Number.parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 5 * 1024 * 1024;
+}
+
 class PublicRedirectUrlResponse {
   data: string;
   id: string;
@@ -141,7 +150,7 @@ export class QrController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
-      limits: { fileSize: 5 * 1024 * 1024 }, // RF-6: 5 MB
+      limits: { fileSize: getListImageMaxUploadSize() }, // RF-6: R2_MAX_UPLOAD_SIZE (default 5 MB)
       fileFilter: (_req, file, cb) => {
         if (!LIST_IMAGE_ALLOWED_MIME.includes(file.mimetype)) {
           return cb(
