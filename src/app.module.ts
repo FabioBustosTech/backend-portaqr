@@ -3,8 +3,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { APP_GUARD } from '@nestjs/core';
 import { HealthModule } from './health/health.module';
-import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
 import { QrModule } from './qr/qr.module';
 import { ScanModule } from './scan/scan.module';
 import { PlanModule } from './plan/plan.module';
@@ -14,7 +14,7 @@ import { QrFreeGenerationModule } from './qr-free-generation/qr-free-generation.
 import { StatisticsModule } from './statistics/statistics.module';
 import { MailModule } from './mail/mail.module';
 import { WebpayModule } from './webpay/webpay.module';
-import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from './modules/auth/infrastructure/guards/jwt-auth.guard';
 import { TrackingIdMiddleware } from './middleware/tracking-id.middleware';
 import { RequestLoggerEntryMiddleware } from './middleware/request-logger-entry.middleware';
 

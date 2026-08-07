@@ -3,7 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { MailService } from './mail.service';
 import { ContactFormDto } from './dto/contact-form.dto';
 import { CustomLogger } from 'src/shared/utils/logger.util';
-import { Public } from '../auth/decorators/public.decorator';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @ApiTags('Mail')
 @Controller('mail')

@@ -18,11 +18,11 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { PlanService } from './plan.service';
 import { CreatePlanDto } from './dto/create-plan.dto';
 import { Plan } from './entities/plan.entity';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../modules/auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from '../modules/auth/infrastructure/guards/roles.guard';
+import { Roles } from 'src/common/decorators/roles.decorator';
 import { CustomLogger } from 'src/shared/utils/logger.util';
-import { Public } from 'src/auth/decorators/public.decorator';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @ApiTags('Plan')
 @Controller('plan')

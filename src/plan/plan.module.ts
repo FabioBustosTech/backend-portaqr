@@ -1,9 +1,9 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { PlanService } from './plan.service';
 import { PlanController } from './plan.controller';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Plan, PlanSchema } from './entities/plan.entity';
-import { AuthModule } from 'src/auth/auth.module';
+import { AuthModule } from 'src/modules/auth/auth.module';
 
 @Module({
   imports: [

@@ -4,11 +4,11 @@ import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { RefundTransactionDto } from './dto/refund-transaction.dto';
 import { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
-import { Public } from 'src/auth/decorators/public.decorator';
+import { Public } from 'src/common/decorators/public.decorator';
 import { CustomLogger } from 'src/shared/utils/logger.util';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { JwtAuthGuard } from 'src/modules/auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/modules/auth/infrastructure/guards/roles.guard';
 
 
 @ApiTags('webpay')

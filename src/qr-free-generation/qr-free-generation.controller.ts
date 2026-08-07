@@ -16,10 +16,10 @@ import { QrFreeGenerationService } from './qr-free-generation.service';
 import { CreateQrFreeGenerationDto } from './dto/create-qr-free-generation.dto';
 import { QrFreeGeneration } from './entities/qr-free-generation.entity';
 import { CustomLogger } from 'src/shared/utils/logger.util';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { RolesGuard } from 'src/auth/guards/roles.guard';
-import { Roles } from 'src/auth/decorators/roles.decorator';
-import { Public } from 'src/auth/decorators/public.decorator';
+import { JwtAuthGuard } from 'src/modules/auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/modules/auth/infrastructure/guards/roles.guard';
+import { Roles } from 'src/common/decorators/roles.decorator';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @ApiTags('QR Free Generation')
 @Controller('qr-free-generation')

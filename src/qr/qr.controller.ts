@@ -20,12 +20,12 @@ import { QrService } from './qr.service';
 import { CreateQrDto } from './dto/create-qr.dto';
 import { Qr } from './entities/qr.entity';
 import { QrSeoDto } from './dto/qr-seo.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../modules/auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from '../modules/auth/infrastructure/guards/roles.guard';
+import { Roles } from 'src/common/decorators/roles.decorator';
 import { CustomLogger } from 'src/shared/utils/logger.util';
-import { Public } from '../auth/decorators/public.decorator';
-import { GetUser } from 'src/auth/decorators/user.decorator';
+import { Public } from 'src/common/decorators/public.decorator';
+import { GetUser } from 'src/common/decorators/user.decorator';
 import { User } from 'src/users/interfaces/usuario.type';
 
 class PublicRedirectUrlResponse {

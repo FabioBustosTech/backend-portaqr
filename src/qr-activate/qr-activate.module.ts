@@ -1,8 +1,8 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { QrActivateService } from './qr-activate.service';
 import { QrActivateController } from './qr-activate.controller';
-import { AuthModule } from '../auth/auth.module';
+import { AuthModule } from '../modules/auth/auth.module';
 import { QrActivate, QrActivateSchema } from './entities/qr-activate.entity';
 import { WebpayModule } from 'src/webpay/webpay.module';
 import { QrModule } from 'src/qr/qr.module';

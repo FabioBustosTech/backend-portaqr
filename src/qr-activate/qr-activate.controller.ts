@@ -18,13 +18,13 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { QrActivateService } from './qr-activate.service';
 import { CreateQrActivateDto } from './dto/create-qr-activate.dto';
 import { UpdateQrActivateDto } from './dto/update-qr-activate.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../modules/auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from '../modules/auth/infrastructure/guards/roles.guard';
+import { Roles } from 'src/common/decorators/roles.decorator';
 import { CustomLogger } from 'src/shared/utils/logger.util';
 import { QrActivate } from './entities/qr-activate.entity';
 import { QrActivateResponse, PaginatedQrActivateResponse } from './dto/qr-activate-response.dto';
-import { Public } from '../auth/decorators/public.decorator';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @ApiTags('QR Activate')
 @Controller('qr-activate')

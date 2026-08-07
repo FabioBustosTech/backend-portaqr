@@ -3,10 +3,10 @@ import { Controller, Post, Get, Patch, Body, Param, UseGuards, Query, Req, HttpC
 import { PetTagService } from './pet-tag.service';
 import { ActivatePetTagDto } from './dto/activate-pet-tag.dto';
 import { QueryReservedTagsDto } from './dto/query-reserved-tags.dto';
-import { Public } from 'src/auth/decorators/public.decorator';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { RolesGuard } from 'src/auth/guards/roles.guard';
-import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Public } from 'src/common/decorators/public.decorator';
+import { JwtAuthGuard } from 'src/modules/auth/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/modules/auth/infrastructure/guards/roles.guard';
+import { Roles } from 'src/common/decorators/roles.decorator';
 import { CustomLogger } from 'src/shared/utils/logger.util';
 import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { GeneratePetTagsDto } from './dto/generate-pet-tags.dto';
