@@ -13,7 +13,7 @@ import { QrActivateModule } from './qr-activate/qr-activate.module';
 import { QrFreeGenerationModule } from './qr-free-generation/qr-free-generation.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { MailModule } from './mail/mail.module';
-import { WebpayModule } from './webpay/webpay.module';
+import { WebpayModule } from './modules/webpay/webpay.module';
 import { JwtAuthGuard } from './modules/auth/infrastructure/guards/jwt-auth.guard';
 import { TrackingIdMiddleware } from './middleware/tracking-id.middleware';
 import { RequestLoggerEntryMiddleware } from './middleware/request-logger-entry.middleware';
