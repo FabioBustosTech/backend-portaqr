@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService as JwtServiceCore } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import type { StringValue } from 'ms';
 import type { IJwtService, JwtPayload, AuthTokenResponse } from '../ports/in/jwt-service.port';
 import type { User } from '../../../users/domain/entities/user.entity';
 
@@ -25,11 +26,11 @@ export class JwtAuthService implements IJwtService {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('JWT_SECRET'),
-        expiresIn: this.configService.get<string>('JWT_EXPIRATION'),
+        expiresIn: this.configService.get<string>('JWT_EXPIRATION') as StringValue,
       }),
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-        expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRATION'),
+        expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRATION') as StringValue,
       }),
     ]);
 
