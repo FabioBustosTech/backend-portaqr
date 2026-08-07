@@ -1,0 +1,388 @@
+import { Injectable, Logger, HttpStatus, HttpException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { FilterQuery, Model, Types } from 'mongoose';
+import { TraceService, TraceLayer } from 'src/common/services/trace.service';
+import type { TrackingContext } from 'src/common/decorators/tracking.decorator';
+import type { Qr } from '../../../domain/entities/qr.entity';
+import type {
+  ICanGetAllQr,
+  ICanGetQr,
+  ICanCreateQr,
+  ICanUpdateQr,
+  ICanDeleteQr,
+  QrPagination,
+} from '../../../domain/ports/queries/qr.port';
+import { QrSchema, QrDocument } from './schemas/qr.schema';
+import { QrMongoMapper } from './mappers/qr-mongo.mapper';
+import { PetTag, PetTagDocument } from 'src/pet-tag/entities/pet-tag.entity';
+
+@Injectable()
+export class MongoQrRepository
+  implements ICanGetAllQr, ICanGetQr, ICanCreateQr, ICanUpdateQr, ICanDeleteQr
+{
+  private readonly logger = new Logger(MongoQrRepository.name);
+
+  constructor(
+    @InjectModel(QrSchema.name)
+    private readonly qrModel: Model<QrDocument>,
+    @InjectModel(PetTag.name)
+    private readonly petTagModel: Model<PetTagDocument>,
+    private readonly traceService: TraceService,
+  ) {}
+
+  async create(qr: Qr, tracking: TrackingContext): Promise<Qr> {
+    try {
+      const createdQr = new this.qrModel(QrMongoMapper.toSchemaData(qr));
+      const saved = await createdQr.save();
+      return QrMongoMapper.toEntity(saved);
+    } catch (error) {
+      this.traceService.error(tracking, TraceLayer.REPOSITORY, 'create:error', error as Error);
+      throw error;
+    }
+  }
+
+  async getRecentActive(limit: number, tracking: TrackingContext): Promise<Qr[]> {
+    try {
+      const docs = await this.qrModel
+        .find({ active: true })
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .exec();
+      return docs.map((doc) => QrMongoMapper.toEntity(doc));
+    } catch (error) {
+      this.traceService.error(tracking, TraceLayer.REPOSITORY, 'getRecentActive:error', error as Error);
+      throw error;
+    }
+  }
+
+  async getAll(tracking: TrackingContext): Promise<Qr[]> {
+    try {
+      const docs = await this.qrModel.find().exec();
+      return docs.map((doc) => QrMongoMapper.toEntity(doc));
+    } catch (error) {
+      this.traceService.error(tracking, TraceLayer.REPOSITORY, 'getAll:error', error as Error);
+      throw error;
+    }
+  }
+
+  async findAllWithSearch(
+    page: number = 1,
+    limit: number = 10,
+    search: string = '',
+    tracking: TrackingContext,
+  ): Promise<{ data: Qr[]; pagination: QrPagination }> {
+    try {
+      this.traceService.log(tracking, TraceLayer.REPOSITORY, 'findAllWithSearch:init', {
+        page,
+        limit,
+        search,
+      });
+
+      const query = this.buildSearchQuery(search);
+
+      const offset = (page - 1) * limit;
+      const [data, total] = await Promise.all([
+        this.qrModel.find(query).skip(offset).limit(limit).exec(),
+        this.qrModel.countDocuments(query).exec(),
+      ]);
+
+      const totalPages = Math.ceil(total / limit);
+
+      return {
+        data: data.map((doc) => QrMongoMapper.toEntity(doc)),
+        pagination: {
+          total,
+          totalPages,
+          currentPage: page,
+          limit,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1,
+        },
+      };
+    } catch (error) {
+      this.traceService.error(tracking, TraceLayer.REPOSITORY, 'findAllWithSearch:error', error as Error);
+      throw error;
+    }
+  }
+
+  async getById(id: string, tracking: TrackingContext): Promise<Qr | null> {
+    try {
+      const qr = await this.qrModel.findOne({ idQr: id }).exec();
+      return qr ? QrMongoMapper.toEntity(qr) : null;
+    } catch (error) {
+      this.traceService.error(tracking, TraceLayer.REPOSITORY, 'getById:error', error as Error);
+      throw error;
+    }
+  }
+
+  async findByUserId(userId: string, tracking: TrackingContext): Promise<Qr[]> {
+    try {
+      const docs = await this.qrModel.find({ userId }).exec();
+      return docs.map((doc) => QrMongoMapper.toEntity(doc));
+    } catch (error) {
+      this.traceService.error(tracking, TraceLayer.REPOSITORY, 'findByUserId:error', error as Error);
+      throw error;
+    }
+  }
+
+  async update(
+    id: string,
+    data: Partial<Qr>,
+    tracking: TrackingContext,
+  ): Promise<Qr | null> {
+    try {
+      const updatedQr = await this.qrModel
+        .findOneAndUpdate({ idQr: id }, QrMongoMapper.toSchemaData(data), { new: true })
+        .exec();
+      return updatedQr ? QrMongoMapper.toEntity(updatedQr) : null;
+    } catch (error) {
+      this.traceService.error(tracking, TraceLayer.REPOSITORY, 'update:error', error as Error);
+      throw error;
+    }
+  }
+
+  async delete(id: string, tracking: TrackingContext): Promise<boolean> {
+    try {
+      const result = await this.qrModel.findOneAndDelete({ idQr: id }).exec();
+      return result !== null;
+    } catch (error) {
+      this.traceService.error(tracking, TraceLayer.REPOSITORY, 'delete:error', error as Error);
+      throw error;
+    }
+  }
+
+  async findPaginatedByUser(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+    search: string = '',
+    tracking: TrackingContext,
+  ): Promise<{ data: Qr[]; pagination: QrPagination }> {
+    try {
+      let query: Record<string, unknown> = { userId };
+
+      if (search) {
+        const conditions = this.buildSearchConditions(search);
+        query = { ...query, ...conditions };
+      }
+
+      const skip = (page - 1) * limit;
+      const [data, total] = await Promise.all([
+        this.qrModel
+          .find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .exec(),
+        this.qrModel.countDocuments(query),
+      ]);
+
+      const totalPages = Math.ceil(total / limit);
+
+      return {
+        data: data.map((doc) => QrMongoMapper.toEntity(doc)),
+        pagination: {
+          total,
+          totalPages,
+          currentPage: page,
+          limit,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1,
+        },
+      };
+    } catch (error) {
+      this.traceService.error(tracking, TraceLayer.REPOSITORY, 'findPaginatedByUser:error', error as Error);
+      throw error;
+    }
+  }
+
+  async findUserByFavorites(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+    search: string = '',
+    role: string = '',
+    userId2: string = '',
+    tracking: TrackingContext,
+  ): Promise<{ data: unknown[]; pagination: QrPagination }> {
+    try {
+      const skip = (page - 1) * limit;
+      const targetUserIdString = role === 'admin' && userId2 ? userId2 : userId;
+      const targetUserId = new Types.ObjectId(targetUserIdString);
+
+      // --- 1. Lógica de Búsqueda Completa (Sin Omisiones) ---
+      let qrQuery: FilterQuery<QrDocument> = { userId: targetUserId };
+      let petTagQuery: FilterQuery<PetTagDocument> = { userId: targetUserId };
+
+      if (search) {
+        // Condiciones de búsqueda específicas para el modelo Qr
+        const typeConditions = {
+          social: [{ typeQr: 'social' }, { $or: [{ 'data.username': { $regex: search, $options: 'i' } }, { 'data.platform': { $regex: search, $options: 'i' } }] }],
+          email: [{ typeQr: 'email' }, { 'data.email': { $regex: search, $options: 'i' } }],
+          whatsapp: [{ typeQr: 'whatsapp' }, { $or: [{ 'data.phone': { $regex: search, $options: 'i' } }, { 'data.message': { $regex: search, $options: 'i' } }] }],
+          pet: [{ typeQr: 'pet' }, { $or: [{ 'data.petName': { $regex: search, $options: 'i' } }, { 'data.petBreed': { $regex: search, $options: 'i' } }, { 'data.petData.ownerPhone': { $regex: search, $options: 'i' } }] }],
+          phone: [{ typeQr: 'phone' }, { 'data.phone': { $regex: search, $options: 'i' } }],
+          map: [{ typeQr: 'map' }, { $or: [{ 'data.latitude': { $regex: search, $options: 'i' } }, { 'data.longitude': { $regex: search, $options: 'i' } }, { 'data.address': { $regex: search, $options: 'i' } }] }],
+        };
+
+        qrQuery['$or'] = [
+          { idQr: { $regex: search, $options: 'i' } },
+          { userId: { $regex: search, $options: 'i' } },
+          { typeQr: { $regex: search, $options: 'i' } },
+          { name: { $regex: search, $options: 'i' } },
+          { 'data.urlList.url': { $regex: search, $options: 'i' } },
+          { 'data.urlList.typeUrl': { $regex: search, $options: 'i' } },
+          { 'data.vcard.fn': { $regex: search, $options: 'i' } },
+          { 'data.vcard.org': { $regex: search, $options: 'i' } },
+          { 'data.vcard.n.firstName': { $regex: search, $options: 'i' } },
+          { 'data.vcard.n.lastName': { $regex: search, $options: 'i' } },
+          { 'data.vcard.nickname': { $regex: search, $options: 'i' } },
+          ...Object.values(typeConditions).flat(),
+        ];
+
+        // Condiciones de búsqueda específicas para el modelo PetTag
+        petTagQuery['$or'] = [
+          { qrId: { $regex: search, $options: 'i' } },
+          { activationPin: { $regex: search, $options: 'i' } },
+          { name: { $regex: search, $options: 'i' } },
+          { 'petData.petName': { $regex: search, $options: 'i' } },
+          { 'petData.ownerName': { $regex: search, $options: 'i' } },
+        ];
+      }
+
+      // --- 2. Obtener Datos y Totales en Paralelo ---
+      const [qrResults, petTagResults, totalQrs, totalPetTags] = await Promise.all([
+        this.qrModel.find(qrQuery).lean().exec(),
+        this.petTagModel.find(petTagQuery).lean().exec(),
+        this.qrModel.countDocuments(qrQuery),
+        this.petTagModel.countDocuments(petTagQuery),
+      ]);
+
+      // --- 3. Unificar, Ordenar y Paginar (Sin Mapeo Inverso) ---
+
+      // Añadimos un campo 'resultType' para que el frontend pueda diferenciar, pero NO modificamos la estructura original
+      const allItems = [
+        ...qrResults.map((item) => ({ ...item, resultType: 'qr' })),
+        ...petTagResults.map((item) => ({ ...item, resultType: 'pet-tag' })),
+      ];
+
+      // Ordenar el array combinado: primero favoritos, luego por fecha de actualización
+      allItems.sort((a, b) => {
+        const aIsFavorite = a.isFavorite ?? false;
+        const bIsFavorite = b.isFavorite ?? false;
+
+        if (aIsFavorite !== bIsFavorite) {
+          return aIsFavorite ? -1 : 1;
+        }
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
+
+      const total = totalQrs + totalPetTags;
+      const paginatedData = allItems.slice(skip, skip + limit);
+      const totalPages = Math.ceil(total / limit);
+
+      this.traceService.log(tracking, TraceLayer.REPOSITORY, 'findUserByFavorites:complete', {
+        total,
+        totalPages,
+        results: paginatedData.length,
+      });
+
+      return {
+        data: paginatedData,
+        pagination: {
+          total,
+          totalPages,
+          currentPage: page.toString(),
+          limit: limit.toString(),
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1,
+        },
+      };
+    } catch (error) {
+      this.traceService.error(tracking, TraceLayer.REPOSITORY, 'findUserByFavorites:error', error as Error);
+      throw new HttpException(
+        'Ocurrió un error al procesar su solicitud.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  // ---- Helpers privados ----
+
+  private buildSearchConditions(search: string): Record<string, unknown> {
+    const typeConditions = {
+      social: [
+        { typeQr: 'social' },
+        {
+          $or: [
+            { 'data.username': { $regex: search, $options: 'i' } },
+            { 'data.platform': { $regex: search, $options: 'i' } },
+          ],
+        },
+      ],
+      email: [
+        { typeQr: 'email' },
+        { 'data.email': { $regex: search, $options: 'i' } },
+      ],
+      whatsapp: [
+        { typeQr: 'whatsapp' },
+        {
+          $or: [
+            { 'data.phone': { $regex: search, $options: 'i' } },
+            { 'data.message': { $regex: search, $options: 'i' } },
+          ],
+        },
+      ],
+      pet: [
+        { typeQr: 'pet' },
+        {
+          $or: [
+            { 'data.petName': { $regex: search, $options: 'i' } },
+            { 'data.petBreed': { $regex: search, $options: 'i' } },
+            { 'data.petData.ownerPhone': { $regex: search, $options: 'i' } },
+          ],
+        },
+      ],
+      phone: [
+        { typeQr: 'phone' },
+        { 'data.phone': { $regex: search, $options: 'i' } },
+      ],
+      map: [
+        { typeQr: 'map' },
+        {
+          $or: [
+            { 'data.latitude': { $regex: search, $options: 'i' } },
+            { 'data.longitude': { $regex: search, $options: 'i' } },
+            { 'data.address': { $regex: search, $options: 'i' } },
+          ],
+        },
+      ],
+    };
+
+    return {
+      $or: [
+        { idQr: { $regex: search, $options: 'i' } },
+        { userId: { $regex: search, $options: 'i' } },
+        { typeQr: { $regex: search, $options: 'i' } },
+        { 'data.urlList.url': { $regex: search, $options: 'i' } },
+        { 'data.urlList.typeUrl': { $regex: search, $options: 'i' } },
+        { 'data.vcard.fn': { $regex: search, $options: 'i' } },
+        { 'data.vcard.org': { $regex: search, $options: 'i' } },
+        { 'data.vcard.n.firstName': { $regex: search, $options: 'i' } },
+        { 'data.vcard.n.lastName': { $regex: search, $options: 'i' } },
+        { 'data.vcard.nickname': { $regex: search, $options: 'i' } },
+        ...Object.values(typeConditions).flat(),
+      ],
+    };
+  }
+
+  private buildSearchQuery(search: string): Record<string, unknown> {
+    let query: Record<string, unknown> = {};
+
+    if (search) {
+      query = this.buildSearchConditions(search);
+    }
+
+    return query;
+  }
+}
