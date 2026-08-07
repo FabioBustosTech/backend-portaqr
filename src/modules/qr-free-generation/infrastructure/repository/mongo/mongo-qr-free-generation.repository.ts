@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+﻿import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
@@ -70,11 +70,7 @@ export class MongoQrFreeGenerationRepository
 
       const [items, total] = await Promise.all([
         this.qrFreeGenerationModel
-          .find(query)
-          .skip(skip)
-          .limit(limit)
-          .sort({ createdAt: -1 })
-          .exec(),
+          .find(query).skip(skip).limit(limit).sort({ createdAt: -1 }).lean().exec(),
         this.qrFreeGenerationModel.countDocuments(query),
       ]);
 
@@ -91,7 +87,7 @@ export class MongoQrFreeGenerationRepository
   async getById(id: string, tracking: TrackingContext): Promise<QrFreeGeneration | null> {
     try {
       this.traceService.log(tracking, TraceLayer.REPOSITORY, 'getById:init', { id });
-      const qr = await this.qrFreeGenerationModel.findById(id).exec();
+      const qr = await this.qrFreeGenerationModel.findById(id).lean().exec();
       if (!qr) {
         return null;
       }

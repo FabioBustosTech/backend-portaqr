@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+﻿import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
@@ -69,6 +69,7 @@ export class MongoPlanRepository
           .sort({ createdDate: -1 })
           .skip(skip)
           .limit(limit)
+          .lean()
           .exec(),
         this.planModel.countDocuments(query),
       ]);
@@ -95,7 +96,7 @@ export class MongoPlanRepository
   async getById(id: string, tracking: TrackingContext): Promise<Plan | null> {
     try {
       this.traceService.log(tracking, TraceLayer.REPOSITORY, 'getById:init', { id });
-      const plan = await this.planModel.findById(id).exec();
+      const plan = await this.planModel.findById(id).lean().exec();
       if (!plan) {
         return null;
       }
@@ -115,6 +116,7 @@ export class MongoPlanRepository
       this.traceService.log(tracking, TraceLayer.REPOSITORY, 'update:init', { id });
       const updatedPlan = await this.planModel
         .findByIdAndUpdate(id, { $set: PlanMongoMapper.toSchemaData(data) }, { new: true })
+        .lean()
         .exec();
 
       if (!updatedPlan) {

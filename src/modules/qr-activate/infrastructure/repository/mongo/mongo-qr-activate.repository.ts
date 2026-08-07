@@ -74,6 +74,7 @@ export class MongoQrActivateRepository
           .populate('qrList.qrCode', 'name code')
           .populate('qrList.plan', 'name description')
           .populate('adminId', '_id name')
+          .lean()
           .exec(),
         this.model.countDocuments(query),
       ]);
@@ -103,6 +104,7 @@ export class MongoQrActivateRepository
         .populate('qrList.qrCode', 'name code')
         .populate('qrList.plan', 'name description')
         .populate('adminId', '_id name')
+        .lean()
         .exec();
       return doc ? QrActivateMongoMapper.toEntity(doc) : null;
     } catch (error) {
@@ -113,7 +115,7 @@ export class MongoQrActivateRepository
 
   async getByWebpayToken(token: string, tracking: TrackingContext): Promise<QrActivate | null> {
     try {
-      const doc = await this.model.findOne({ 'WebpayTransaction.id': token }).exec();
+      const doc = await this.model.findOne({ 'WebpayTransaction.id': token }).lean().exec();
       return doc ? QrActivateMongoMapper.toEntity(doc) : null;
     } catch (error) {
       this.traceService.error(tracking, TraceLayer.REPOSITORY, 'getByWebpayToken:error', error as Error);

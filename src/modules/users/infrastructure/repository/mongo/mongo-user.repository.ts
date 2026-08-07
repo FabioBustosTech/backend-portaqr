@@ -48,7 +48,7 @@ export class MongoUserRepository
       this.traceService.log(tracking, TraceLayer.REPOSITORY, 'getAll:init', { page, limit, search });
 
       const [data, total] = await Promise.all([
-        this.userModel.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+        this.userModel.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean().exec(),
         this.userModel.countDocuments(filter),
       ]);
 
@@ -71,7 +71,7 @@ export class MongoUserRepository
 
   async getById(id: string, tracking: TrackingContext): Promise<User | null> {
     try {
-      const user = await this.userModel.findById(id).exec();
+      const user = await this.userModel.findById(id).lean().exec();
       return user ? UserMongoMapper.toEntity(user) : null;
     } catch (error) {
       this.traceService.error(tracking, TraceLayer.REPOSITORY, 'getById:error', error as Error);
@@ -81,7 +81,7 @@ export class MongoUserRepository
 
   async getByEmail(email: string, tracking: TrackingContext): Promise<User | null> {
     try {
-      const user = await this.userModel.findOne({ email }).exec();
+      const user = await this.userModel.findOne({ email }).lean().exec();
       return user ? UserMongoMapper.toEntity(user) : null;
     } catch (error) {
       this.traceService.error(tracking, TraceLayer.REPOSITORY, 'getByEmail:error', error as Error);
@@ -98,6 +98,7 @@ export class MongoUserRepository
             { userName: usernameOrEmail },
           ],
         })
+        .lean()
         .exec();
       return user ? UserMongoMapper.toEntity(user) : null;
     } catch (error) {
@@ -108,7 +109,7 @@ export class MongoUserRepository
 
   async getByVerificationCode(code: string, tracking: TrackingContext): Promise<User | null> {
     try {
-      const user = await this.userModel.findOne({ verificationCode: code }).exec();
+      const user = await this.userModel.findOne({ verificationCode: code }).lean().exec();
       return user ? UserMongoMapper.toEntity(user) : null;
     } catch (error) {
       this.traceService.error(tracking, TraceLayer.REPOSITORY, 'getByVerificationCode:error', error as Error);
@@ -118,7 +119,7 @@ export class MongoUserRepository
 
   async getByPasswordResetCode(code: string, tracking: TrackingContext): Promise<User | null> {
     try {
-      const user = await this.userModel.findOne({ passwordResetCode: code }).exec();
+      const user = await this.userModel.findOne({ passwordResetCode: code }).lean().exec();
       return user ? UserMongoMapper.toEntity(user) : null;
     } catch (error) {
       this.traceService.error(tracking, TraceLayer.REPOSITORY, 'getByPasswordResetCode:error', error as Error);
@@ -161,6 +162,7 @@ export class MongoUserRepository
           { $set: UserMongoMapper.toSchemaData(data) },
           { new: true },
         )
+        .lean()
         .exec();
       return actualizado ? UserMongoMapper.toEntity(actualizado) : null;
     } catch (error) {
@@ -200,7 +202,7 @@ export class MongoUserRepository
 
   async checkEmailExists(email: string, tracking: TrackingContext): Promise<boolean> {
     try {
-      const user = await this.userModel.findOne({ email }).exec();
+      const user = await this.userModel.findOne({ email }).lean().exec();
       return !!user;
     } catch (error) {
       this.traceService.error(tracking, TraceLayer.REPOSITORY, 'checkEmailExists:error', error as Error);

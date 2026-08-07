@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+﻿import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
@@ -227,11 +227,7 @@ export class MongoScanRepository implements ICanCreateScan, ICanGetScan {
       });
 
       const docs = await this.scanModel
-        .find({ idQr })
-        .sort({ scanDate: -1 })
-        .limit(limit)
-        .select('-__v')
-        .exec();
+        .find({ idQr }).sort({ scanDate: -1 }).limit(limit).select('-__v').lean().exec();
 
       return docs.map((doc) => ScanMongoMapper.toEntity(doc));
     } catch (error) {

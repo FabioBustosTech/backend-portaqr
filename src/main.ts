@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ResponseLoggerInterceptor } from './interceptors/response-logger.interceptor';
+import { LegacyIdAliasInterceptor } from './interceptors/legacy-id-alias.interceptor';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -11,6 +12,7 @@ async function bootstrap() {
 
   app.useGlobalPipes(new ValidationPipe());
   app.useGlobalInterceptors(new ResponseLoggerInterceptor());
+  app.useGlobalInterceptors(new LegacyIdAliasInterceptor());
 
   // Habilitar CORS para todos los orígenes
   app.enableCors({
