@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CommonModule } from 'src/common/common.module';
 import { QrController } from './presentation/controllers/qr.controller';
@@ -9,7 +9,7 @@ import {
 } from './infrastructure/repository/mongo/schemas/qr.schema';
 import { MongoQrRepository } from './infrastructure/repository/mongo/mongo-qr.repository';
 import { QrRepositoryAdapter } from './infrastructure/adapters/QrRepositoryAdapter';
-import { PetTag, PetTagSchema } from 'src/pet-tag/entities/pet-tag.entity';
+import { PetTagSchema, PetTagSchemaDefinition } from 'src/modules/pet-tag/infrastructure/repository/mongo/schemas/pet-tag.schema';
 
 import { CreateQrUseCase } from './application/use-cases/create-qr.usecase';
 import { GetAllQrUseCase } from './application/use-cases/get-all-qr.usecase';
@@ -35,7 +35,7 @@ import {
     CommonModule,
     MongooseModule.forFeature([
       { name: QrSchema.name, schema: QrSchemaDefinition },
-      { name: PetTag.name, schema: PetTagSchema },
+      { name: PetTagSchema.name, schema: PetTagSchemaDefinition },
     ]),
   ],
   controllers: [QrController],

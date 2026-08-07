@@ -35,7 +35,7 @@ import { GetUser } from 'src/common/decorators/user.decorator';
 import { Tracking } from 'src/common/decorators/tracking.decorator';
 import type { TrackingContext } from 'src/common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
-import { User } from 'src/users/interfaces/usuario.type';
+import type { User } from 'src/modules/users/domain/entities/user.entity';
 
 class PublicRedirectUrlResponse {
   data: string;

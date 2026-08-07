@@ -1,4 +1,4 @@
-import { Injectable, Logger, HttpStatus, HttpException } from '@nestjs/common';
+﻿import { Injectable, Logger, HttpStatus, HttpException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
@@ -14,7 +14,7 @@ import type {
 } from '../../../domain/ports/queries/qr.port';
 import { QrSchema, QrDocument } from './schemas/qr.schema';
 import { QrMongoMapper } from './mappers/qr-mongo.mapper';
-import { PetTag, PetTagDocument } from 'src/pet-tag/entities/pet-tag.entity';
+import { PetTagSchema, PetTagDocument } from 'src/modules/pet-tag/infrastructure/repository/mongo/schemas/pet-tag.schema';
 
 @Injectable()
 export class MongoQrRepository
@@ -25,7 +25,7 @@ export class MongoQrRepository
   constructor(
     @InjectModel(QrSchema.name)
     private readonly qrModel: Model<QrDocument>,
-    @InjectModel(PetTag.name)
+    @InjectModel(PetTagSchema.name)
     private readonly petTagModel: Model<PetTagDocument>,
     private readonly traceService: TraceService,
   ) {}
@@ -210,12 +210,12 @@ export class MongoQrRepository
       const targetUserIdString = role === 'admin' && userId2 ? userId2 : userId;
       const targetUserId = new Types.ObjectId(targetUserIdString);
 
-      // --- 1. Lógica de Búsqueda Completa (Sin Omisiones) ---
+      // --- 1. LÃ³gica de BÃºsqueda Completa (Sin Omisiones) ---
       let qrQuery: FilterQuery<QrDocument> = { userId: targetUserId };
       let petTagQuery: FilterQuery<PetTagDocument> = { userId: targetUserId };
 
       if (search) {
-        // Condiciones de búsqueda específicas para el modelo Qr
+        // Condiciones de bÃºsqueda especÃ­ficas para el modelo Qr
         const typeConditions = {
           social: [{ typeQr: 'social' }, { $or: [{ 'data.username': { $regex: search, $options: 'i' } }, { 'data.platform': { $regex: search, $options: 'i' } }] }],
           email: [{ typeQr: 'email' }, { 'data.email': { $regex: search, $options: 'i' } }],
@@ -240,7 +240,7 @@ export class MongoQrRepository
           ...Object.values(typeConditions).flat(),
         ];
 
-        // Condiciones de búsqueda específicas para el modelo PetTag
+        // Condiciones de bÃºsqueda especÃ­ficas para el modelo PetTag
         petTagQuery['$or'] = [
           { qrId: { $regex: search, $options: 'i' } },
           { activationPin: { $regex: search, $options: 'i' } },
@@ -260,13 +260,13 @@ export class MongoQrRepository
 
       // --- 3. Unificar, Ordenar y Paginar (Sin Mapeo Inverso) ---
 
-      // Añadimos un campo 'resultType' para que el frontend pueda diferenciar, pero NO modificamos la estructura original
+      // AÃ±adimos un campo 'resultType' para que el frontend pueda diferenciar, pero NO modificamos la estructura original
       const allItems = [
         ...qrResults.map((item) => ({ ...item, resultType: 'qr' })),
         ...petTagResults.map((item) => ({ ...item, resultType: 'pet-tag' })),
       ];
 
-      // Ordenar el array combinado: primero favoritos, luego por fecha de actualización
+      // Ordenar el array combinado: primero favoritos, luego por fecha de actualizaciÃ³n
       allItems.sort((a, b) => {
         const aIsFavorite = a.isFavorite ?? false;
         const bIsFavorite = b.isFavorite ?? false;
@@ -301,7 +301,7 @@ export class MongoQrRepository
     } catch (error) {
       this.traceService.error(tracking, TraceLayer.REPOSITORY, 'findUserByFavorites:error', error as Error);
       throw new HttpException(
-        'Ocurrió un error al procesar su solicitud.',
+        'OcurriÃ³ un error al procesar su solicitud.',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

@@ -1,11 +1,11 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CommonModule } from 'src/common/common.module';
 import { StatisticsController } from './presentation/controllers/statistics.controller';
 
-import { Scan, ScanSchema } from 'src/scan/entities/scan.entity';
-import { Qr, QrSchema } from 'src/qr/entities/qr.entity';
-import { User, UserSchema } from 'src/users/entities/user.entity';
+import { ScanSchema, ScanSchemaDefinition } from 'src/modules/scan/infrastructure/repository/mongo/schemas/scan.schema';
+import { QrSchema, QrSchemaDefinition } from 'src/modules/qr/infrastructure/repository/mongo/schemas/qr.schema';
+import { UserSchema, UserSchemaDefinition } from 'src/modules/users/infrastructure/repository/mongo/schemas/user.schema';
 
 import { MongoStatisticsRepository } from './infrastructure/repository/mongo/mongo-statistics.repository';
 import { StatisticsRepositoryAdapter } from './infrastructure/adapters/StatisticsRepositoryAdapter';
@@ -19,9 +19,9 @@ import { STATISTICS_GET_PORT } from './domain/constants/statistics.tokens';
   imports: [
     CommonModule,
     MongooseModule.forFeature([
-      { name: Scan.name, schema: ScanSchema },
-      { name: Qr.name, schema: QrSchema },
-      { name: User.name, schema: UserSchema },
+      { name: ScanSchema.name, schema: ScanSchemaDefinition },
+      { name: QrSchema.name, schema: QrSchemaDefinition },
+      { name: UserSchema.name, schema: UserSchemaDefinition },
     ]),
   ],
   controllers: [StatisticsController],

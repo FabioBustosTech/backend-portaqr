@@ -1,11 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+﻿import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
 import type { TrackingContext } from 'src/common/decorators/tracking.decorator';
-import { Scan, ScanSchema } from 'src/scan/entities/scan.entity';
-import { Qr, QrSchema } from 'src/qr/entities/qr.entity';
-import { User, UserSchema } from 'src/users/entities/user.entity';
+import { ScanSchema, ScanDocument as _ScanDoc } from 'src/modules/scan/infrastructure/repository/mongo/schemas/scan.schema';
+import { QrSchema, QrDocument as _QrDoc } from 'src/modules/qr/infrastructure/repository/mongo/schemas/qr.schema';
+import { UserSchema, UserDocument as _UserDoc } from 'src/modules/users/infrastructure/repository/mongo/schemas/user.schema';
 import type { ICanGetStatistics } from '../../../domain/ports/queries/statistics.port';
 import type { UserStatistics, SystemStatistics } from '../../../domain/entities/statistics.entity';
 
@@ -14,12 +14,12 @@ export class MongoStatisticsRepository implements ICanGetStatistics {
   private readonly logger = new Logger(MongoStatisticsRepository.name);
 
   constructor(
-    @InjectModel(Scan.name) private readonly scanModel: Model<Scan>,
-    @InjectModel(Qr.name) private readonly qrModel: Model<Qr>,
-    @InjectModel(User.name) private readonly userModel: Model<User>,
+    @InjectModel(ScanSchema.name) private readonly scanModel: Model<_ScanDoc>,
+    @InjectModel(QrSchema.name) private readonly qrModel: Model<_QrDoc>,
+    @InjectModel(UserSchema.name) private readonly userModel: Model<_UserDoc>,
     private readonly traceService: TraceService,
   ) {
-    // Crear índices para optimizar las consultas
+    // Crear Ã­ndices para optimizar las consultas
     this.scanModel.collection.createIndex({ userId: 1, scanDate: -1 });
     this.scanModel.collection.createIndex({ scanDate: -1 });
     this.scanModel.collection.createIndex({ origen: 1 });
@@ -47,7 +47,7 @@ export class MongoStatisticsRepository implements ICanGetStatistics {
             { lean: true },
           ),
 
-          // Escaneos del día
+          // Escaneos del dÃ­a
           this.scanModel.countDocuments(
             { userId, scanDate: { $gte: startOfDay } },
             { lean: true },
@@ -98,7 +98,7 @@ export class MongoStatisticsRepository implements ICanGetStatistics {
           // Escaneos del mes
           this.scanModel.countDocuments({ scanDate: { $gte: startOfMonth } }, { lean: true }),
 
-          // Escaneos del día
+          // Escaneos del dÃ­a
           this.scanModel.countDocuments({ scanDate: { $gte: startOfDay } }, { lean: true }),
 
           // Total de QRs

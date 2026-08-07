@@ -1,7 +1,7 @@
-import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+﻿import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Reflector } from '@nestjs/core';
-import { IS_PUBLIC_KEY } from '../../../../auth/decorators/public.decorator';
+import { IS_PUBLIC_KEY } from 'src/common/decorators/public.decorator';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
@@ -26,7 +26,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       if (error?.name === 'TokenExpiredError') {
         throw new UnauthorizedException('Token expirado');
       }
-      throw new UnauthorizedException('Token inválido');
+      throw new UnauthorizedException('Token invÃ¡lido');
     }
   }
 

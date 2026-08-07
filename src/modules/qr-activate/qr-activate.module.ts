@@ -2,7 +2,7 @@
 import { MongooseModule } from '@nestjs/mongoose';
 import { CommonModule } from '../../common/common.module';
 import { WebpayModule } from '../webpay/webpay.module';
-import { QrModule } from '../../qr/qr.module';
+import { QrModule } from '../qr/qr.module';
 import { QrActivateController } from './presentation/controllers/qr-activate.controller';
 
 import {

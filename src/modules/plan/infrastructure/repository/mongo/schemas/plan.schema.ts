@@ -1,6 +1,6 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+﻿import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
-import { QrType } from 'src/qr/dto/create-qr.dto';
+import { QrType } from 'src/modules/qr/application/dto/create-qr.dto';
 import { DurationType } from '../../../../domain/entities/plan.entity';
 
 export type PlanDocument = HydratedDocument<PlanSchema>;
@@ -50,14 +50,14 @@ export class PlanSchema {
   free: boolean;
 
   @Prop({
-    description: 'Indica el tiempo de duración del plan',
+    description: 'Indica el tiempo de duraciÃ³n del plan',
     type: Object,
     required: true,
     validate: {
       validator: function (value: DetailDuration) {
         return value.duration > 0 && Object.values(DurationType).includes(value.type);
       },
-      message: 'Tipo de duración inválido o duración debe ser mayor a 0',
+      message: 'Tipo de duraciÃ³n invÃ¡lido o duraciÃ³n debe ser mayor a 0',
     },
   })
   detailDuration: DetailDuration;
@@ -68,7 +68,7 @@ export class PlanSchema {
 
 export const PlanSchemaDefinition = SchemaFactory.createForClass(PlanSchema);
 
-// Agregando índices
+// Agregando Ã­ndices
 PlanSchemaDefinition.index({ name: 1 });
 PlanSchemaDefinition.index({ status: 1 });
 PlanSchemaDefinition.index({ active: 1 });

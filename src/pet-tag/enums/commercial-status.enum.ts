@@ -1,6 +1,0 @@
-export enum CommercialStatus {
-  EN_CREACION = 'EN_CREACION',
-  EN_BODEGA = 'EN_BODEGA',
-  ASIGNADO_COMERCIO = 'ASIGNADO_COMERCIO',
-  VENDIDO = 'VENDIDO'
-}

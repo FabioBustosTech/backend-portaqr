@@ -1,22 +1,20 @@
 ﻿import { Injectable } from '@nestjs/common';
 import type { ICanActivateQr } from '../../domain/ports/queries/qr-activate.port';
-import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
-import { QrService } from '../../../../qr/qr.service';
+import type { TrackingContext } from 'src/common/decorators/tracking.decorator';
+import { UpdateQrUseCase } from '../../../qr/application/use-cases/update-qr.usecase';
 
 /**
- * Adaptador temporal: activa QRs usando el QrService legacy.
- * Cuando el mÃ³dulo qr se migre a hexagonal, este adapter
- * apuntarÃ¡ al nuevo puerto de qr sin tocar el caso de uso.
+ * Adaptador: activa QRs usando el caso de uso del módulo qr hexagonal.
  */
 @Injectable()
 export class QrActivateQrAdapter implements ICanActivateQr {
-  constructor(private readonly qrService: QrService) {}
+  constructor(private readonly updateQrUseCase: UpdateQrUseCase) {}
 
   async updateQr(
     idQr: string,
     data: { active: boolean; expiration?: Date },
     tracking: TrackingContext,
   ): Promise<void> {
-    await this.qrService.update(idQr, data, tracking.trackingId);
+    await this.updateQrUseCase.execute(idQr, data, tracking);
   }
 }

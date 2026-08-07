@@ -1,4 +1,4 @@
-import {
+﻿import {
   Controller,
   Post,
   Body,
@@ -13,12 +13,12 @@ import { AuthService } from '../../domain/services/auth.service';
 import { LoginDto } from '../../application/dto/login.dto';
 import { RefreshTokenDto } from '../../application/dto/refresh-token.dto';
 import { JwtAuthGuard } from '../../infrastructure/guards/jwt-auth.guard';
-import { Public } from '../../../../auth/decorators/public.decorator';
+import { Public } from 'src/common/decorators/public.decorator';
 import { Tracking } from '../../../../common/decorators/tracking.decorator';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 
-@ApiTags('Autenticación')
+@ApiTags('AutenticaciÃ³n')
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -29,9 +29,9 @@ export class AuthController {
   @Post('login')
   @Public()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Iniciar sesión' })
+  @ApiOperation({ summary: 'Iniciar sesiÃ³n' })
   @ApiResponse({ status: 200, description: 'Login exitoso' })
-  @ApiResponse({ status: 401, description: 'Credenciales inválidas' })
+  @ApiResponse({ status: 401, description: 'Credenciales invÃ¡lidas' })
   async login(@Body() loginDto: LoginDto, @Tracking() tracking: TrackingContext) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'POST /auth/login', {
       username: loginDto.username,
@@ -44,7 +44,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refrescar el token de acceso' })
   @ApiResponse({ status: 200, description: 'Token de acceso generado exitosamente.' })
-  @ApiResponse({ status: 401, description: 'Token de actualización inválido o expirado.' })
+  @ApiResponse({ status: 401, description: 'Token de actualizaciÃ³n invÃ¡lido o expirado.' })
   async refreshToken(
     @Body() refreshTokenDto: RefreshTokenDto,
     @Tracking() tracking: TrackingContext,
