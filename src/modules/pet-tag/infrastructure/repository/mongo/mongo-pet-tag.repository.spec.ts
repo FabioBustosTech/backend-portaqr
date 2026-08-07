@@ -130,6 +130,7 @@ describe('MongoPetTagRepository', () => {
   describe('findReserved', () => {
     const results = [
       {
+        _id: { toString: () => 'tag-1' },
         idQr: 'qr-1',
         activationPin: 'ABC123',
         createdAt: new Date('2024-01-01'),
@@ -148,7 +149,24 @@ describe('MongoPetTagRepository', () => {
       expect(mockFind).toHaveBeenCalledWith({});
       expect(mockCountDocuments).toHaveBeenCalledWith({});
       expect(result).toEqual({
-        data: results,
+        // El repository mapea con PetTagMongoMapper.toEntity (id string desde _id)
+        data: [
+          {
+            id: 'tag-1',
+            name: undefined,
+            idQr: 'qr-1',
+            userId: null,
+            activationPin: 'ABC123',
+            status: 'RESERVADO',
+            petData: null,
+            expiration: undefined,
+            commercialStatus: 'EN_BODEGA',
+            isFavorite: undefined,
+            assignedStoreName: null,
+            createdAt: new Date('2024-01-01'),
+            updatedAt: undefined,
+          },
+        ],
         pagination: { total: 1, page: 1, limit: 100, totalPages: 1 },
       });
     });
