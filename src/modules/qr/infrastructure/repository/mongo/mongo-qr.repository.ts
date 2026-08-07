@@ -47,6 +47,7 @@ export class MongoQrRepository
         .find({ active: true })
         .sort({ updatedAt: -1 })
         .limit(limit)
+        .lean()
         .exec();
       return docs.map((doc) => QrMongoMapper.toEntity(doc));
     } catch (error) {
@@ -57,7 +58,7 @@ export class MongoQrRepository
 
   async getAll(tracking: TrackingContext): Promise<Qr[]> {
     try {
-      const docs = await this.qrModel.find().exec();
+      const docs = await this.qrModel.find().lean().exec();
       return docs.map((doc) => QrMongoMapper.toEntity(doc));
     } catch (error) {
       this.traceService.error(tracking, TraceLayer.REPOSITORY, 'getAll:error', error as Error);
@@ -82,7 +83,7 @@ export class MongoQrRepository
 
       const offset = (page - 1) * limit;
       const [data, total] = await Promise.all([
-        this.qrModel.find(query).skip(offset).limit(limit).exec(),
+        this.qrModel.find(query).skip(offset).limit(limit).lean().exec(),
         this.qrModel.countDocuments(query).exec(),
       ]);
 
@@ -107,7 +108,7 @@ export class MongoQrRepository
 
   async getById(id: string, tracking: TrackingContext): Promise<Qr | null> {
     try {
-      const qr = await this.qrModel.findOne({ idQr: id }).exec();
+      const qr = await this.qrModel.findOne({ idQr: id }).lean().exec();
       return qr ? QrMongoMapper.toEntity(qr) : null;
     } catch (error) {
       this.traceService.error(tracking, TraceLayer.REPOSITORY, 'getById:error', error as Error);
@@ -117,7 +118,7 @@ export class MongoQrRepository
 
   async findByUserId(userId: string, tracking: TrackingContext): Promise<Qr[]> {
     try {
-      const docs = await this.qrModel.find({ userId }).exec();
+      const docs = await this.qrModel.find({ userId }).lean().exec();
       return docs.map((doc) => QrMongoMapper.toEntity(doc));
     } catch (error) {
       this.traceService.error(tracking, TraceLayer.REPOSITORY, 'findByUserId:error', error as Error);
@@ -173,6 +174,7 @@ export class MongoQrRepository
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit)
+          .lean()
           .exec(),
         this.qrModel.countDocuments(query),
       ]);
