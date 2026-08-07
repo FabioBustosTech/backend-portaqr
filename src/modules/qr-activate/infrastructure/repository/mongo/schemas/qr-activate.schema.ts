@@ -63,7 +63,7 @@ export class QrActivateSchema {
   @Prop({
     type: [
       {
-        qrCode: { type: Types.ObjectId, ref: 'QR' },
+        qrCode: { type: String, ref: 'QR' },
         price: Number,
         expirationDate: Date,
         duration: String,
