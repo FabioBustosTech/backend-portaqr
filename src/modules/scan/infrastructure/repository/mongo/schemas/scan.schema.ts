@@ -97,6 +97,4 @@ ScanSchemaDefinition.pre('save', function(next) {
   next();
 });
 
-ScanSchemaDefinition.index({ idQr: 1, scanDate: -1 });
 ScanSchemaDefinition.index({ 'location.country': 1 });
-ScanSchemaDefinition.index({ 'device.platform': 1 });

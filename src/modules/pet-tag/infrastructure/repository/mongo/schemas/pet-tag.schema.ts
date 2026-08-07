@@ -49,7 +49,6 @@ export class PetDataSchema {
 export const PetDataSchemaDefinition = SchemaFactory.createForClass(PetDataSchema);
 
 // Agregando Ã­ndices para PetDataSchema
-PetDataSchemaDefinition.index({ petName: 1 });
 PetDataSchemaDefinition.index({ ownerName: 1 });
 PetDataSchemaDefinition.index({ breed: 1 });
 PetDataSchemaDefinition.index({ species: 1 });
@@ -62,10 +61,10 @@ export class PetTagSchema {
   @Prop({ type: String, required: false })
   name?: string;
 
-  @Prop({ type: String, required: true, unique: true, index: true, trim: true })
+  @Prop({ type: String, required: true, unique: true, trim: true })
   idQr: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', default: null, index: true })
+  @Prop({ type: Types.ObjectId, ref: 'User', default: null })
   userId: Types.ObjectId | null;
 
   @Prop({ type: String, required: true, unique: true })
@@ -102,9 +101,7 @@ export class PetTagSchema {
 
 export const PetTagSchemaDefinition = SchemaFactory.createForClass(PetTagSchema);
 
-PetTagSchemaDefinition.index({ idQr: 1 });
 PetTagSchemaDefinition.index({ userId: 1 });
 PetTagSchemaDefinition.index({ status: 1 });
-PetTagSchemaDefinition.index({ activationPin: 1 });
 PetTagSchemaDefinition.index({ expiration: 1 });
 PetTagSchemaDefinition.index({ 'petData.petName': 1 });
