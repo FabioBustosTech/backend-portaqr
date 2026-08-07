@@ -35,6 +35,8 @@ import {
     CommonModule,
     MongooseModule.forFeature([
       { name: QrSchema.name, schema: QrSchemaDefinition },
+      // Alias 'QR' para que los refs 'QR' de qr-activate resuelvan el populate
+      { name: 'QR', schema: QrSchemaDefinition },
       { name: PetTagSchema.name, schema: PetTagSchemaDefinition },
     ]),
   ],

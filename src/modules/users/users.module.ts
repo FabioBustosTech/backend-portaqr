@@ -40,6 +40,9 @@ import {
     EmailModule,
     MongooseModule.forFeature([
       { name: UserSchema.name, schema: UserSchemaDefinition },
+      // Alias 'User' para que los refs de qr-activate/pet-tag resuelvan el populate
+      // (el nombre de clase UserSchema no coincide con ref: 'User')
+      { name: 'User', schema: UserSchemaDefinition },
     ]),
   ],
   controllers: [UsersController],

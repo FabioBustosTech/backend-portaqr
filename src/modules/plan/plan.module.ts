@@ -29,6 +29,8 @@ import {
     CommonModule,
     MongooseModule.forFeature([
       { name: PlanSchema.name, schema: PlanSchemaDefinition },
+      // Alias 'Plan' para que los refs 'Plan' de qr-activate resuelvan el populate
+      { name: 'Plan', schema: PlanSchemaDefinition },
     ]),
   ],
   controllers: [PlanController],

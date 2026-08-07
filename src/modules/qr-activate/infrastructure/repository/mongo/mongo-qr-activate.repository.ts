@@ -71,7 +71,9 @@ export class MongoQrActivateRepository
           .skip(skip)
           .limit(limit)
           .populate('userId', '_id email name')
-          .populate('qrList.qrCode', 'name code')
+          // NOTA: qrList.qrCode guarda el UUID idQr (string), no el _id ObjectId.
+          // Hacer populate con ref 'QR' lanza CastError (fix 2026-08-07).
+          // El frontend usa qr.qrCode directo; no requiere populate.
           .populate('qrList.plan', 'name description')
           .populate('adminId', '_id name')
           .lean()
@@ -101,7 +103,7 @@ export class MongoQrActivateRepository
       const doc = await this.model
         .findById(id)
         .populate('userId', '_id email name')
-        .populate('qrList.qrCode', 'name code')
+        // NOTA: qrList.qrCode es UUID string (idQr), no ObjectId — no populable (fix 2026-08-07)
         .populate('qrList.plan', 'name description')
         .populate('adminId', '_id name')
         .lean()
