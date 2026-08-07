@@ -107,6 +107,7 @@ export class CreateScanDto {
   @IsOptional()
   origen?: string;
   
+  @IsOptional()
   @IsBoolean({ message: 'El indicador de éxito debe ser un valor booleano' })
   successful?: boolean;
 

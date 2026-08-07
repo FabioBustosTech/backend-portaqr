@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { GetUserUseCase } from '../../../users/application/use-cases/get-user.usecase';
 import type { JwtPayload } from '../../domain/ports/in/jwt-service.port';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
+import { loadJwtKeys } from '../jwt-keys';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -16,7 +17,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET'),
+      // passport-jwt usa secretOrKey como nombre de la opción; acepta la llave
+      // pública PEM para verificación asimétrica RS256
+      secretOrKey: loadJwtKeys(configService).publicKey,
+      algorithms: ['RS256'],
     });
   }
 
@@ -31,6 +35,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       id: payload.sub,
       role: payload.role,
     });
+
+    // Si el token fue emitido con una versión anterior a la actual del
+    // usuario, fue invalidado (logout) y debe rechazarse.
+    if ((payload.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) {
+      this.traceService.log(
+        tracking,
+        TraceLayer.SERVICE,
+        'JwtStrategy.validate - token invalidado',
+        { id: payload.sub },
+      );
+      throw new UnauthorizedException('Token invalidado (sesión cerrada)');
+    }
 
     return { id: user.id, email: user.email, userName: user.userName, role: user.role, isEmailVerified: user.isEmailVerified };
   }

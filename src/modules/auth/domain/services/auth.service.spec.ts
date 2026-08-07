@@ -6,6 +6,7 @@ import { JwtAuthService } from './jwt.service';
 import { PasswordService } from '../../../users/domain/services/password.service';
 import { GetUserUseCase } from '../../../users/application/use-cases/get-user.usecase';
 import { UpdateUserUseCase } from '../../../users/application/use-cases/update-user.usecase';
+import { IncrementTokenVersionUseCase } from '../../../users/application/use-cases/increment-token-version.usecase';
 import { TraceService } from '../../../../common/services/trace.service';
 import type { User } from '../../../users/domain/entities/user.entity';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
@@ -16,6 +17,7 @@ describe('AuthService', () => {
   let passwordService: jest.Mocked<PasswordService>;
   let getUserUseCase: jest.Mocked<GetUserUseCase>;
   let updateUserUseCase: jest.Mocked<UpdateUserUseCase>;
+  let incrementTokenVersionUseCase: jest.Mocked<IncrementTokenVersionUseCase>;
 
   const tracking: TrackingContext = { trackingId: 't-1', sessionId: 's-1' };
 
@@ -76,6 +78,12 @@ describe('AuthService', () => {
           },
         },
         {
+          provide: IncrementTokenVersionUseCase,
+          useValue: {
+            execute: jest.fn(),
+          },
+        },
+        {
           provide: TraceService,
           useValue: {
             log: jest.fn(),
@@ -92,6 +100,7 @@ describe('AuthService', () => {
     passwordService = module.get(PasswordService);
     getUserUseCase = module.get(GetUserUseCase);
     updateUserUseCase = module.get(UpdateUserUseCase);
+    incrementTokenVersionUseCase = module.get(IncrementTokenVersionUseCase);
   });
 
   it('debe estar definido', () => {
@@ -200,6 +209,37 @@ describe('AuthService', () => {
       await expect(service.refreshToken('bad-token', tracking)).rejects.toThrow(
         UnauthorizedException,
       );
+    });
+
+    it('debe lanzar UnauthorizedException si el tokenVersion del refresh token no coincide (logout)', async () => {
+      jwtAuthService.verifyRefreshToken.mockReturnValue({
+        sub: validObjectId,
+        email: mockUser.email,
+        userName: mockUser.userName,
+        role: mockUser.role,
+        isEmailVerified: true,
+        tokenVersion: 0,
+      });
+      getUserUseCase.execute.mockResolvedValue({ ...mockUser, tokenVersion: 1 });
+
+      await expect(service.refreshToken('stale-refresh', tracking)).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(jwtAuthService.generateTokens).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('logout', () => {
+    it('debe incrementar el tokenVersion del usuario y retornar success', async () => {
+      incrementTokenVersionUseCase.execute.mockResolvedValue(undefined);
+
+      const result = await service.logout(validObjectId, tracking);
+
+      expect(incrementTokenVersionUseCase.execute).toHaveBeenCalledWith(
+        validObjectId,
+        tracking,
+      );
+      expect(result).toEqual({ success: true });
     });
   });
 

@@ -1,8 +1,6 @@
 ﻿import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import type { StringValue } from 'ms';
 
 import { AuthController } from './presentation/controllers/auth.controller';
 
@@ -28,16 +26,9 @@ import {
         defaultStrategy: 'jwt',
       }),
     }),
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
-        signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRATION') as StringValue,
-        },
-      }),
-    }),
+    // El JwtService se configura por llamada (privateKey/publicKey RS256 en
+    // jwt.service.ts y jwt.strategy.ts); no hay secret global HS256.
+    JwtModule.register({}),
     UsersModule,
     CommonModule,
   ],

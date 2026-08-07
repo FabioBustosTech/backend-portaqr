@@ -10,7 +10,7 @@ Elimina la duplicación de código (~40%), el borde HTTP interno con `any` (`@ne
 | ---- | ---------- |
 | Framework | NestJS 10, TypeScript 5 |
 | Base de datos | MongoDB (BD `sistema`) vía Mongoose 8 |
-| Autenticación | JWT (access + refresh), Passport, bcrypt |
+| Autenticación | JWT **RS256** (access + refresh), Passport, bcrypt, logout con `tokenVersion` |
 | Pagos | Webpay / Transbank (`transbank-sdk`) |
 | Email | Nodemailer + plantillas EJS |
 | Documentación | Swagger (`@nestjs/swagger`) |
@@ -42,13 +42,76 @@ cp .env.example .env
 | --- | --- | --- |
 | `SERVER_PORT` | Puerto del servidor | `3001` |
 | `MONGODB_URI` | Cadena de conexión a MongoDB (BD `sistema`) | `mongodb://root:example@mongo:27017/sistema?authSource=admin` |
-| `JWT_SECRET` | Secreto para firmar tokens de acceso | — |
-| `JWT_REFRESH_SECRET` | Secreto para firmar refresh tokens | — |
+| `JWT_PRIVATE_KEY` | Llave **privada** RSA (firma) — ver [Creación de llaves JWT](#creación-de-llaves-jwt-rs256) | — |
+| `JWT_PUBLIC_KEY` | Llave **pública** RSA (verificación, se comparte con el frontend) | — |
+| `JWT_EXPIRATION` | Vida del access token | `24h` |
+| `JWT_REFRESH_EXPIRATION` | Vida del refresh token | `7d` |
 | `WEBPAY_COMMERCE_CODE` | Código de comercio Webpay | — |
 | `WEBPAY_API_KEY` | API key de Webpay | — |
 | `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` | Configuración SMTP para emails | — |
 
 > ⚠️ **Nunca** commitees el archivo `.env`. Está excluido por `.gitignore`.
+>
+> ⚠️ La llave **privada** (`JWT_PRIVATE_KEY`) **nunca debe salir del backend** ni publicarse. La **pública** (`JWT_PUBLIC_KEY`) es segura de compartir y debe coincidir con la del frontend (`qr-app/.env`).
+
+## Creación de llaves JWT (RS256)
+
+El backend firma los JWT con **RS256** (par de llaves asimétricas RSA 2048):
+
+- **Backend** firma con la llave **privada** (nunca se expone).
+- **Frontend** (`qr-app`) verifica con la llave **pública** — puede estar en el frontend sin riesgo; robarla NO permite forjar tokens (a diferencia de HS256, donde el secreto compartido sí lo permite).
+
+### Generar el par de llaves
+
+**Opción A — Script del proyecto (recomendado):**
+
+```bash
+npm run generate:jwt-env
+```
+
+Genera el par RSA 2048, lo guarda en `keys/` (`jwt-private.pem` + `jwt-public.pem`) e imprime ambas variables en **una sola línea** (con `\n` literales) listas para pegar en el `.env`:
+
+```
+JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvQ...\n-----END PRIVATE KEY-----"
+JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\nMIIBIj...\n-----END PUBLIC KEY-----"
+```
+
+Para solo formatear las llaves existentes sin rotar:
+
+```bash
+npm run generate:jwt-env -- --use-existing
+```
+
+**Opción B — Manual con OpenSSL:**
+
+```bash
+# Generar llave privada (PKCS#8 PEM)
+openssl genpkey -algorithm RSA -out jwt-private.pem -pkeyopt rsa_keygen_bits:2048
+# Derivar llave pública
+openssl rsa -in jwt-private.pem -pubout -out jwt-public.pem
+# Convertir a una línea (para .env)
+awk '{printf "%s\\n", $0}' jwt-private.pem   # y jwt-public.pem
+```
+
+### Formatos aceptados por `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY`
+
+| Formato | Ejemplo | Uso |
+| --- | --- | --- |
+| **Contenido PEM directo** | `JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"` | **Recomendado** (Railway, despliegues, sin archivos) |
+| **Ruta a archivo PEM** | `JWT_PRIVATE_KEY=keys/jwt-private.pem` | Local / formato legacy |
+
+Los `\n` literales del formato a) se normalizan automáticamente a saltos de línea reales.
+
+### Consideraciones de seguridad
+
+1. **La llave privada nunca se commitea**: `keys/` y `*.pem` están en `.gitignore`; el `.env` también.
+2. **Rotación de llaves**: al ejecutar `npm run generate:jwt-env` (sin `--use-existing`) se genera un par nuevo → **todos los tokens emitidos quedan inválidos** (los usuarios deben volver a iniciar sesión). Tras rotar:
+   - Actualizar `JWT_PRIVATE_KEY` y `JWT_PUBLIC_KEY` en el backend (`.env` / Railway).
+   - Actualizar `JWT_PUBLIC_KEY` en el **frontend** `qr-app/.env` con la nueva llave pública.
+   - Reiniciar ambos servicios.
+3. **La pública debe coincidir en backend y frontend**: si difieren, la verificación falla con 401 en toda la app.
+4. **Fallback en desarrollo**: si no hay llaves configuradas, el backend genera un par RSA **efímero en memoria** (solo para dev/tests — firma/verificación consistentes en el mismo proceso, pero los tokens no sobreviven reinicios). En producción SIEMPRE define las llaves reales.
+5. **Logout real**: al hacer `POST /auth/logout` se incrementa `tokenVersion` del usuario → todos sus tokens (access y refresh) quedan revocados al instante.
 
 ## Scripts disponibles
 
@@ -64,6 +127,7 @@ cp .env.example .env
 | `npm run test:cov` | Tests con reporte de cobertura |
 | `npm run test:e2e` | Tests end-to-end |
 | `npm run create:admin` | CLI para crear un usuario administrador |
+| `npm run generate:jwt-env` | Genera el par de llaves RSA y lo imprime en una línea para `.env` (ver [Creación de llaves JWT](#creación-de-llaves-jwt-rs256)) |
 
 ## Estructura del proyecto
 
@@ -116,6 +180,7 @@ Todas las rutas (excepto las marcadas como públicas) requieren `Authorization: 
 | --- | --- | --- | --- |
 | POST | `/auth/login` | Inicia sesión y devuelve tokens | ✅ |
 | POST | `/auth/refresh` | Renueva el access token | ✅ |
+| POST | `/auth/logout` | Cierra sesión (revoca todos los tokens vía `tokenVersion`) | ❌ |
 | GET | `/auth/profile` | Datos del usuario autenticado | ❌ |
 
 ### Usuarios — `/users`

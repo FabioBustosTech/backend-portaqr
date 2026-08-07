@@ -13,6 +13,8 @@ export interface ICanUpdateUser {
     tracking: TrackingContext,
   ): Promise<User | null>;
   updateLastLogin(userId: string, tracking: TrackingContext): Promise<void>;
+  /** Incrementa tokenVersion del usuario (invalida todos sus tokens JWT emitidos) */
+  incrementTokenVersion(userId: string, tracking: TrackingContext): Promise<void>;
 }
 
 export interface ICanDeleteUser {

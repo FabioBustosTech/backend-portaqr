@@ -20,6 +20,7 @@ describe('AuthController', () => {
             login: jest.fn(),
             refreshToken: jest.fn(),
             getProfile: jest.fn(),
+            logout: jest.fn(),
             validateUser: jest.fn(),
           },
         },
@@ -86,6 +87,18 @@ describe('AuthController', () => {
 
       expect(authService.getProfile).toHaveBeenCalledWith('user-1', tracking);
       expect(result).toEqual(expected);
+    });
+  });
+
+  describe('logout', () => {
+    it('debe delegar el logout al AuthService con el id del usuario autenticado', async () => {
+      const req = { user: { id: 'user-1' } };
+      authService.logout.mockResolvedValue({ success: true } as never);
+
+      const result = await controller.logout(req, tracking);
+
+      expect(authService.logout).toHaveBeenCalledWith('user-1', tracking);
+      expect(result).toEqual({ success: true });
     });
   });
 });

@@ -22,6 +22,8 @@ import { STATISTICS_GET_PORT } from './domain/constants/statistics.tokens';
       { name: ScanSchema.name, schema: ScanSchemaDefinition },
       { name: QrSchema.name, schema: QrSchemaDefinition },
       { name: UserSchema.name, schema: UserSchemaDefinition },
+      // Alias 'User' para que los refs de qr-activate/pet-tag resuelvan el populate
+      { name: 'User', schema: UserSchemaDefinition },
     ]),
   ],
   controllers: [StatisticsController],

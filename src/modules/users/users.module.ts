@@ -16,6 +16,7 @@ import { CreateUserUseCase } from './application/use-cases/create-user.usecase';
 import { GetAllUserUseCase } from './application/use-cases/get-all-user.usecase';
 import { GetUserUseCase } from './application/use-cases/get-user.usecase';
 import { UpdateUserUseCase } from './application/use-cases/update-user.usecase';
+import { IncrementTokenVersionUseCase } from './application/use-cases/increment-token-version.usecase';
 import { DeleteUserUseCase } from './application/use-cases/delete-user.usecase';
 import { VerifyEmailUseCase } from './application/use-cases/verify-email.usecase';
 import { ResendVerificationCodeUseCase } from './application/use-cases/resend-verification-code.usecase';
@@ -39,6 +40,9 @@ import {
     EmailModule,
     MongooseModule.forFeature([
       { name: UserSchema.name, schema: UserSchemaDefinition },
+      // Alias 'User' para que los refs de qr-activate/pet-tag resuelvan el populate
+      // (el nombre de clase UserSchema no coincide con ref: 'User')
+      { name: 'User', schema: UserSchemaDefinition },
     ]),
   ],
   controllers: [UsersController],
@@ -52,6 +56,7 @@ import {
     GetAllUserUseCase,
     GetUserUseCase,
     UpdateUserUseCase,
+    IncrementTokenVersionUseCase,
     DeleteUserUseCase,
     VerifyEmailUseCase,
     ResendVerificationCodeUseCase,
@@ -94,6 +99,7 @@ import {
     GetAllUserUseCase,
     GetUserUseCase,
     UpdateUserUseCase,
+    IncrementTokenVersionUseCase,
     DeleteUserUseCase,
     VerifyEmailUseCase,
     ResendVerificationCodeUseCase,

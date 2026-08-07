@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import type { StringValue } from 'ms';
 import type { IJwtService, JwtPayload, AuthTokenResponse } from '../ports/in/jwt-service.port';
 import type { User } from '../../../users/domain/entities/user.entity';
+import { loadJwtKeys } from '../../infrastructure/jwt-keys';
 
 @Injectable()
 export class JwtAuthService implements IJwtService {
@@ -15,21 +16,26 @@ export class JwtAuthService implements IJwtService {
   ) {}
 
   async generateTokens(user: User): Promise<AuthTokenResponse> {
+    const { privateKey } = loadJwtKeys(this.configService);
+
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
       userName: user.userName,
       role: user.role,
       isEmailVerified: user.isEmailVerified,
+      tokenVersion: user.tokenVersion ?? 0,
     };
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('JWT_SECRET'),
+        privateKey,
+        algorithm: 'RS256',
         expiresIn: this.configService.get<string>('JWT_EXPIRATION') as StringValue,
       }),
       this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+        privateKey,
+        algorithm: 'RS256',
         expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRATION') as StringValue,
       }),
     ]);
@@ -39,8 +45,10 @@ export class JwtAuthService implements IJwtService {
 
   verifyToken(token: string): JwtPayload {
     try {
+      const { publicKey } = loadJwtKeys(this.configService);
       return this.jwtService.verify<JwtPayload>(token, {
-        secret: this.configService.get<string>('JWT_SECRET'),
+        publicKey,
+        algorithms: ['RS256'],
       });
     } catch (error) {
       this.logger.error('Error al verificar el token', error);
@@ -50,9 +58,10 @@ export class JwtAuthService implements IJwtService {
 
   verifyRefreshToken(token: string): JwtPayload {
     try {
+      const { publicKey } = loadJwtKeys(this.configService);
       return this.jwtService.verify<JwtPayload>(token, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-        algorithms: ['HS256'],
+        publicKey,
+        algorithms: ['RS256'],
       });
     } catch (error) {
       this.logger.error('Error al verificar refresh token', error);

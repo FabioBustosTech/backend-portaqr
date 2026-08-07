@@ -10,6 +10,7 @@ import type {
 import { PasswordService } from '../../../users/domain/services/password.service';
 import { GetUserUseCase } from '../../../users/application/use-cases/get-user.usecase';
 import { UpdateUserUseCase } from '../../../users/application/use-cases/update-user.usecase';
+import { IncrementTokenVersionUseCase } from '../../../users/application/use-cases/increment-token-version.usecase';
 import type { User } from '../../../users/domain/entities/user.entity';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
@@ -24,6 +25,7 @@ export class AuthService implements IAuthService {
     private readonly passwordService: PasswordService,
     private readonly getUserUseCase: GetUserUseCase,
     private readonly updateUserUseCase: UpdateUserUseCase,
+    private readonly incrementTokenVersionUseCase: IncrementTokenVersionUseCase,
     private readonly traceService: TraceService,
   ) {}
 
@@ -78,6 +80,16 @@ export class AuthService implements IAuthService {
     }
 
     const user = await this.getUserUseCase.execute(decoded.sub, tracking);
+
+    // Si el refresh token fue emitido con una versión anterior a la actual,
+    // fue invalidado (logout) y no puede usarse para renovar sesión.
+    if ((decoded.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) {
+      this.logger.warn(
+        `Refresh token invalidado (tokenVersion desactualizado) para user ${user.id}`,
+      );
+      throw new UnauthorizedException('Token de refresco inválido o expirado');
+    }
+
     const tokens = await this.jwtAuthService.generateTokens(user);
     this.traceService.log(tracking, TraceLayer.USE_CASE, 'AuthService.refreshToken - éxito', {
       email: user.email,
@@ -98,6 +110,19 @@ export class AuthService implements IAuthService {
     const { password: _password, ...profile } = user;
     void _password;
     return profile;
+  }
+
+  async logout(
+    userId: string,
+    tracking: TrackingContext,
+  ): Promise<{ success: boolean }> {
+    this.traceService.log(tracking, TraceLayer.USE_CASE, 'AuthService.logout', {
+      userId,
+    });
+
+    // Incrementar tokenVersion invalida todos los tokens JWT emitidos previamente
+    await this.incrementTokenVersionUseCase.execute(userId, tracking);
+    return { success: true };
   }
 
   async validateUser(payload: JwtPayload): Promise<User | null> {

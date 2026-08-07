@@ -127,7 +127,7 @@ export class MongoPetTagRepository
       const [results, total] = await Promise.all([
         this.petTagModel
           .find(mongoQuery)
-          .select('idQr activationPin createdAt status commercialStatus assignedStoreName')
+          .select('_id idQr activationPin createdAt status commercialStatus assignedStoreName')
           .sort({ createdAt: -1 }) // Las más nuevas primero
           .skip(skip)
           .limit(limit)
@@ -140,7 +140,9 @@ export class MongoPetTagRepository
       });
 
       return {
-        data: results,
+        // Mapear a entidad: convierte _id (ObjectId) a id string y evita
+        // serializaciones raras del ObjectId ({buffer}) que rompen keys de React
+        data: results.map((doc) => PetTagMongoMapper.toEntity(doc)),
         pagination: {
           total,
           page,
