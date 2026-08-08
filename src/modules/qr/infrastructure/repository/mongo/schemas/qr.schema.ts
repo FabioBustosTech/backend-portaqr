@@ -49,7 +49,8 @@ export class QrSchema {
           }
         }],
         required: false,
-        default: undefined
+        default: undefined,
+        _id: false // evita CastError al re-enviar items con _id desde el frontend (edición)
       },
       listImageUrl: { type: String, required: false, default: null }, // SPEC-002: portada QR multilink
       vcardData: {

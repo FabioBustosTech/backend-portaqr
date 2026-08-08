@@ -398,6 +398,15 @@ export class QrController {
       }
     }
 
+    // Sanitizar urlList: descartar _id de los items (evita CastError al re-persistir
+    // subdocumentos que vinieron del GET con _id de Mongo)
+    if (Array.isArray(updateQrDto.data?.urlList)) {
+      updateQrDto.data.urlList = updateQrDto.data.urlList.map((item) => {
+        const { _id, ...rest } = item as { _id?: unknown } & typeof item;
+        return rest;
+      });
+    }
+
     // SPEC-002 RF-4: ignorar listImageUrl si el QR no es de tipo 'list'
     if (currentQr.typeQr !== 'list' && updateQrDto.data?.listImageUrl !== undefined) {
       delete updateQrDto.data.listImageUrl;
