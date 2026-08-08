@@ -271,6 +271,13 @@ export class QrData {
   @Type(() => ListUrlData)
   urlList?: ListUrlData[];
 
+  // SPEC-002: imagen de portada del QR multilink (URL pública R2).
+  // Solo se acepta para typeQr === 'list'; se ignora para los demás tipos (RF-4).
+  @ValidateIf(o => o.typeQr === 'list')
+  @IsOptional()
+  @IsUrl({}, { message: 'La URL de la imagen de portada debe ser válida' })
+  listImageUrl?: string | null;
+
   @ValidateIf(o => o.typeQr === 'vcard')
   @ValidateNested({ message: 'Los datos de la tarjeta de contacto deben ser válidos' })
   @Type(() => VCard)

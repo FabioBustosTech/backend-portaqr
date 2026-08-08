@@ -115,3 +115,39 @@ describe('QrMongoMapper', () => {
     });
   });
 });
+describe('QrMongoMapper — listImageUrl (SPEC-002)', () => {
+  it('toEntity preserva data.listImageUrl', () => {
+    const doc: any = {
+      _id: { toString: () => 'qr-id-3' },
+      idQr: 'QR-3',
+      userId: 'user-3',
+      data: {
+        typeQr: 'list',
+        urlList: [{ typeUrl: 'web', url: 'https://a.cl' }],
+        listImageUrl: 'https://images.portaqr.cl/qr-multilink/QR-3.webp',
+      },
+      typeQr: 'list',
+    };
+
+    const entity = QrMongoMapper.toEntity(doc);
+
+    expect(entity.data.listImageUrl).toBe('https://images.portaqr.cl/qr-multilink/QR-3.webp');
+  });
+
+  it('toSchemaData incluye data con listImageUrl', () => {
+    const entity: Partial<Qr> = {
+      idQr: 'QR-4',
+      userId: 'user-4',
+      data: {
+        typeQr: 'list',
+        urlList: [{ typeUrl: 'web', url: 'https://b.cl' }],
+        listImageUrl: 'https://images.portaqr.cl/qr-multilink/QR-4.webp',
+      },
+      typeQr: 'list',
+    };
+
+    const schemaData = QrMongoMapper.toSchemaData(entity);
+
+    expect(schemaData.data).toEqual(entity.data);
+  });
+});
