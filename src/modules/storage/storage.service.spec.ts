@@ -75,6 +75,60 @@ describe('StorageService', () => {
     });
   });
 
+  describe('uploadPdf', () => {
+    it('genera key qr-multilink-pdf/{idQr}-{itemId}.pdf y publicUrl compuesta', async () => {
+      const service = createService();
+      const result = await service.uploadPdf({
+        idQr: '89302960-7799-43fe-b5a0-45d2295d539f',
+        itemId: 'item-abc-123',
+        buffer: Buffer.from('%PDF-1.7'),
+      });
+
+      expect(result.key).toBe('qr-multilink-pdf/89302960-7799-43fe-b5a0-45d2295d539f-item-abc-123.pdf');
+      expect(result.publicUrl).toBe(
+        'https://images.portaqr.cl/qr-multilink-pdf/89302960-7799-43fe-b5a0-45d2295d539f-item-abc-123.pdf',
+      );
+      expect(result.size).toBe(8);
+
+      const send = mockedSend();
+      expect(send).toHaveBeenCalledTimes(1);
+      const cmd = (send as jest.Mock).mock.calls[0][0];
+      expect(cmd.name).toBe('PutObjectCommand');
+      expect(cmd.input).toMatchObject({
+        Bucket: 'portaqr-assets',
+        Key: 'qr-multilink-pdf/89302960-7799-43fe-b5a0-45d2295d539f-item-abc-123.pdf',
+        ContentType: 'application/pdf',
+        CacheControl: 'public, max-age=31536000, immutable',
+      });
+      expect(cmd.input.Body).toEqual(Buffer.from('%PDF-1.7'));
+    });
+
+    it('usa la key como publicUrl cuando no hay base URL configurada', async () => {
+      const service = createService({ CLOUDFLARE_R2_PUBLIC_URL: '' });
+      const result = await service.uploadPdf({
+        idQr: 'uuid-1',
+        itemId: 'item-1',
+        buffer: Buffer.from('x'),
+      });
+
+      expect(result.key).toBe('qr-multilink-pdf/uuid-1-item-1.pdf');
+      expect(result.publicUrl).toBe('qr-multilink-pdf/uuid-1-item-1.pdf');
+    });
+
+    it('funciona con ConfigService sin variables R2 (fallbacks del constructor)', async () => {
+      const service = new StorageService(new ConfigService({}));
+      const result = await service.uploadPdf({
+        idQr: 'uuid-1',
+        itemId: 'item-1',
+        buffer: Buffer.from('x'),
+      });
+
+      expect(result.publicUrl).toBe('qr-multilink-pdf/uuid-1-item-1.pdf');
+      const cmd = (mockedSend() as jest.Mock).mock.calls[0][0];
+      expect(cmd.input.Bucket).toBe('portaqr-assets');
+    });
+  });
+
   describe('deleteObject', () => {
     it('extrae el key de la publicUrl y llama DeleteObjectCommand', async () => {
       const service = createService();
@@ -87,6 +141,22 @@ describe('StorageService', () => {
       const cmd = (send as jest.Mock).mock.calls[0][0];
       expect(cmd.name).toBe('DeleteObjectCommand');
       expect(cmd.input).toEqual({ Bucket: 'portaqr-assets', Key: 'qr-multilink/uuid-1.webp' });
+    });
+
+    it('extrae el key de un publicUrl con prefijo qr-multilink-pdf/ (SPEC-005)', async () => {
+      const service = createService();
+      await service.deleteObject(
+        'https://images.portaqr.cl/qr-multilink-pdf/uuid-1-item-abc.pdf',
+      );
+
+      const send = mockedSend();
+      expect(send).toHaveBeenCalledTimes(1);
+      const cmd = (send as jest.Mock).mock.calls[0][0];
+      expect(cmd.name).toBe('DeleteObjectCommand');
+      expect(cmd.input).toEqual({
+        Bucket: 'portaqr-assets',
+        Key: 'qr-multilink-pdf/uuid-1-item-abc.pdf',
+      });
     });
 
     it('NO lanza cuando la subida/borrado falla (mejor esfuerzo — RF-14)', async () => {
@@ -102,6 +172,13 @@ describe('StorageService', () => {
     it('no llama al SDK si la URL no es reconocible', async () => {
       const service = createService();
       await service.deleteObject('https://otro-dominio.com/no-es-qr.jpg');
+      expect(mockedSend()).not.toHaveBeenCalled();
+    });
+
+    it('no llama al SDK si la URL es vacía o nula', async () => {
+      const service = createService();
+      await service.deleteObject('');
+      await service.deleteObject(null as unknown as string);
       expect(mockedSend()).not.toHaveBeenCalled();
     });
   });
