@@ -284,20 +284,48 @@ export class MongoQrRepository
         ];
       }
 
-      // --- 2. Obtener Datos y Totales en Paralelo ---
-      const [qrResults, petTagResults, totalQrs, totalPetTags] = await Promise.all([
-        this.qrModel.find(qrQuery).lean().exec(),
-        this.petTagModel.find(petTagQuery).lean().exec(),
-        this.qrModel.countDocuments(qrQuery),
-        this.petTagModel.countDocuments(petTagQuery),
+      // --- 2. Paginar en origen con $facet (SPEC-007 H3) ---
+      // Cada colección trae a lo sumo `limit` docs (2×limit en total a unir),
+      // no la colección completa; el total se calcula en la misma consulta.
+      const sort = { isFavorite: -1, updatedAt: -1 } as const;
+      const [qrFacet, petTagFacet] = await Promise.all([
+        this.qrModel
+          .aggregate([
+            { $match: qrQuery },
+            { $sort: sort },
+            {
+              $facet: {
+                data: [{ $skip: skip }, { $limit: limit }],
+                total: [{ $count: 'v' }],
+              },
+            },
+          ])
+          .exec(),
+        this.petTagModel
+          .aggregate([
+            { $match: petTagQuery },
+            { $sort: sort },
+            {
+              $facet: {
+                data: [{ $skip: skip }, { $limit: limit }],
+                total: [{ $count: 'v' }],
+              },
+            },
+          ])
+          .exec(),
       ]);
+
+      const qrData = qrFacet[0]?.data ?? [];
+      const petTagData = petTagFacet[0]?.data ?? [];
+      const totalQrs = qrFacet[0]?.total?.[0]?.v ?? 0;
+      const totalPetTags = petTagFacet[0]?.total?.[0]?.v ?? 0;
 
       // --- 3. Unificar, Ordenar y Paginar (Sin Mapeo Inverso) ---
 
       // AÃ±adimos un campo 'resultType' para que el frontend pueda diferenciar, pero NO modificamos la estructura original
       const allItems = [
-        ...qrResults.map((item) => ({ ...item, resultType: 'qr' })),
-        ...petTagResults.map((item) => ({ ...item, resultType: 'pet-tag' })),
+        ...qrData.map((item) => ({ ...item, resultType: 'qr' })),
+        ...petTagData.map((item) => ({ ...item, resultType: 'pet-tag' })),
       ];
 
       // Ordenar el array combinado: primero favoritos, luego por fecha de actualizaciÃ³n
@@ -312,17 +340,16 @@ export class MongoQrRepository
       });
 
       const total = totalQrs + totalPetTags;
-      const paginatedData = allItems.slice(skip, skip + limit);
       const totalPages = Math.ceil(total / limit);
 
       this.traceService.log(tracking, TraceLayer.REPOSITORY, 'findUserByFavorites:complete', {
         total,
         totalPages,
-        results: paginatedData.length,
+        results: allItems.length,
       });
 
       return {
-        data: paginatedData,
+        data: allItems,
         pagination: {
           total,
           totalPages,

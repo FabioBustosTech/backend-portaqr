@@ -21,6 +21,8 @@ const mockCountDocuments = jest.fn();
 const mockPetTagFind = jest.fn();
 const mockPetTagCountDocuments = jest.fn();
 const mockUpdateMany = jest.fn();
+const mockAggregate = jest.fn();
+const mockPetTagAggregate = jest.fn();
 
 const qrModelMock = jest.fn().mockImplementation((data: Record<string, unknown>) => ({
   ...data,
@@ -33,10 +35,12 @@ const qrModelMock = jest.fn().mockImplementation((data: Record<string, unknown>)
 (qrModelMock as unknown as Record<string, unknown>).findOneAndDelete = mockFindOneAndDelete;
 (qrModelMock as unknown as Record<string, unknown>).countDocuments = mockCountDocuments;
 (qrModelMock as unknown as Record<string, unknown>).updateMany = mockUpdateMany;
+(qrModelMock as unknown as Record<string, unknown>).aggregate = mockAggregate;
 
 const petTagModelMock = jest.fn() as unknown as Model<PetTagDocument>;
 (petTagModelMock as unknown as Record<string, unknown>).find = mockPetTagFind;
 (petTagModelMock as unknown as Record<string, unknown>).countDocuments = mockPetTagCountDocuments;
+(petTagModelMock as unknown as Record<string, unknown>).aggregate = mockPetTagAggregate;
 
 /** Crea un mock de query encadenable (sort/limit/skip/lean/select/exec) */
 const createQueryMock = (result: unknown, reject = false) => {
@@ -64,6 +68,15 @@ const createCountResult = (value: number) => {
   const promise = Promise.resolve(value) as unknown as { exec: jest.Mock };
   promise.exec = jest.fn().mockResolvedValue(value);
   return promise;
+};
+
+/** Crea un resultado de aggregate $facet: [{ data, total }] con .exec() */
+const createAggregateFacetResult = (
+  data: unknown[],
+  total: number,
+): { exec: jest.Mock } => {
+  const result = [{ data, total: [{ v: total }] }];
+  return { exec: jest.fn().mockResolvedValue(result) };
 };
 
 describe('MongoQrRepository', () => {
@@ -637,17 +650,29 @@ describe('MongoQrRepository', () => {
       updatedAt: new Date('2025-01-04T00:00:00.000Z'),
     };
 
-    it('debe unificar QRs y pet-tags, ordenar favoritos primero y paginar', async () => {
-      mockFind.mockReturnValue(createQueryMock([qrFav, qrNoFav]));
-      mockPetTagFind.mockReturnValue(createQueryMock([petTagDoc]));
-      mockCountDocuments.mockReturnValue(createCountResult(2));
-      mockPetTagCountDocuments.mockReturnValue(createCountResult(1));
+    it('debe unificar QRs y pet-tags, ordenar favoritos primero y paginar (2 aggregates con $facet)', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([qrFav, qrNoFav], 2));
+      mockPetTagAggregate.mockReturnValue(createAggregateFacetResult([petTagDoc], 1));
 
       const result = await repository.findUserByFavorites(userId, 1, 10, '', '', '', tracking);
 
-      expect(mockFind).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: expect.any(Types.ObjectId) }),
+      expect(mockAggregate).toHaveBeenCalledTimes(1);
+      expect(mockPetTagAggregate).toHaveBeenCalledTimes(1);
+      // Paginación en BD: $skip/$limit dentro del $facet, no fetch completo
+      expect(mockAggregate).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ $match: expect.objectContaining({ userId: expect.any(Types.ObjectId) }) }),
+          expect.objectContaining({ $sort: { isFavorite: -1, updatedAt: -1 } }),
+          expect.objectContaining({
+            $facet: {
+              data: expect.arrayContaining([{ $skip: 0 }, { $limit: 10 }]),
+              total: [{ $count: 'v' }],
+            },
+          }),
+        ]),
       );
+      expect(mockFind).not.toHaveBeenCalled();
+      expect(mockCountDocuments).not.toHaveBeenCalled();
       expect(result.data).toHaveLength(3);
       expect(result.data[0]).toEqual(expect.objectContaining({ resultType: 'qr', isFavorite: true }));
       expect(result.data[1]).toEqual(
@@ -671,59 +696,63 @@ describe('MongoQrRepository', () => {
     });
 
     it('debe aplicar condiciones de búsqueda a ambos modelos', async () => {
-      mockFind.mockReturnValue(createQueryMock([]));
-      mockPetTagFind.mockReturnValue(createQueryMock([]));
-      mockCountDocuments.mockReturnValue(createCountResult(0));
-      mockPetTagCountDocuments.mockReturnValue(createCountResult(0));
+      mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
+      mockPetTagAggregate.mockReturnValue(createAggregateFacetResult([], 0));
 
       await repository.findUserByFavorites(userId, 1, 10, 'hola', '', '', tracking);
 
-      expect(mockFind).toHaveBeenCalledWith(
-        expect.objectContaining({ $or: expect.any(Array) }),
+      expect(mockAggregate).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ $match: expect.objectContaining({ $or: expect.any(Array) }) }),
+        ]),
       );
-      expect(mockPetTagFind).toHaveBeenCalledWith(
-        expect.objectContaining({ $or: expect.any(Array) }),
+      expect(mockPetTagAggregate).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ $match: expect.objectContaining({ $or: expect.any(Array) }) }),
+        ]),
       );
     });
 
     it('debe usar userId2 cuando el rol es admin y se entrega userId2', async () => {
-      mockFind.mockReturnValue(createQueryMock([]));
-      mockPetTagFind.mockReturnValue(createQueryMock([]));
-      mockCountDocuments.mockReturnValue(createCountResult(0));
-      mockPetTagCountDocuments.mockReturnValue(createCountResult(0));
+      mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
+      mockPetTagAggregate.mockReturnValue(createAggregateFacetResult([], 0));
 
       await repository.findUserByFavorites(userId, 1, 10, '', 'admin', userId2, tracking);
 
-      expect(mockFind).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: expect.any(Types.ObjectId) }),
+      expect(mockAggregate).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ $match: expect.objectContaining({ userId: expect.any(Types.ObjectId) }) }),
+        ]),
       );
-      expect(mockPetTagFind).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: expect.any(Types.ObjectId) }),
+      expect(mockPetTagAggregate).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ $match: expect.objectContaining({ userId: expect.any(Types.ObjectId) }) }),
+        ]),
       );
     });
 
     it('debe usar userId cuando el rol es admin pero no se entrega userId2', async () => {
-      mockFind.mockReturnValue(createQueryMock([]));
-      mockPetTagFind.mockReturnValue(createQueryMock([]));
-      mockCountDocuments.mockReturnValue(createCountResult(0));
-      mockPetTagCountDocuments.mockReturnValue(createCountResult(0));
+      mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
+      mockPetTagAggregate.mockReturnValue(createAggregateFacetResult([], 0));
 
       await repository.findUserByFavorites(userId, 1, 10, '', 'admin', '', tracking);
 
-      expect(mockFind).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: expect.any(Types.ObjectId) }),
+      expect(mockAggregate).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ $match: expect.objectContaining({ userId: expect.any(Types.ObjectId) }) }),
+        ]),
       );
-      expect(mockPetTagFind).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: expect.any(Types.ObjectId) }),
+      expect(mockPetTagAggregate).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ $match: expect.objectContaining({ userId: expect.any(Types.ObjectId) }) }),
+        ]),
       );
     });
 
     it('debe tratar como no favoritos los items sin campo isFavorite', async () => {
       const qrSinFavorito = { ...qrDoc, _id: { toString: () => 'qr-id-9' }, isFavorite: undefined };
-      mockFind.mockReturnValue(createQueryMock([qrSinFavorito]));
-      mockPetTagFind.mockReturnValue(createQueryMock([]));
-      mockCountDocuments.mockReturnValue(createCountResult(1));
-      mockPetTagCountDocuments.mockReturnValue(createCountResult(0));
+      mockAggregate.mockReturnValue(createAggregateFacetResult([qrSinFavorito], 1));
+      mockPetTagAggregate.mockReturnValue(createAggregateFacetResult([], 0));
 
       const result = await repository.findUserByFavorites(userId, 1, 10, '', '', '', tracking);
 
@@ -731,15 +760,17 @@ describe('MongoQrRepository', () => {
       expect(result.pagination.total).toBe(1);
     });
 
-    it('debe aplicar el slice de paginación sobre el arreglo combinado', async () => {
-      mockFind.mockReturnValue(createQueryMock([qrFav, qrNoFav]));
-      mockPetTagFind.mockReturnValue(createQueryMock([petTagDoc]));
-      mockCountDocuments.mockReturnValue(createCountResult(2));
-      mockPetTagCountDocuments.mockReturnValue(createCountResult(1));
+    it('debe aplicar $skip/$limit en BD según la página (paginación en origen)', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([qrFav], 2));
+      mockPetTagAggregate.mockReturnValue(createAggregateFacetResult([petTagDoc], 1));
 
       const result = await repository.findUserByFavorites(userId, 2, 1, '', '', '', tracking);
 
-      expect(result.data).toHaveLength(1);
+      const qrAggregateCall = mockAggregate.mock.calls[0][0] as Array<Record<string, unknown>>;
+      const qrFacet = qrAggregateCall.find((s) => s.$facet)?.$facet as {
+        data: Array<Record<string, unknown>>;
+      };
+      expect(qrFacet.data).toEqual([{ $skip: 1 }, { $limit: 1 }]);
       expect(result.pagination).toEqual({
         total: 3,
         totalPages: 3,
@@ -751,7 +782,9 @@ describe('MongoQrRepository', () => {
     });
 
     it('debe lanzar HttpException y trazar el error si la consulta falla', async () => {
-      mockFind.mockReturnValue(createQueryMock(new Error('DB down'), true));
+      mockAggregate.mockReturnValue({
+        exec: jest.fn().mockRejectedValue(new Error('DB down')),
+      });
 
       await expect(
         repository.findUserByFavorites(userId, 1, 10, '', '', '', tracking),

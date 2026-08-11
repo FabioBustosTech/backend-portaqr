@@ -322,6 +322,8 @@ QrSchemaDefinition.index({ userId: 1, typeQr: 1 });
 QrSchemaDefinition.index({ expiration: 1 });
 QrSchemaDefinition.index({ createdAt: 1 });
 QrSchemaDefinition.index({ updatedAt: 1 });
+// SPEC-007 RF-6: soporte del sort { isFavorite: -1, updatedAt: -1 } en findUserByFavorites sin escaneo
+QrSchemaDefinition.index({ userId: 1, isFavorite: -1, updatedAt: -1 });
 
 QrSchemaDefinition.pre('save', function(next) {
   this.updatedAt = new Date();
