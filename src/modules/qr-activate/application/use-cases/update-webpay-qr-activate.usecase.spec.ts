@@ -91,6 +91,7 @@ describe('UpdateWebpayQrActivateUseCase', () => {
           provide: QR_ACTIVATE_QR_PORT,
           useValue: {
             updateQr: jest.fn(),
+            activateMany: jest.fn(),
           },
         },
         {
@@ -124,9 +125,10 @@ describe('UpdateWebpayQrActivateUseCase', () => {
   });
 
   describe('execute', () => {
-    it('debe marcar como PAYED, activar los QRs y actualizar la transacción cuando el pago es autorizado', async () => {
+    it('debe marcar como PAYED, activar los QRs en batch y actualizar la transacción cuando el pago es autorizado', async () => {
       reader.getByWebpayToken.mockResolvedValue(mockActivation);
       commitTransactionUseCase.execute.mockResolvedValue(mockCommitAuthorized);
+      qrActivator.activateMany.mockResolvedValue({ matchedCount: 1, modifiedCount: 1 });
       updater.update.mockResolvedValue({
         ...mockActivation,
         state: ActivationState.PAYED,
@@ -152,11 +154,14 @@ describe('UpdateWebpayQrActivateUseCase', () => {
         'UpdateWebpayQrActivateUseCase - PAGADO',
         { token_ws: 'token-ws-1' },
       );
-      expect(qrActivator.updateQr).toHaveBeenCalledWith(
-        'qr-1',
-        { active: true, expiration: expirationDate },
+      // Batch: 1 sola llamada con todos los códigos, esperada (no fire-and-forget)
+      expect(qrActivator.activateMany).toHaveBeenCalledTimes(1);
+      expect(qrActivator.activateMany).toHaveBeenCalledWith(
+        ['qr-1'],
+        expirationDate,
         tracking,
       );
+      expect(qrActivator.updateQr).not.toHaveBeenCalled();
       expect(updater.update).toHaveBeenCalledWith(
         'act-1',
         {
@@ -171,6 +176,101 @@ describe('UpdateWebpayQrActivateUseCase', () => {
       expect(result.state).toBe(ActivationState.PAYED);
     });
 
+    it('debe activar todos los QRs de la compra en 1 operación batch (N QRs)', async () => {
+      const multiQrActivation: QrActivate = {
+        ...mockActivation,
+        qrList: [
+          { qrCode: 'qr-1', price: 50, expirationDate, duration: '6 meses' },
+          { qrCode: 'qr-2', price: 50, expirationDate, duration: '6 meses' },
+        ],
+      };
+      reader.getByWebpayToken.mockResolvedValue(multiQrActivation);
+      commitTransactionUseCase.execute.mockResolvedValue(mockCommitAuthorized);
+      qrActivator.activateMany.mockResolvedValue({ matchedCount: 2, modifiedCount: 2 });
+      updater.update.mockResolvedValue({
+        ...multiQrActivation,
+        state: ActivationState.PAYED,
+        WebpayTransaction: { ...multiQrActivation.WebpayTransaction, state: WebpayState.ACTIVE },
+      });
+
+      await useCase.execute('token-ws-1', tracking);
+
+      expect(qrActivator.activateMany).toHaveBeenCalledTimes(1);
+      expect(qrActivator.activateMany).toHaveBeenCalledWith(
+        ['qr-1', 'qr-2'],
+        expirationDate,
+        tracking,
+      );
+      expect(qrActivator.updateQr).not.toHaveBeenCalled();
+    });
+
+    it('debe avisar con warn si hay QRs inexistentes (matchedCount < total) pero igual guardar PAYED', async () => {
+      reader.getByWebpayToken.mockResolvedValue(mockActivation);
+      commitTransactionUseCase.execute.mockResolvedValue(mockCommitAuthorized);
+      qrActivator.activateMany.mockResolvedValue({ matchedCount: 0, modifiedCount: 0 });
+      updater.update.mockResolvedValue({
+        ...mockActivation,
+        state: ActivationState.PAYED,
+        WebpayTransaction: { ...mockActivation.WebpayTransaction, state: WebpayState.ACTIVE },
+      });
+
+      const result = await useCase.execute('token-ws-1', tracking);
+
+      expect(traceService.warn).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.USE_CASE,
+        'UpdateWebpayQrActivateUseCase - QRs inexistentes',
+        { token_ws: 'token-ws-1', total: 1, matchedCount: 0, modifiedCount: 0 },
+      );
+      expect(updater.update).toHaveBeenCalledWith(
+        'act-1',
+        expect.objectContaining({ state: ActivationState.PAYED }),
+        tracking,
+      );
+      expect(result.state).toBe(ActivationState.PAYED);
+    });
+
+    it('debe esperar la activación batch ANTES de persistir PAYED (RF-2)', async () => {
+      reader.getByWebpayToken.mockResolvedValue(mockActivation);
+      commitTransactionUseCase.execute.mockResolvedValue(mockCommitAuthorized);
+      updater.update.mockResolvedValue({
+        ...mockActivation,
+        state: ActivationState.PAYED,
+        WebpayTransaction: { ...mockActivation.WebpayTransaction, state: WebpayState.ACTIVE },
+      });
+
+      // Verificar orden: activateMany resuelve antes que updater.update
+      let activateResolved = false;
+      qrActivator.activateMany.mockImplementation(async () => {
+        activateResolved = true;
+        return { matchedCount: 1, modifiedCount: 1 };
+      });
+      updater.update.mockImplementation(async () => {
+        expect(activateResolved).toBe(true);
+        return {
+          ...mockActivation,
+          state: ActivationState.PAYED,
+          WebpayTransaction: {
+            ...mockActivation.WebpayTransaction,
+            state: WebpayState.ACTIVE,
+          },
+        } as never;
+      });
+
+      await useCase.execute('token-ws-1', tracking);
+
+      expect(activateResolved).toBe(true);
+    });
+
+    it('debe propagar el error si la activación batch falla (no guarda PAYED)', async () => {
+      reader.getByWebpayToken.mockResolvedValue(mockActivation);
+      commitTransactionUseCase.execute.mockResolvedValue(mockCommitAuthorized);
+      qrActivator.activateMany.mockRejectedValue(new Error('DB down'));
+
+      await expect(useCase.execute('token-ws-1', tracking)).rejects.toThrow('DB down');
+      expect(updater.update).not.toHaveBeenCalled();
+    });
+
     it('debe marcar como FAILED y no activar QRs cuando el pago no es autorizado', async () => {
       reader.getByWebpayToken.mockResolvedValue(mockActivation);
       commitTransactionUseCase.execute.mockResolvedValue(mockCommitFailed);
@@ -182,6 +282,7 @@ describe('UpdateWebpayQrActivateUseCase', () => {
 
       const result = await useCase.execute('token-ws-1', tracking);
 
+      expect(qrActivator.activateMany).not.toHaveBeenCalled();
       expect(qrActivator.updateQr).not.toHaveBeenCalled();
       expect(updater.update).toHaveBeenCalledWith(
         'act-1',
@@ -242,6 +343,7 @@ describe('UpdateWebpayQrActivateUseCase', () => {
     it('debe lanzar Error si la actualización de la activación falla', async () => {
       reader.getByWebpayToken.mockResolvedValue(mockActivation);
       commitTransactionUseCase.execute.mockResolvedValue(mockCommitAuthorized);
+      qrActivator.activateMany.mockResolvedValue({ matchedCount: 1, modifiedCount: 1 });
       updater.update.mockResolvedValue(null);
 
       await expect(useCase.execute('token-ws-1', tracking)).rejects.toThrow(

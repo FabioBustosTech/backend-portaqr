@@ -47,14 +47,24 @@ export class UpdateWebpayQrActivateUseCase {
       updatedState = ActivationState.PAYED;
       this.traceService.log(tracking, TraceLayer.USE_CASE, 'UpdateWebpayQrActivateUseCase - PAGADO', { token_ws });
 
-      // Activar los QRs de la compra
-      activation.qrList.forEach((qr) => {
-        this.qrActivator.updateQr(
-          qr.qrCode,
-          { active: true, expiration: qr.expirationDate },
+      // Activar los QRs de la compra en 1 operación batch atómica (SPEC-007 H2)
+      const codes = activation.qrList.map((qr) => qr.qrCode);
+      if (codes.length > 0) {
+        const { matchedCount, modifiedCount } = await this.qrActivator.activateMany(
+          codes,
+          activation.qrList[0]?.expirationDate ?? new Date(),
           tracking,
         );
-      });
+
+        if (matchedCount < codes.length) {
+          this.traceService.warn(
+            tracking,
+            TraceLayer.USE_CASE,
+            'UpdateWebpayQrActivateUseCase - QRs inexistentes',
+            { token_ws, total: codes.length, matchedCount, modifiedCount },
+          );
+        }
+      }
     } else {
       updatedState = ActivationState.FAILED;
     }

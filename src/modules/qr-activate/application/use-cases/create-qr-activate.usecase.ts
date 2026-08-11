@@ -57,13 +57,24 @@ export class CreateQrActivateUseCase {
 
     const created = await this.execute(dto, tracking);
 
-    dto.qrList.forEach((qr) => {
-      this.qrActivator.updateQr(
-        qr.qrCode,
-        { active: true, expiration: qr.expirationDate },
+    // Activar los QRs de la compra en 1 operación batch atómica (SPEC-007 H2)
+    const codes = dto.qrList.map((qr) => qr.qrCode);
+    if (codes.length > 0) {
+      const { matchedCount, modifiedCount } = await this.qrActivator.activateMany(
+        codes,
+        dto.qrList[0]?.expirationDate ?? new Date(),
         tracking,
       );
-    });
+
+      if (matchedCount < codes.length) {
+        this.traceService.warn(
+          tracking,
+          TraceLayer.USE_CASE,
+          'CreateQrActivateUseCase - QRs inexistentes',
+          { total: codes.length, matchedCount, modifiedCount },
+        );
+      }
+    }
 
     return created;
   }
