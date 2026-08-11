@@ -20,6 +20,7 @@ const mockFindOneAndDelete = jest.fn();
 const mockCountDocuments = jest.fn();
 const mockPetTagFind = jest.fn();
 const mockPetTagCountDocuments = jest.fn();
+const mockUpdateMany = jest.fn();
 
 const qrModelMock = jest.fn().mockImplementation((data: Record<string, unknown>) => ({
   ...data,
@@ -31,6 +32,7 @@ const qrModelMock = jest.fn().mockImplementation((data: Record<string, unknown>)
 (qrModelMock as unknown as Record<string, unknown>).findOneAndUpdate = mockFindOneAndUpdate;
 (qrModelMock as unknown as Record<string, unknown>).findOneAndDelete = mockFindOneAndDelete;
 (qrModelMock as unknown as Record<string, unknown>).countDocuments = mockCountDocuments;
+(qrModelMock as unknown as Record<string, unknown>).updateMany = mockUpdateMany;
 
 const petTagModelMock = jest.fn() as unknown as Model<PetTagDocument>;
 (petTagModelMock as unknown as Record<string, unknown>).find = mockPetTagFind;
@@ -407,6 +409,95 @@ describe('MongoQrRepository', () => {
         'update:error',
         expect.any(Error),
       );
+    });
+  });
+
+  describe('activateMany', () => {
+    /** Crea un resultado de updateMany que soporta .exec() */
+    const createUpdateManyResult = (matchedCount: number, modifiedCount: number) => {
+      const promise = Promise.resolve({ matchedCount, modifiedCount }) as unknown as {
+        exec: jest.Mock;
+        matchedCount: number;
+        modifiedCount: number;
+      };
+      promise.exec = jest.fn().mockResolvedValue({ matchedCount, modifiedCount });
+      return promise;
+    };
+
+    it('debe activar los QRs con 1 updateMany y retornar matchedCount/modifiedCount', async () => {
+      mockUpdateMany.mockReturnValue(createUpdateManyResult(3, 3));
+
+      const codes = ['QR-1', 'QR-2', 'QR-3'];
+      const expiration = new Date('2026-08-11T00:00:00.000Z');
+      const result = await repository.activateMany(codes, expiration, tracking);
+
+      expect(mockUpdateMany).toHaveBeenCalledWith(
+        { idQr: { $in: codes } },
+        { $set: { active: true, expiration } },
+      );
+      expect(result).toEqual({ matchedCount: 3, modifiedCount: 3 });
+      expect(traceService.log).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.REPOSITORY,
+        'activateMany:init',
+        { total: 3 },
+      );
+      expect(traceService.log).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.REPOSITORY,
+        'activateMany:complete',
+        { matchedCount: 3, modifiedCount: 3 },
+      );
+    });
+
+    it('debe retornar modifiedCount menor cuando hay QRs ya activos (idempotencia RF-3)', async () => {
+      mockUpdateMany.mockReturnValue(createUpdateManyResult(3, 1));
+
+      const result = await repository.activateMany(
+        ['QR-1', 'QR-2', 'QR-3'],
+        new Date(),
+        tracking,
+      );
+
+      expect(result).toEqual({ matchedCount: 3, modifiedCount: 1 });
+    });
+
+    it('debe retornar 0/0 cuando ningún QR coincide', async () => {
+      mockUpdateMany.mockReturnValue(createUpdateManyResult(0, 0));
+
+      const result = await repository.activateMany(['QR-inexistente'], new Date(), tracking);
+
+      expect(result).toEqual({ matchedCount: 0, modifiedCount: 0 });
+    });
+
+    it('debe trazar y re-lanzar el error si la activación falla', async () => {
+      mockUpdateMany.mockReturnValue(createUpdateManyResult(0, 0));
+      mockUpdateMany.mockReturnValue({
+        exec: jest.fn().mockRejectedValue(new Error('DB down')),
+      });
+
+      await expect(
+        repository.activateMany(['QR-1'], new Date(), tracking),
+      ).rejects.toThrow('DB down');
+      expect(traceService.error).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.REPOSITORY,
+        'activateMany:error',
+        expect.any(Error),
+      );
+    });
+
+    it('debe ejecutar updateMany incluso con array vacío (no lanza error)', async () => {
+      mockUpdateMany.mockReturnValue(createUpdateManyResult(0, 0));
+
+      const expiration = new Date('2026-08-11T00:00:00.000Z');
+      const result = await repository.activateMany([], expiration, tracking);
+
+      expect(mockUpdateMany).toHaveBeenCalledWith(
+        { idQr: { $in: [] } },
+        { $set: { active: true, expiration } },
+      );
+      expect(result).toEqual({ matchedCount: 0, modifiedCount: 0 });
     });
   });
 

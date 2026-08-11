@@ -142,6 +142,38 @@ export class MongoQrRepository
     }
   }
 
+  async activateMany(
+    qrCodes: string[],
+    expiration: Date,
+    tracking: TrackingContext,
+  ): Promise<{ matchedCount: number; modifiedCount: number }> {
+    try {
+      this.traceService.log(tracking, TraceLayer.REPOSITORY, 'activateMany:init', {
+        total: qrCodes.length,
+      });
+
+      const result = await this.qrModel
+        .updateMany(
+          { idQr: { $in: qrCodes } },
+          { $set: { active: true, expiration } },
+        )
+        .exec();
+
+      this.traceService.log(tracking, TraceLayer.REPOSITORY, 'activateMany:complete', {
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount,
+      });
+
+      return {
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount,
+      };
+    } catch (error) {
+      this.traceService.error(tracking, TraceLayer.REPOSITORY, 'activateMany:error', error as Error);
+      throw error;
+    }
+  }
+
   async delete(id: string, tracking: TrackingContext): Promise<boolean> {
     try {
       const result = await this.qrModel.findOneAndDelete({ idQr: id }).exec();
