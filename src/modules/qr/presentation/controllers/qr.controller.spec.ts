@@ -491,6 +491,36 @@ describe('QrController — PATCH /qr/:id con items PDF (SPEC-005 RF-15/RF-16)', 
     expect(mocks.updateQrUseCase.execute).toHaveBeenCalledWith('uuid', dto, tracking);
   });
 
+  it('RF-16: si deleteObject falla al REEMPLAZAR documentUrl del mismo itemId NO aborta el PATCH', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(
+      makeQr('list', {
+        data: {
+          typeQr: 'list',
+          urlList: [{ itemId: 'pdf-1', typeUrl: 'pdf', documentUrl: 'https://x.cl/old.pdf' }],
+        },
+      }),
+    );
+    mocks.storageService.deleteObject.mockRejectedValue(new Error('R2 caído'));
+
+    const dto = {
+      data: {
+        typeQr: 'list' as const,
+        urlList: [{ itemId: 'pdf-1', typeUrl: 'pdf', documentUrl: 'https://x.cl/new.pdf' }],
+      },
+    };
+    await expect(controller.update('uuid', dto as any, makeUser(), tracking)).resolves.toBeUndefined();
+    expect(mocks.storageService.deleteObject).toHaveBeenCalledWith('https://x.cl/old.pdf');
+    expect(mocks.storageService.deleteObject).toHaveBeenCalledTimes(1);
+    expect(mocks.traceService.warn).toHaveBeenCalledWith(
+      tracking,
+      'CONTROLLER',
+      'PATCH /qr/:id - pdf delete failed',
+      expect.objectContaining({ oldUrl: 'https://x.cl/old.pdf' }),
+    );
+    expect(mocks.updateQrUseCase.execute).toHaveBeenCalledWith('uuid', dto, tracking);
+  });
+
   it('no procesa items PDF si el QR actual NO es de tipo list', async () => {
     const { controller, mocks } = createController();
     mocks.getQrUseCase.execute.mockResolvedValue(

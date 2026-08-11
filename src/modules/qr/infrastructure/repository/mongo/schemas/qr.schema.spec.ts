@@ -95,6 +95,24 @@ describe('isValidQrData — case list (SPEC-005 RF-4/RF-5)', () => {
     })).toBe(false);
   });
 
+  it('rechaza item vcard con url (exclusividad de campos)', () => {
+    expect(isValidQrData({
+      ...base,
+      urlList: [
+        { itemId: 'i1', typeUrl: 'vcard', vcard: { fn: 'X' }, url: 'https://a.cl' },
+      ],
+    })).toBe(false);
+  });
+
+  it('rechaza item url/web con vcard (exclusividad de campos)', () => {
+    expect(isValidQrData({
+      ...base,
+      urlList: [
+        { itemId: 'i1', typeUrl: 'web', url: 'https://a.cl', vcard: { fn: 'X' } },
+      ],
+    })).toBe(false);
+  });
+
   it('rechaza item genérico sin url', () => {
     expect(isValidQrData({
       ...base,

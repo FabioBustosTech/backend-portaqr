@@ -73,6 +73,17 @@ describe('StorageService', () => {
       });
       expect(result.publicUrl).toBe('https://pub-abc.r2.dev/qr-multilink/uuid-1.webp');
     });
+
+    it('usa la key como publicUrl cuando no hay publicBaseUrl configurado', async () => {
+      const service = createService({ CLOUDFLARE_R2_PUBLIC_URL: '' });
+      const result = await service.uploadImage({
+        idQr: 'uuid-1',
+        buffer: Buffer.from('x'),
+        width: 1,
+        height: 1,
+      });
+      expect(result.publicUrl).toBe('qr-multilink/uuid-1.webp');
+    });
   });
 
   describe('uploadPdf', () => {
@@ -127,6 +138,16 @@ describe('StorageService', () => {
       const cmd = (mockedSend() as jest.Mock).mock.calls[0][0];
       expect(cmd.input.Bucket).toBe('portaqr-assets');
     });
+
+    it('propaga el error si PutObject falla (a diferencia de deleteObject NO es mejor esfuerzo)', async () => {
+      const send = jest.fn().mockRejectedValue(new Error('R2 endpoint down'));
+      (S3Client as unknown as jest.Mock).mockImplementationOnce(() => ({ send }));
+
+      const service = createService();
+      await expect(
+        service.uploadPdf({ idQr: 'uuid-1', itemId: 'item-1', buffer: Buffer.from('x') }),
+      ).rejects.toThrow('R2 endpoint down');
+    });
   });
 
   describe('deleteObject', () => {
@@ -156,6 +177,20 @@ describe('StorageService', () => {
       expect(cmd.input).toEqual({
         Bucket: 'portaqr-assets',
         Key: 'qr-multilink-pdf/uuid-1-item-abc.pdf',
+      });
+    });
+
+    it('extrae el key por regex cuando el publicUrl NO usa el publicBaseUrl configurado', async () => {
+      const service = createService(); // publicBaseUrl = https://images.portaqr.cl
+      await service.deleteObject('https://cdn.otro.cl/qr-multilink-pdf/uuid-item-9.pdf');
+
+      const send = mockedSend();
+      expect(send).toHaveBeenCalledTimes(1);
+      const cmd = (send as jest.Mock).mock.calls[0][0];
+      expect(cmd.name).toBe('DeleteObjectCommand');
+      expect(cmd.input).toEqual({
+        Bucket: 'portaqr-assets',
+        Key: 'qr-multilink-pdf/uuid-item-9.pdf',
       });
     });
 
