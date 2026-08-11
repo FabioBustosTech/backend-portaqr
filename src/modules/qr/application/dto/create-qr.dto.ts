@@ -153,6 +153,15 @@ export class VCard {
 
 export class ListUrlData {
   @IsOptional()
+  @IsString()
+  itemId?: string; // SPEC-005 RF-12: identificador estable del item dentro de urlList[]
+
+  @ValidateIf((o) => o.typeUrl === 'pdf')
+  @IsOptional()
+  @IsUrl({}, { message: 'La URL del documento debe ser válida' })
+  documentUrl?: string | null; // SPEC-005 RF-2: URL pública R2 del PDF (solo typeUrl === 'pdf')
+
+  @IsOptional()
   @Matches(/^((https?:\/\/[^\s]+|tel:\+\d{1,3}\d{4,14}))$/, {
     message: 'Debe comenzar con http://, https:// o tel: seguido de un número telefónico válido'
   })

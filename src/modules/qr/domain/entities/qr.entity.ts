@@ -7,8 +7,10 @@ export interface QrWifiData {
 }
 
 export interface QrUrlListItem {
+  itemId?: string;            // SPEC-005 RF-12: identificador único del item dentro del array
   vcard?: unknown;
   url?: string;
+  documentUrl?: string | null; // SPEC-005 RF-2: URL pública R2 del PDF (solo typeUrl === 'pdf')
   typeUrl: string;
 }
 

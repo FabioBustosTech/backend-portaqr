@@ -2,9 +2,84 @@
 import { HydratedDocument, SchemaTypes } from 'mongoose';
 import { ApiProperty } from '@nestjs/swagger';
 import { QrType } from '../../../../application/dto/create-qr.dto';
+import { getMaxPdfItemsPerQr } from '../../../../application/pdf-limits.helper';
 import { IsOptional } from 'class-validator';
 
 export type QrDocument = HydratedDocument<QrSchema>;
+
+/**
+ * Validación de exclusividad por tipo de item + límite de PDFs (SPEC-005 RF-4/RF-5).
+ * - `typeUrl === 'pdf'` → exige `documentUrl`, prohíbe `url` y `vcard`.
+ * - `typeUrl === 'vcard'` → exige `vcard`, prohíbe `url` y `documentUrl`.
+ * - resto (URL/red social) → exige `url`, prohíbe `vcard` y `documentUrl`.
+ * - El conteo de items PDF no puede superar `MAX_PDF_ITEMS_PER_QR` (default 2).
+ */
+export function isValidQrData(value: any): boolean {
+  return validateQrDataFields(value) === true;
+}
+
+function validateQrDataFields(value: any): boolean | undefined {
+  switch (value.typeQr) {
+    case 'dynamic':
+    case 'static':
+      return value.url && !value.whatsappUrl && !value.emailUrl && !value.phoneUrl &&
+             !value.wifiData && !value.text && !value.urlList && !value.vcardData && !value.petData;
+    case 'whatsapp':
+      return value.whatsappUrl && !value.url && !value.emailUrl && !value.phoneUrl &&
+             !value.wifiData && !value.text && !value.urlList && !value.vcardData && !value.petData;
+    case 'email':
+      return value.emailUrl && !value.url && !value.whatsappUrl && !value.phoneUrl &&
+             !value.wifiData && !value.text && !value.urlList && !value.vcardData && !value.petData;
+    case 'call':
+      return value.phoneUrl && !value.url && !value.whatsappUrl && !value.emailUrl &&
+             !value.wifiData && !value.text && !value.urlList && !value.vcardData && !value.petData;
+    case 'wifi':
+      return value.wifiData && !value.url && !value.whatsappUrl && !value.emailUrl &&
+             !value.phoneUrl && !value.text && !value.urlList && !value.vcardData && !value.petData;
+    case 'texto':
+      return value.text && !value.url && !value.whatsappUrl && !value.emailUrl &&
+             !value.phoneUrl && !value.wifiData && !value.urlList && !value.vcardData && !value.petData;
+    case 'list': {
+      if (!value.urlList) return false;
+      let pdfCount = 0;
+      // Exclusividad a nivel de item (RF-4) + conteo de items PDF (RF-5)
+      for (const item of value.urlList) {
+        if (item.typeUrl === 'pdf') {
+          // PDF: exige documentUrl, prohíbe url y vcard
+          if (!item.documentUrl || item.url || item.vcard) return false;
+          pdfCount += 1;
+        } else if (item.typeUrl === 'vcard') {
+          // vCard: exige vcard, prohíbe url y documentUrl
+          if (!item.vcard || item.url || item.documentUrl) return false;
+        } else {
+          // URL/red social: exige url, prohíbe vcard y documentUrl
+          if (!item.url || item.vcard || item.documentUrl) return false;
+        }
+      }
+      // RF-5: límite de items PDF por QR (env MAX_PDF_ITEMS_PER_QR, default 2).
+      if (pdfCount > getMaxPdfItemsPerQr()) return false;
+      // Exclusividad a nivel de QR (sin cambios)
+      return !value.url && !value.whatsappUrl && !value.emailUrl && !value.phoneUrl
+        && !value.wifiData && !value.text && !value.vcardData && !value.petData
+        && !value.mapUrl; // SPEC-002: fix bug preexistente (mapUrl no se excluía)
+      // listImageUrl se permite opcional — no figura en la exclusividad (RF-4)
+    }
+    case 'vcard':
+      return value.vcardData && !value.url && !value.whatsappUrl && !value.emailUrl &&
+             !value.phoneUrl && !value.wifiData && !value.text && !value.urlList && !value.petData;
+    case 'pet':
+      return value.petData && !value.url && !value.whatsappUrl && !value.emailUrl &&
+             !value.phoneUrl && !value.wifiData && !value.text && !value.urlList && !value.vcardData;
+    case 'phone':
+      return value.phoneUrl && !value.url && !value.whatsappUrl && !value.emailUrl &&
+             !value.wifiData && !value.text && !value.urlList && !value.vcardData && !value.petData;
+    case 'map':
+      return value.mapUrl && !value.url && !value.whatsappUrl && !value.emailUrl &&
+             !value.wifiData && !value.text && !value.urlList && !value.vcardData && !value.petData;
+    default:
+      return false;
+  }
+}
 
 @Schema({ timestamps: true, collection: 'qrs' })
 export class QrSchema {
@@ -42,8 +117,10 @@ export class QrSchema {
       text: { type: String },
       urlList: {
         type: [{
+          itemId: { type: String, required: false }, // SPEC-005 RF-12
           vcard: { type: SchemaTypes.Mixed }, // Usar la estructura completa de vCardData
           url: { type: String },
+          documentUrl: { type: String, required: false, default: null }, // SPEC-005 RF-2
           typeUrl: { 
             type: String,
           }
@@ -148,49 +225,7 @@ export class QrSchema {
     required: true,
     _id: false,
     validate: {
-      validator: function(value: any) {
-        // Validar que los campos solo existan segÃºn el tipo
-        switch(value.typeQr) {
-          case 'dynamic':
-          case 'static':
-            return value.url && !value.whatsappUrl && !value.emailUrl && !value.phoneUrl && 
-                   !value.wifiData && !value.text && !value.urlList && !value.vcardData && !value.petData;
-          case 'whatsapp':
-            return value.whatsappUrl && !value.url && !value.emailUrl && !value.phoneUrl && 
-                   !value.wifiData && !value.text && !value.urlList && !value.vcardData && !value.petData;
-          case 'email':
-            return value.emailUrl && !value.url && !value.whatsappUrl && !value.phoneUrl && 
-                   !value.wifiData && !value.text && !value.urlList && !value.vcardData && !value.petData;
-          case 'call':
-            return value.phoneUrl && !value.url && !value.whatsappUrl && !value.emailUrl && 
-                   !value.wifiData && !value.text && !value.urlList && !value.vcardData && !value.petData;
-          case 'wifi':
-            return value.wifiData && !value.url && !value.whatsappUrl && !value.emailUrl && 
-                   !value.phoneUrl && !value.text && !value.urlList && !value.vcardData && !value.petData;
-          case 'texto':
-            return value.text && !value.url && !value.whatsappUrl && !value.emailUrl && 
-                   !value.phoneUrl && !value.wifiData && !value.urlList && !value.vcardData && !value.petData;
-          case 'list':
-            return value.urlList && !value.url && !value.whatsappUrl && !value.emailUrl && 
-                   !value.phoneUrl && !value.wifiData && !value.text && !value.vcardData && !value.petData
-                   && !value.mapUrl; // SPEC-002: fix bug preexistente (mapUrl no se excluía)
-            // listImageUrl se permite opcional — no figura en la exclusividad (RF-4)
-          case 'vcard':
-            return value.vcardData && !value.url && !value.whatsappUrl && !value.emailUrl && 
-                   !value.phoneUrl && !value.wifiData && !value.text && !value.urlList && !value.petData;
-          case 'pet':
-            return value.petData && !value.url && !value.whatsappUrl && !value.emailUrl && 
-                   !value.phoneUrl && !value.wifiData && !value.text && !value.urlList && !value.vcardData;
-          case 'phone':
-            return value.phoneUrl && !value.url && !value.whatsappUrl && !value.emailUrl && 
-                   !value.wifiData && !value.text && !value.urlList && !value.vcardData && !value.petData;
-          case 'map':
-            return value.mapUrl && !value.url && !value.whatsappUrl && !value.emailUrl && 
-                   !value.wifiData && !value.text && !value.urlList && !value.vcardData && !value.petData;
-          default:
-            return false;
-        }
-      },
+      validator: isValidQrData,
       message: 'Los campos del QR deben corresponder con su tipo'
     }
   })
@@ -206,7 +241,10 @@ export class QrSchema {
     };
     text?: string;
     urlList?: Array<{
-      url: string;
+      itemId?: string; // SPEC-005 RF-12
+      vcard?: unknown;
+      url?: string;
+      documentUrl?: string | null; // SPEC-005 RF-2 (solo typeUrl === 'pdf')
       typeUrl: string;
     }>;
     listImageUrl?: string | null; // SPEC-002: portada QR multilink
