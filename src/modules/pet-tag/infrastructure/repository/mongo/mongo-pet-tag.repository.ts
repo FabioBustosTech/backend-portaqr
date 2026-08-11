@@ -188,17 +188,27 @@ export class MongoPetTagRepository
       });
       const userObjectId = new Types.ObjectId(userId);
 
-      const tag = await this.petTagModel.findOne({ idQr: petTagIdQr, userId: userObjectId });
+      // 1 round-trip (SPEC-007 H6): findOneAndUpdate en vez de find + mutate + save
+      const tag = await this.petTagModel
+        .findOneAndUpdate(
+          { idQr: petTagIdQr, userId: userObjectId },
+          {
+            $set: {
+              petData: (data.petData as any) ?? undefined,
+              ...(data.name !== undefined && { name: data.name }),
+              ...(data.isFavorite !== undefined && { isFavorite: data.isFavorite }),
+              ...(data.commercialStatus !== undefined && {
+                commercialStatus: data.commercialStatus,
+              }),
+            },
+          },
+          { new: true, runValidators: true }, // runValidators: no-regresión de enum commercialStatus
+        )
+        .lean();
 
       if (!tag) {
         throw new NotFoundException('Placa no encontrada o no pertenece a este usuario.');
       }
-
-      tag.petData = (data.petData as any) ?? tag.petData;
-      if (data.name !== undefined) tag.name = data.name;
-      if (data.isFavorite !== undefined) tag.isFavorite = data.isFavorite;
-      if (data.commercialStatus !== undefined) tag.commercialStatus = data.commercialStatus;
-      await tag.save();
 
       this.traceService.log(tracking, TraceLayer.REPOSITORY, 'update:complete', { petTagIdQr });
       return tag;

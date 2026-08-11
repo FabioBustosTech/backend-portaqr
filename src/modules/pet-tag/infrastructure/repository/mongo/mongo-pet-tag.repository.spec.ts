@@ -337,16 +337,15 @@ describe('MongoPetTagRepository', () => {
   });
 
   describe('update', () => {
-    it('debe actualizar los campos de la placa y guardar', async () => {
-      const tag = {
-        petData: null,
-        name: 'Viejo',
-        isFavorite: false,
-        commercialStatus: 'EN_BODEGA',
-        save: mockSave,
+    it('debe actualizar la placa en 1 findOneAndUpdate con los campos enviados', async () => {
+      const updatedTag = {
+        idQr: 'qr-1',
+        petData,
+        name: 'Nuevo',
+        isFavorite: true,
+        commercialStatus: 'VENDIDO',
       };
-      mockFindOne.mockResolvedValue(tag);
-      mockSave.mockResolvedValue(tag);
+      mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(updatedTag) });
 
       const result = await repository.update(
         'qr-1',
@@ -355,40 +354,51 @@ describe('MongoPetTagRepository', () => {
         tracking,
       );
 
-      expect(mockFindOne).toHaveBeenCalledWith({
-        idQr: 'qr-1',
-        userId: expect.anything(),
-      });
-      expect(tag.petData).toEqual(petData);
-      expect(tag.name).toBe('Nuevo');
-      expect(tag.isFavorite).toBe(true);
-      expect(tag.commercialStatus).toBe('VENDIDO');
-      expect(mockSave).toHaveBeenCalledTimes(1);
-      expect(result).toBe(tag);
+      expect(mockFindOneAndUpdate).toHaveBeenCalledTimes(1);
+      expect(mockFindOneAndUpdate).toHaveBeenCalledWith(
+        { idQr: 'qr-1', userId: expect.anything() },
+        {
+          $set: {
+            petData,
+            name: 'Nuevo',
+            isFavorite: true,
+            commercialStatus: 'VENDIDO',
+          },
+        },
+        { new: true, runValidators: true },
+      );
+      expect(mockFindOne).not.toHaveBeenCalled();
+      expect(mockSave).not.toHaveBeenCalled();
+      expect(result).toEqual(updatedTag);
     });
 
-    it('debe conservar los valores existentes cuando no se envían campos', async () => {
-      const tag = {
+    it('debe conservar los valores existentes cuando no se envían campos (solo campos presentes en $set)', async () => {
+      const updatedTag = {
+        idQr: 'qr-1',
         petData,
         name: 'Rex',
         isFavorite: true,
         commercialStatus: 'VENDIDO',
-        save: mockSave,
       };
-      mockFindOne.mockResolvedValue(tag);
-      mockSave.mockResolvedValue(tag);
+      mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(updatedTag) });
 
       const result = await repository.update('qr-1', VALID_USER_ID, {}, tracking);
 
-      expect(tag.petData).toEqual(petData);
-      expect(tag.name).toBe('Rex');
-      expect(tag.isFavorite).toBe(true);
-      expect(tag.commercialStatus).toBe('VENDIDO');
-      expect(result).toBe(tag);
+      const updateCall = mockFindOneAndUpdate.mock.calls[0][1] as {
+        $set: Record<string, unknown>;
+      };
+      // petData undefined no debe incluirse en el $set (Mongoose lo ignora)
+      expect(updateCall.$set).toEqual({ petData: undefined });
+      expect(mockFindOneAndUpdate).toHaveBeenCalledWith(
+        { idQr: 'qr-1', userId: expect.anything() },
+        expect.objectContaining({ $set: expect.any(Object) }),
+        { new: true, runValidators: true },
+      );
+      expect(result).toEqual(updatedTag);
     });
 
     it('debe lanzar error cuando la placa no existe o no pertenece al usuario', async () => {
-      mockFindOne.mockResolvedValue(null);
+      mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
 
       await expect(
         repository.update('qr-1', VALID_USER_ID, {}, tracking),
@@ -402,7 +412,9 @@ describe('MongoPetTagRepository', () => {
     });
 
     it('debe trazar y lanzar HttpException si la consulta falla', async () => {
-      mockFindOne.mockRejectedValue(new Error('DB down'));
+      mockFindOneAndUpdate.mockReturnValue({
+        lean: jest.fn().mockRejectedValue(new Error('DB down')),
+      });
 
       await expect(
         repository.update('qr-1', VALID_USER_ID, {}, tracking),
