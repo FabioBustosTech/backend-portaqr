@@ -23,6 +23,8 @@ FROM node:20-alpine AS development
 
 # Instalar dependencias necesarias
 RUN apk add --no-cache python3 make g++
+# SPEC-005: Ghostscript para sanitización de PDFs (PdfSanitizerService)
+RUN apk add --no-cache ghostscript
 
 WORKDIR /app
 
@@ -42,6 +44,8 @@ FROM node:20-alpine AS production
 
 # Instalar dependencias necesarias para producción
 RUN apk add --no-cache python3 make g++
+# SPEC-005: Ghostscript para sanitización de PDFs (PdfSanitizerService)
+RUN apk add --no-cache ghostscript
 
 WORKDIR /app
 
