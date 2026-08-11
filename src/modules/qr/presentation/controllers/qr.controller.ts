@@ -45,6 +45,8 @@ import { TraceService, TraceLayer } from 'src/common/services/trace.service';
 import type { User } from 'src/modules/users/domain/entities/user.entity';
 import { StorageService } from 'src/modules/storage/storage.service';
 import { ImageProcessorService } from 'src/modules/storage/image-processor.service';
+import { PdfSanitizerService } from 'src/modules/storage/pdf-sanitizer.service';
+import { getMaxPdfItemsPerQr } from '../../application/pdf-limits.helper';
 
 // SPEC-002: MIME types aceptados en el fileFilter (RF-5). La salida siempre es WebP.
 const LIST_IMAGE_ALLOWED_MIME = [
@@ -65,6 +67,17 @@ function getListImageMaxUploadSize(): number {
   const raw = process.env.CLOUDFLARE_R2_MAX_UPLOAD_SIZE;
   const parsed = raw ? Number.parseInt(raw, 10) : NaN;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 5 * 1024 * 1024;
+}
+
+// SPEC-005 RF-6: MIME types aceptados en el fileFilter (solo application/pdf).
+const LIST_PDF_ALLOWED_MIME = ['application/pdf'];
+
+// SPEC-005 RF-7: límite de entrada desde PDF_MAX_UPLOAD_SIZE (default 2 MB).
+// Se evalúa al definir la clase (decorador) — misma técnica que list-image.
+function getListPdfMaxUploadSize(): number {
+  const raw = process.env.PDF_MAX_UPLOAD_SIZE;
+  const parsed = raw ? Number.parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 2 * 1024 * 1024;
 }
 
 class PublicRedirectUrlResponse {
@@ -93,6 +106,7 @@ export class QrController {
     private readonly traceService: TraceService,
     private readonly storageService: StorageService,
     private readonly imageProcessor: ImageProcessorService,
+    private readonly pdfSanitizer: PdfSanitizerService, // SPEC-005: sanitización Ghostscript
   ) {}
 
   @Post()
@@ -227,6 +241,137 @@ export class QrController {
     });
 
     return { listImageUrl: publicUrl, size, width, height };
+  }
+
+  @Post('list-pdf')
+  @Roles('admin', 'user')
+  @HttpCode(HttpStatus.OK)
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Subida de PDF para item de QR multilink (SPEC-005)',
+    schema: {
+      type: 'object',
+      properties: {
+        idQr: { type: 'string', description: 'UUID v4 del QR (typeQr: list)' },
+        itemId: { type: 'string', description: 'Identificador único del item dentro de urlList[]' },
+        file: { type: 'string', format: 'binary', description: 'PDF (application/pdf, máx PDF_MAX_UPLOAD_SIZE default 2 MB)' },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Subir PDF de un item de QR multilink (sanitiza con gs y sube a R2)' })
+  @ApiResponse({ status: 200, description: 'PDF subido. Retorna { documentUrl, size, itemId }' })
+  @ApiResponse({ status: 403, description: 'Prohibido - no es el propietario' })
+  @ApiResponse({ status: 400, description: 'El QR no es de tipo list, falta idQr/itemId, o límite excedido' })
+  @ApiResponse({ status: 413, description: 'Archivo mayor al límite configurado (PDF_MAX_UPLOAD_SIZE, default 2 MB)' })
+  @ApiResponse({ status: 415, description: 'Formato no soportado (solo application/pdf)' })
+  @ApiResponse({ status: 422, description: 'El PDF no se pudo procesar (corrupto)' })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: getListPdfMaxUploadSize() }, // SPEC-005 RF-7: PDF_MAX_UPLOAD_SIZE (default 2 MB)
+      fileFilter: (_req, file, cb) => {
+        if (!LIST_PDF_ALLOWED_MIME.includes(file.mimetype)) {
+          return cb(
+            new UnsupportedMediaTypeException(
+              'Formato no soportado. Solo se aceptan archivos PDF',
+            ),
+            false,
+          );
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  async uploadListPdf(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('idQr') idQr: string,
+    @Body('itemId') itemId: string,
+    @GetUser() user: User,
+    @Tracking() tracking: TrackingContext,
+  ): Promise<{ documentUrl: string; size: number; itemId: string }> {
+    this.traceService.log(tracking, TraceLayer.CONTROLLER, 'POST /qr/list-pdf', {
+      idQr,
+      itemId,
+      userId: user.id,
+    });
+
+    if (!file) throw new BadRequestException('El archivo es requerido (campo "file")');
+    if (!idQr) throw new BadRequestException('El campo idQr es requerido');
+    if (!itemId) throw new BadRequestException('El campo itemId es requerido');
+
+    // 1. Validar que el QR existe, es del usuario y es tipo 'list' (RF-13 paso 4)
+    const qr = await this.getQrUseCase.execute(idQr, tracking);
+    if (!qr) throw new NotFoundException('QR no encontrado');
+    const isAdmin = user.role === 'admin';
+    if (!isAdmin && qr.userId !== user.id) {
+      this.traceService.warn(tracking, TraceLayer.CONTROLLER, 'POST /qr/list-pdf - forbidden owner', {
+        requester: user.id,
+        owner: qr.userId,
+      });
+      throw new ForbiddenException('No tienes permiso para subir un PDF a este QR');
+    }
+    if (qr.typeQr !== 'list') {
+      this.traceService.warn(tracking, TraceLayer.CONTROLLER, 'POST /qr/list-pdf - wrong type', {
+        idQr,
+        typeQr: qr.typeQr,
+      });
+      throw new BadRequestException('Solo los QRs multilink (list) admiten items PDF');
+    }
+
+    // 2. Validar tipo del item (RF-13 paso 5) y límite MAX_PDF_ITEMS_PER_QR (RF-5)
+    const urlList = qr.data?.urlList ?? [];
+    const existingItem = urlList.find((it) => it.itemId === itemId);
+    const isReplacement = !!existingItem;
+    if (existingItem && existingItem.typeUrl !== 'pdf') {
+      // RF-13 paso 5: si el itemId existe pero NO es tipo PDF, rechazar ANTES de
+      // sanitizar/subir — evita subir a R2 y luego fallar el PATCH por el validador
+      // de exclusividad (objeto R2 huérfano + 400 confuso).
+      throw new BadRequestException('El item indicado no es de tipo PDF');
+    }
+    if (!isReplacement) {
+      const pdfCount = urlList.filter((it) => it.typeUrl === 'pdf').length;
+      if (pdfCount >= getMaxPdfItemsPerQr()) {
+        throw new BadRequestException(
+          `Límite excedido: máximo ${getMaxPdfItemsPerQr()} items PDF por QR`,
+        );
+      }
+    }
+
+    // 3. Sanitizar con Ghostscript (RF-8) — 422 si el binario no es procesable
+    const { buffer, size } = await this.pdfSanitizer.sanitize(file.buffer);
+
+    // 4. Subir a R2 (RF-11: key qr-multilink-pdf/{idQr}-{itemId}.pdf)
+    const { publicUrl } = await this.storageService.uploadPdf({
+      idQr: qr.idQr,
+      itemId,
+      buffer,
+    });
+
+    // 5. Actualizar el item en urlList (RF-13 paso 9): reemplazo por itemId o append
+    const updatedUrlList = isReplacement
+      ? urlList.map((it) => (it.itemId === itemId ? { ...it, documentUrl: publicUrl } : it))
+      : [...urlList, { itemId, typeUrl: 'pdf', documentUrl: publicUrl }];
+
+    await this.updateQrUseCase.execute(
+      qr.idQr,
+      {
+        data: {
+          ...qr.data,
+          urlList: updatedUrlList,
+          typeQr: qr.data.typeQr as QrType,
+        },
+      } as Partial<CreateQrDto>,
+      tracking,
+    );
+
+    this.traceService.log(tracking, TraceLayer.CONTROLLER, 'POST /qr/list-pdf - complete', {
+      idQr,
+      itemId,
+      documentUrl: publicUrl,
+      size,
+    });
+
+    return { documentUrl: publicUrl, size, itemId };
   }
 
   @Get('seo-idqr')
@@ -421,6 +566,64 @@ export class QrController {
           oldUrl,
           newUrl: newUrl ?? null,
         });
+      }
+    }
+
+    // SPEC-005 RF-15/RF-16: items PDF eliminados o reemplazados → borrar objeto R2 anterior (mejor esfuerzo)
+    if (currentQr.typeQr === 'list' && Array.isArray(updateQrDto.data?.urlList)) {
+      const oldUrlList = currentQr.data?.urlList ?? [];
+      const newUrlList = updateQrDto.data.urlList;
+
+      // Items PDF que estaban en el urlList anterior y ya no están (eliminados) → borrar R2
+      const removedPdfItems = oldUrlList.filter(
+        (old) => old.typeUrl === 'pdf' && old.documentUrl &&
+          !newUrlList.find((nw) => nw.itemId === old.itemId),
+      );
+      for (const item of removedPdfItems) {
+        if (item.documentUrl) {
+          try {
+            await this.storageService.deleteObject(item.documentUrl); // mejor esfuerzo (RF-15)
+          } catch (error) {
+            // Defensa en profundidad: StorageService ya no relanza, pero si algún
+            // fallo se escapa el PATCH NO debe abortar (§8.1 — objeto R2 huérfano,
+            // lo limpia el lifecycle rule §6.3).
+            this.traceService.warn(tracking, TraceLayer.CONTROLLER, 'PATCH /qr/:id - pdf delete failed', {
+              qrid,
+              itemId: item.itemId,
+              oldUrl: item.documentUrl,
+              error: (error as Error).message,
+            });
+          }
+          this.traceService.log(tracking, TraceLayer.CONTROLLER, 'PATCH /qr/:id - pdf item removed', {
+            qrid,
+            itemId: item.itemId,
+            oldUrl: item.documentUrl,
+          });
+        }
+      }
+
+      // Items PDF con documentUrl reemplazado para el mismo itemId → borrar el anterior
+      for (const newItem of newUrlList) {
+        if (newItem.typeUrl === 'pdf' && newItem.documentUrl) {
+          const oldItem = oldUrlList.find((old) => old.itemId === newItem.itemId);
+          if (oldItem?.documentUrl && oldItem.documentUrl !== newItem.documentUrl) {
+            try {
+              await this.storageService.deleteObject(oldItem.documentUrl); // mejor esfuerzo (RF-16)
+            } catch (error) {
+              this.traceService.warn(tracking, TraceLayer.CONTROLLER, 'PATCH /qr/:id - pdf delete failed', {
+                qrid,
+                itemId: newItem.itemId,
+                oldUrl: oldItem.documentUrl,
+                error: (error as Error).message,
+              });
+            }
+            this.traceService.log(tracking, TraceLayer.CONTROLLER, 'PATCH /qr/:id - pdf replaced', {
+              qrid,
+              itemId: newItem.itemId,
+              oldUrl: oldItem.documentUrl,
+            });
+          }
+        }
       }
     }
 

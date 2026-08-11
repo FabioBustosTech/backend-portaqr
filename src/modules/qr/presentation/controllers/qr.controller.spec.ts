@@ -37,8 +37,9 @@ function createController(overrides: Record<string, unknown> = {}) {
   const mocks: Record<string, any> = {
     getQrUseCase: { execute: jest.fn() },
     updateQrUseCase: { execute: jest.fn() },
-    storageService: { uploadImage: jest.fn(), deleteObject: jest.fn() },
+    storageService: { uploadImage: jest.fn(), uploadPdf: jest.fn(), deleteObject: jest.fn() },
     imageProcessor: { process: jest.fn() },
+    pdfSanitizer: { sanitize: jest.fn() },
     traceService: makeTraceService(),
   };
   Object.assign(mocks, overrides);
@@ -57,6 +58,7 @@ function createController(overrides: Record<string, unknown> = {}) {
     mocks.traceService,
     mocks.storageService,
     mocks.imageProcessor,
+    mocks.pdfSanitizer,
   );
   return { controller, mocks };
 }
@@ -206,6 +208,296 @@ describe('QrController — PATCH /qr/:id con listImageUrl (SPEC-002)', () => {
     );
 
     const dto = { data: { typeQr: 'list' as const, urlList: [], listImageUrl: 'https://images.portaqr.cl/qr-multilink/same.webp' } };
+    await controller.update('uuid', dto as any, makeUser(), tracking);
+
+    expect(mocks.storageService.deleteObject).not.toHaveBeenCalled();
+  });
+});
+
+describe('QrController — POST /qr/list-pdf (SPEC-005)', () => {
+  const PDF_URL = 'https://images.portaqr.cl/qr-multilink-pdf/89302960-7799-43fe-b5a0-45d2295d539f-item-1.pdf';
+
+  function makePdfFile(overrides: Partial<Express.Multer.File> = {}): Express.Multer.File {
+    return makeFile({ mimetype: 'application/pdf', originalname: 'menu.pdf', ...overrides });
+  }
+
+  afterEach(() => {
+    delete process.env.MAX_PDF_ITEMS_PER_QR;
+  });
+
+  it('200: item nuevo → sanitiza, sube a R2, persiste y retorna { documentUrl, size, itemId }', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(makeQr('list', { data: { typeQr: 'list', urlList: [] } }));
+    mocks.pdfSanitizer.sanitize.mockResolvedValue({ buffer: Buffer.from('sanitized'), size: 10 });
+    mocks.storageService.uploadPdf.mockResolvedValue({ publicUrl: PDF_URL, key: 'qr-multilink-pdf/uuid-item-1.pdf', size: 10 });
+
+    const result = await controller.uploadListPdf(
+      makePdfFile(),
+      '89302960-7799-43fe-b5a0-45d2295d539f',
+      'item-1',
+      makeUser(),
+      tracking,
+    );
+
+    expect(result).toEqual({ documentUrl: PDF_URL, size: 10, itemId: 'item-1' });
+    expect(mocks.pdfSanitizer.sanitize).toHaveBeenCalledWith(expect.any(Buffer));
+    expect(mocks.storageService.uploadPdf).toHaveBeenCalledWith(
+      expect.objectContaining({ idQr: '89302960-7799-43fe-b5a0-45d2295d539f', itemId: 'item-1' }),
+    );
+    expect(mocks.updateQrUseCase.execute).toHaveBeenCalledWith(
+      '89302960-7799-43fe-b5a0-45d2295d539f',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          urlList: [{ itemId: 'item-1', typeUrl: 'pdf', documentUrl: PDF_URL }],
+        }),
+      }),
+      tracking,
+    );
+  });
+
+  it('200: reemplazo → sobrescribe documentUrl del item existente y preserva los demás', async () => {
+    const { controller, mocks } = createController();
+    const existing = [
+      { itemId: 'item-1', typeUrl: 'pdf', documentUrl: 'https://x.cl/old.pdf' },
+      { itemId: 'item-2', typeUrl: 'web', url: 'https://b.cl' },
+    ];
+    mocks.getQrUseCase.execute.mockResolvedValue(makeQr('list', { data: { typeQr: 'list', urlList: existing } }));
+    mocks.pdfSanitizer.sanitize.mockResolvedValue({ buffer: Buffer.from('s'), size: 1 });
+    mocks.storageService.uploadPdf.mockResolvedValue({ publicUrl: PDF_URL, key: 'k', size: 1 });
+
+    await controller.uploadListPdf(makePdfFile(), '89302960-7799-43fe-b5a0-45d2295d539f', 'item-1', makeUser(), tracking);
+
+    expect(mocks.updateQrUseCase.execute).toHaveBeenCalledWith(
+      '89302960-7799-43fe-b5a0-45d2295d539f',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          urlList: [
+            { itemId: 'item-1', typeUrl: 'pdf', documentUrl: PDF_URL },
+            { itemId: 'item-2', typeUrl: 'web', url: 'https://b.cl' },
+          ],
+        }),
+      }),
+      tracking,
+    );
+  });
+
+  it('400: rechaza si falta el archivo', async () => {
+    const { controller } = createController();
+    await expect(
+      controller.uploadListPdf(undefined as any, 'uuid', 'item-1', makeUser(), tracking),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('400: rechaza si falta idQr', async () => {
+    const { controller } = createController();
+    await expect(
+      controller.uploadListPdf(makePdfFile(), '', 'item-1', makeUser(), tracking),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('400: rechaza si falta itemId', async () => {
+    const { controller } = createController();
+    await expect(
+      controller.uploadListPdf(makePdfFile(), 'uuid', '', makeUser(), tracking),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('404: rechaza si el QR no existe', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(null);
+    await expect(
+      controller.uploadListPdf(makePdfFile(), 'uuid', 'item-1', makeUser(), tracking),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('403: rechaza a un usuario NO propietario (y no admin)', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(makeQr('list', { userId: 'otro-user' }));
+    await expect(
+      controller.uploadListPdf(makePdfFile(), 'uuid', 'item-1', makeUser(), tracking),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('200: un admin SÍ puede subir a un QR de otro usuario', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(makeQr('list', { userId: 'otro-user', data: { typeQr: 'list', urlList: [] } }));
+    mocks.pdfSanitizer.sanitize.mockResolvedValue({ buffer: Buffer.from('s'), size: 1 });
+    mocks.storageService.uploadPdf.mockResolvedValue({ publicUrl: PDF_URL, key: 'k', size: 1 });
+
+    const result = await controller.uploadListPdf(makePdfFile(), 'uuid', 'item-1', makeUser('admin'), tracking);
+    expect(result.documentUrl).toBe(PDF_URL);
+  });
+
+  it('400: rechaza si el QR no es de tipo list', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(makeQr('dynamic'));
+    await expect(
+      controller.uploadListPdf(makePdfFile(), 'uuid', 'item-1', makeUser(), tracking),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('400 (RF-13 paso 5): itemId existente que NO es tipo pdf → rechaza ANTES de sanitizar/subir', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(
+      makeQr('list', { data: { typeQr: 'list', urlList: [{ itemId: 'item-web', typeUrl: 'web', url: 'https://a.cl' }] } }),
+    );
+
+    await expect(
+      controller.uploadListPdf(makePdfFile(), 'uuid', 'item-web', makeUser(), tracking),
+    ).rejects.toThrow(BadRequestException);
+    expect(mocks.pdfSanitizer.sanitize).not.toHaveBeenCalled();
+    expect(mocks.storageService.uploadPdf).not.toHaveBeenCalled();
+    expect(mocks.updateQrUseCase.execute).not.toHaveBeenCalled();
+  });
+
+  it('400 (RF-5): límite MAX_PDF_ITEMS_PER_QR alcanzado con item nuevo → rechaza ANTES de sanitizar/subir', async () => {
+    process.env.MAX_PDF_ITEMS_PER_QR = '2';
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(
+      makeQr('list', {
+        data: {
+          typeQr: 'list',
+          urlList: [
+            { itemId: 'pdf-1', typeUrl: 'pdf', documentUrl: 'https://x.cl/1.pdf' },
+            { itemId: 'pdf-2', typeUrl: 'pdf', documentUrl: 'https://x.cl/2.pdf' },
+          ],
+        },
+      }),
+    );
+
+    await expect(
+      controller.uploadListPdf(makePdfFile(), 'uuid', 'pdf-nuevo', makeUser(), tracking),
+    ).rejects.toThrow(BadRequestException);
+    expect(mocks.pdfSanitizer.sanitize).not.toHaveBeenCalled();
+    expect(mocks.storageService.uploadPdf).not.toHaveBeenCalled();
+    expect(mocks.updateQrUseCase.execute).not.toHaveBeenCalled();
+  });
+
+  it('200 (RF-5): reemplazo de un item pdf existente NO cuenta contra el límite', async () => {
+    process.env.MAX_PDF_ITEMS_PER_QR = '2';
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(
+      makeQr('list', {
+        data: {
+          typeQr: 'list',
+          urlList: [
+            { itemId: 'pdf-1', typeUrl: 'pdf', documentUrl: 'https://x.cl/1.pdf' },
+            { itemId: 'pdf-2', typeUrl: 'pdf', documentUrl: 'https://x.cl/2.pdf' },
+          ],
+        },
+      }),
+    );
+    mocks.pdfSanitizer.sanitize.mockResolvedValue({ buffer: Buffer.from('s'), size: 1 });
+    mocks.storageService.uploadPdf.mockResolvedValue({ publicUrl: PDF_URL, key: 'k', size: 1 });
+
+    const result = await controller.uploadListPdf(makePdfFile(), 'uuid', 'pdf-2', makeUser(), tracking);
+    expect(result.documentUrl).toBe(PDF_URL);
+  });
+
+  it('422: propaga el error de gs y NO sube a R2 ni persiste', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(makeQr('list', { data: { typeQr: 'list', urlList: [] } }));
+    mocks.pdfSanitizer.sanitize.mockRejectedValue(new UnprocessableEntityException('corrupto'));
+
+    await expect(
+      controller.uploadListPdf(makePdfFile(), 'uuid', 'item-1', makeUser(), tracking),
+    ).rejects.toThrow(UnprocessableEntityException);
+    expect(mocks.storageService.uploadPdf).not.toHaveBeenCalled();
+    expect(mocks.updateQrUseCase.execute).not.toHaveBeenCalled();
+  });
+});
+
+describe('QrController — PATCH /qr/:id con items PDF (SPEC-005 RF-15/RF-16)', () => {
+  it('RF-15: elimina un item PDF del urlList → borra el objeto R2 correspondiente', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(
+      makeQr('list', {
+        data: {
+          typeQr: 'list',
+          urlList: [
+            { itemId: 'pdf-1', typeUrl: 'pdf', documentUrl: 'https://x.cl/qr-multilink-pdf/uuid-pdf-1.pdf' },
+            { itemId: 'web-1', typeUrl: 'web', url: 'https://a.cl' },
+          ],
+        },
+      }),
+    );
+
+    const dto = { data: { typeQr: 'list' as const, urlList: [{ itemId: 'web-1', typeUrl: 'web', url: 'https://a.cl' }] } };
+    await controller.update('uuid', dto as any, makeUser(), tracking);
+
+    expect(mocks.storageService.deleteObject).toHaveBeenCalledWith('https://x.cl/qr-multilink-pdf/uuid-pdf-1.pdf');
+    expect(mocks.updateQrUseCase.execute).toHaveBeenCalledWith('uuid', dto, tracking);
+  });
+
+  it('RF-16: reemplaza documentUrl para el mismo itemId → borra el objeto anterior', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(
+      makeQr('list', {
+        data: {
+          typeQr: 'list',
+          urlList: [{ itemId: 'pdf-1', typeUrl: 'pdf', documentUrl: 'https://x.cl/old.pdf' }],
+        },
+      }),
+    );
+
+    const dto = {
+      data: {
+        typeQr: 'list' as const,
+        urlList: [{ itemId: 'pdf-1', typeUrl: 'pdf', documentUrl: 'https://x.cl/new.pdf' }],
+      },
+    };
+    await controller.update('uuid', dto as any, makeUser(), tracking);
+
+    expect(mocks.storageService.deleteObject).toHaveBeenCalledWith('https://x.cl/old.pdf');
+    expect(mocks.storageService.deleteObject).toHaveBeenCalledTimes(1);
+  });
+
+  it('NO borra nada si documentUrl no cambia para el mismo itemId', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(
+      makeQr('list', {
+        data: {
+          typeQr: 'list',
+          urlList: [{ itemId: 'pdf-1', typeUrl: 'pdf', documentUrl: 'https://x.cl/same.pdf' }],
+        },
+      }),
+    );
+
+    const dto = {
+      data: {
+        typeQr: 'list' as const,
+        urlList: [{ itemId: 'pdf-1', typeUrl: 'pdf', documentUrl: 'https://x.cl/same.pdf' }],
+      },
+    };
+    await controller.update('uuid', dto as any, makeUser(), tracking);
+
+    expect(mocks.storageService.deleteObject).not.toHaveBeenCalled();
+  });
+
+  it('RF-15/RF-16: si deleteObject falla NO aborta el PATCH (mejor esfuerzo)', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(
+      makeQr('list', {
+        data: {
+          typeQr: 'list',
+          urlList: [{ itemId: 'pdf-1', typeUrl: 'pdf', documentUrl: 'https://x.cl/old.pdf' }],
+        },
+      }),
+    );
+    mocks.storageService.deleteObject.mockRejectedValue(new Error('R2 caído'));
+
+    const dto = { data: { typeQr: 'list' as const, urlList: [] } };
+    await expect(controller.update('uuid', dto as any, makeUser(), tracking)).resolves.toBeUndefined();
+    expect(mocks.updateQrUseCase.execute).toHaveBeenCalledWith('uuid', dto, tracking);
+  });
+
+  it('no procesa items PDF si el QR actual NO es de tipo list', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(
+      makeQr('dynamic', { data: { typeQr: 'dynamic', url: 'https://a.cl' } }),
+    );
+
+    const dto = { data: { typeQr: 'dynamic' as const, url: 'https://a.cl', urlList: [] } };
     await controller.update('uuid', dto as any, makeUser(), tracking);
 
     expect(mocks.storageService.deleteObject).not.toHaveBeenCalled();
