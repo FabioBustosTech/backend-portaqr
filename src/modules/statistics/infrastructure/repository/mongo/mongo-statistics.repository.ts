@@ -36,39 +36,45 @@ export class MongoStatisticsRepository implements ICanGetStatistics {
       const startOfDay = new Date(today.setHours(0, 0, 0, 0));
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-      const [totalScans, monthlyScans, dailyScans, totalQrs, activeQrs] =
-        await Promise.all([
-          // Total de escaneos
-          this.scanModel.countDocuments({ userId }, { lean: true }),
+      // SPEC-007 H4: 1 aggregate $facet por colección (2 consultas totales)
+      const [scanStats, qrStats] = await Promise.all([
+        this.scanModel
+          .aggregate([
+            { $match: { userId } },
+            {
+              $facet: {
+                total: [{ $count: 'v' }],
+                monthly: [{ $match: { scanDate: { $gte: startOfMonth } } }, { $count: 'v' }],
+                daily: [{ $match: { scanDate: { $gte: startOfDay } } }, { $count: 'v' }],
+              },
+            },
+          ])
+          .exec(),
+        this.qrModel
+          .aggregate([
+            { $match: { userId } },
+            {
+              $facet: {
+                total: [{ $count: 'v' }],
+                active: [{ $match: { active: true } }, { $count: 'v' }],
+              },
+            },
+          ])
+          .exec(),
+      ]);
 
-          // Escaneos del mes
-          this.scanModel.countDocuments(
-            { userId, scanDate: { $gte: startOfMonth } },
-            { lean: true },
-          ),
-
-          // Escaneos del dÃ­a
-          this.scanModel.countDocuments(
-            { userId, scanDate: { $gte: startOfDay } },
-            { lean: true },
-          ),
-
-          // Total de QRs creados
-          this.qrModel.countDocuments({ userId }, { lean: true }),
-
-          // QRs activos
-          this.qrModel.countDocuments({ userId, active: true }, { lean: true }),
-        ]);
+      const scanFacet = scanStats[0] ?? {};
+      const qrFacet = qrStats[0] ?? {};
 
       return {
         scans: {
-          total: totalScans,
-          monthly: monthlyScans,
-          daily: dailyScans,
+          total: scanFacet.total?.[0]?.v ?? 0,
+          monthly: scanFacet.monthly?.[0]?.v ?? 0,
+          daily: scanFacet.daily?.[0]?.v ?? 0,
         },
         qrs: {
-          total: totalQrs,
-          active: activeQrs,
+          total: qrFacet.total?.[0]?.v ?? 0,
+          active: qrFacet.active?.[0]?.v ?? 0,
         },
       };
     } catch (error) {
@@ -90,44 +96,60 @@ export class MongoStatisticsRepository implements ICanGetStatistics {
       const startOfDay = new Date(today.setHours(0, 0, 0, 0));
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-      const [totalScans, monthlyScans, dailyScans, totalQrs, activeQrs, totalUsers, activeUsers] =
-        await Promise.all([
-          // Total de escaneos
-          this.scanModel.countDocuments({}, { lean: true }),
+      // SPEC-007 H4: 1 aggregate $facet por colección (3 consultas + activeUsers ya optimizado)
+      const [scanStats, qrStats, userStats, activeUsers] = await Promise.all([
+        this.scanModel
+          .aggregate([
+            { $match: {} },
+            {
+              $facet: {
+                total: [{ $count: 'v' }],
+                monthly: [{ $match: { scanDate: { $gte: startOfMonth } } }, { $count: 'v' }],
+                daily: [{ $match: { scanDate: { $gte: startOfDay } } }, { $count: 'v' }],
+              },
+            },
+          ])
+          .exec(),
+        this.qrModel
+          .aggregate([
+            { $match: {} },
+            {
+              $facet: {
+                total: [{ $count: 'v' }],
+                active: [{ $match: { active: true } }, { $count: 'v' }],
+              },
+            },
+          ])
+          .exec(),
+        this.userModel
+          .aggregate([
+            { $match: {} },
+            { $facet: { total: [{ $count: 'v' }] } },
+          ])
+          .exec(),
+        // Usuarios con QRs activos (aggregate de distinct userId — ya optimizado)
+        this.qrModel
+          .aggregate([{ $match: { active: true } }, { $group: { _id: '$userId' } }, { $count: 'total' }])
+          .exec()
+          .then((result) => result[0]?.total || 0),
+      ]);
 
-          // Escaneos del mes
-          this.scanModel.countDocuments({ scanDate: { $gte: startOfMonth } }, { lean: true }),
-
-          // Escaneos del dÃ­a
-          this.scanModel.countDocuments({ scanDate: { $gte: startOfDay } }, { lean: true }),
-
-          // Total de QRs
-          this.qrModel.countDocuments({}, { lean: true }),
-
-          // QRs activos
-          this.qrModel.countDocuments({ active: true }, { lean: true }),
-
-          // Total de usuarios
-          this.userModel.countDocuments({}, { lean: true }),
-
-          // Usuarios con QRs activos
-          this.qrModel
-            .aggregate([{ $match: { active: true } }, { $group: { _id: '$userId' } }, { $count: 'total' }])
-            .then((result) => result[0]?.total || 0),
-        ]);
+      const scanFacet = scanStats[0] ?? {};
+      const qrFacet = qrStats[0] ?? {};
+      const userFacet = userStats[0] ?? {};
 
       return {
         scans: {
-          total: totalScans,
-          monthly: monthlyScans,
-          daily: dailyScans,
+          total: scanFacet.total?.[0]?.v ?? 0,
+          monthly: scanFacet.monthly?.[0]?.v ?? 0,
+          daily: scanFacet.daily?.[0]?.v ?? 0,
         },
         qrs: {
-          total: totalQrs,
-          active: activeQrs,
+          total: qrFacet.total?.[0]?.v ?? 0,
+          active: qrFacet.active?.[0]?.v ?? 0,
         },
         users: {
-          total: totalUsers,
+          total: userFacet.total?.[0]?.v ?? 0,
           active: activeUsers,
         },
       };

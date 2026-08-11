@@ -17,27 +17,34 @@ import {
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
 import type { TrackingContext } from 'src/common/decorators/tracking.decorator';
 
-const mockScanCountDocuments = jest.fn();
-const mockQrCountDocuments = jest.fn();
-const mockUserCountDocuments = jest.fn();
+const mockScanAggregate = jest.fn();
 const mockQrAggregate = jest.fn();
+const mockUserAggregate = jest.fn();
 const mockScanCreateIndex = jest.fn();
 const mockQrCreateIndex = jest.fn();
 
 const scanModelMock = {
   collection: { createIndex: mockScanCreateIndex },
-  countDocuments: mockScanCountDocuments,
+  aggregate: mockScanAggregate,
 } as unknown as Model<_ScanDoc>;
 
 const qrModelMock = {
   collection: { createIndex: mockQrCreateIndex },
-  countDocuments: mockQrCountDocuments,
   aggregate: mockQrAggregate,
 } as unknown as Model<_QrDoc>;
 
 const userModelMock = {
-  countDocuments: mockUserCountDocuments,
+  aggregate: mockUserAggregate,
 } as unknown as Model<_UserDoc>;
+
+/** Crea un resultado de aggregate con $facet: [{ facetKey: [{v: N}], ... }] con .exec() */
+const createFacetAggregateResult = (facet: Record<string, number>): { exec: jest.Mock } => {
+  const row: Record<string, Array<{ v: number }>> = {};
+  for (const [key, value] of Object.entries(facet)) {
+    row[key] = [{ v: value }];
+  }
+  return { exec: jest.fn().mockResolvedValue([row]) };
+};
 
 describe('MongoStatisticsRepository', () => {
   let repository: MongoStatisticsRepository;
@@ -89,14 +96,11 @@ describe('MongoStatisticsRepository', () => {
   });
 
   describe('getUserStatistics', () => {
-    it('debe calcular las estadísticas del usuario con countDocuments', async () => {
-      mockScanCountDocuments
-        .mockResolvedValueOnce(10) // total de escaneos
-        .mockResolvedValueOnce(15) // escaneos del mes
-        .mockResolvedValueOnce(20); // escaneos del día
-      mockQrCountDocuments
-        .mockResolvedValueOnce(3) // total de QRs
-        .mockResolvedValueOnce(1); // QRs activos
+    it('debe calcular las estadísticas del usuario con 1 aggregate $facet por colección (2 consultas)', async () => {
+      mockScanAggregate.mockReturnValue(
+        createFacetAggregateResult({ total: 10, monthly: 15, daily: 20 }),
+      );
+      mockQrAggregate.mockReturnValue(createFacetAggregateResult({ total: 3, active: 1 }));
 
       const result = await repository.getUserStatistics('user-1', tracking);
 
@@ -106,17 +110,20 @@ describe('MongoStatisticsRepository', () => {
         'getUserStatistics:init',
         { userId: 'user-1' },
       );
-      expect(mockScanCountDocuments).toHaveBeenNthCalledWith(1, { userId: 'user-1' }, { lean: true });
-      expect(mockScanCountDocuments).toHaveBeenNthCalledWith(
-        2,
-        { userId: 'user-1', scanDate: { $gte: expect.any(Date) } },
-        { lean: true },
+      // 2 aggregates totales (scan + qr), no 5 countDocuments
+      expect(mockScanAggregate).toHaveBeenCalledTimes(1);
+      expect(mockQrAggregate).toHaveBeenCalledTimes(1);
+      expect(mockScanAggregate).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ $match: { userId: 'user-1' } }),
+          expect.objectContaining({ $facet: expect.any(Object) }),
+        ]),
       );
-      expect(mockQrCountDocuments).toHaveBeenNthCalledWith(1, { userId: 'user-1' }, { lean: true });
-      expect(mockQrCountDocuments).toHaveBeenNthCalledWith(
-        2,
-        { userId: 'user-1', active: true },
-        { lean: true },
+      expect(mockQrAggregate).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ $match: { userId: 'user-1' } }),
+          expect.objectContaining({ $facet: expect.any(Object) }),
+        ]),
       );
       expect(result).toEqual({
         scans: { total: 10, monthly: 15, daily: 20 },
@@ -124,8 +131,48 @@ describe('MongoStatisticsRepository', () => {
       });
     });
 
+    it('debe usar fechas de corte en los facet monthly/daily', async () => {
+      mockScanAggregate.mockReturnValue(
+        createFacetAggregateResult({ total: 10, monthly: 15, daily: 20 }),
+      );
+      mockQrAggregate.mockReturnValue(createFacetAggregateResult({ total: 3, active: 1 }));
+
+      await repository.getUserStatistics('user-1', tracking);
+
+      const scanPipeline = mockScanAggregate.mock.calls[0][0] as Array<Record<string, unknown>>;
+      const scanFacet = scanPipeline.find((s) => s.$facet)?.$facet as Record<string, unknown>;
+      expect(scanFacet.monthly).toEqual([
+        { $match: { scanDate: { $gte: expect.any(Date) } } },
+        { $count: 'v' },
+      ]);
+      expect(scanFacet.daily).toEqual([
+        { $match: { scanDate: { $gte: expect.any(Date) } } },
+        { $count: 'v' },
+      ]);
+      const qrPipeline = mockQrAggregate.mock.calls[0][0] as Array<Record<string, unknown>>;
+      const qrFacet = qrPipeline.find((s) => s.$facet)?.$facet as Record<string, unknown>;
+      expect(qrFacet.active).toEqual([
+        { $match: { active: true } },
+        { $count: 'v' },
+      ]);
+    });
+
+    it('debe retornar 0s cuando no hay documentos (facet vacío)', async () => {
+      mockScanAggregate.mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+      mockQrAggregate.mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+
+      const result = await repository.getUserStatistics('user-1', tracking);
+
+      expect(result).toEqual({
+        scans: { total: 0, monthly: 0, daily: 0 },
+        qrs: { total: 0, active: 0 },
+      });
+    });
+
     it('debe trazar y re-lanzar el error si alguna consulta falla', async () => {
-      mockScanCountDocuments.mockRejectedValue(new Error('DB down'));
+      mockScanAggregate.mockReturnValue({
+        exec: jest.fn().mockRejectedValue(new Error('DB down')),
+      });
 
       await expect(repository.getUserStatistics('user-1', tracking)).rejects.toThrow('DB down');
       expect(traceService.error).toHaveBeenCalledWith(
@@ -138,16 +185,19 @@ describe('MongoStatisticsRepository', () => {
   });
 
   describe('getSystemStatistics', () => {
-    it('debe calcular las estadísticas del sistema', async () => {
-      mockScanCountDocuments
-        .mockResolvedValueOnce(100) // total de escaneos
-        .mockResolvedValueOnce(50) // escaneos del mes
-        .mockResolvedValueOnce(5); // escaneos del día
-      mockQrCountDocuments
-        .mockResolvedValueOnce(40) // total de QRs
-        .mockResolvedValueOnce(15); // QRs activos
-      mockUserCountDocuments.mockResolvedValueOnce(10); // total de usuarios
-      mockQrAggregate.mockResolvedValue([{ total: 6 }]); // usuarios con QRs activos
+    it('debe calcular las estadísticas del sistema con 3 aggregates $facet + activeUsers', async () => {
+      mockScanAggregate.mockReturnValue(
+        createFacetAggregateResult({ total: 100, monthly: 50, daily: 5 }),
+      );
+      mockQrAggregate.mockReturnValue(createFacetAggregateResult({ total: 40, active: 15 }));
+      mockUserAggregate.mockReturnValue(createFacetAggregateResult({ total: 10 }));
+      // activeUsers: aggregate de distinct userId
+      mockQrAggregate.mockReturnValueOnce(
+        createFacetAggregateResult({ total: 40, active: 15 }),
+      );
+      mockQrAggregate.mockReturnValueOnce({
+        exec: jest.fn().mockResolvedValue([{ total: 6 }]),
+      });
 
       const result = await repository.getSystemStatistics(tracking);
 
@@ -157,10 +207,12 @@ describe('MongoStatisticsRepository', () => {
         'getSystemStatistics:init',
         {},
       );
-      expect(mockScanCountDocuments).toHaveBeenNthCalledWith(1, {}, { lean: true });
-      expect(mockQrCountDocuments).toHaveBeenNthCalledWith(2, { active: true }, { lean: true });
-      expect(mockUserCountDocuments).toHaveBeenCalledWith({}, { lean: true });
-      expect(mockQrAggregate).toHaveBeenCalledWith(
+      // 3 aggregates con $facet (scan, qr, user) + 1 aggregate distinct (activeUsers)
+      expect(mockScanAggregate).toHaveBeenCalledTimes(1);
+      expect(mockQrAggregate).toHaveBeenCalledTimes(2);
+      expect(mockUserAggregate).toHaveBeenCalledTimes(1);
+      expect(mockQrAggregate).toHaveBeenNthCalledWith(
+        2,
         expect.arrayContaining([
           expect.objectContaining({ $match: { active: true } }),
           expect.objectContaining({ $group: { _id: '$userId' } }),
@@ -174,13 +226,11 @@ describe('MongoStatisticsRepository', () => {
     });
 
     it('debe considerar 0 usuarios activos cuando el aggregate no retorna total', async () => {
-      mockScanCountDocuments
-        .mockResolvedValueOnce(0)
-        .mockResolvedValueOnce(0)
-        .mockResolvedValueOnce(0);
-      mockQrCountDocuments.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
-      mockUserCountDocuments.mockResolvedValueOnce(0);
-      mockQrAggregate.mockResolvedValue([]);
+      mockScanAggregate.mockReturnValue(createFacetAggregateResult({ total: 0, monthly: 0, daily: 0 }));
+      mockQrAggregate.mockReturnValue(createFacetAggregateResult({ total: 0, active: 0 }));
+      mockUserAggregate.mockReturnValue(createFacetAggregateResult({ total: 0 }));
+      mockQrAggregate.mockReturnValueOnce(createFacetAggregateResult({ total: 0, active: 0 }));
+      mockQrAggregate.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
 
       const result = await repository.getSystemStatistics(tracking);
 
@@ -189,7 +239,9 @@ describe('MongoStatisticsRepository', () => {
     });
 
     it('debe trazar y re-lanzar el error si alguna consulta falla', async () => {
-      mockUserCountDocuments.mockRejectedValue(new Error('DB down'));
+      mockUserAggregate.mockReturnValue({
+        exec: jest.fn().mockRejectedValue(new Error('DB down')),
+      });
 
       await expect(repository.getSystemStatistics(tracking)).rejects.toThrow('DB down');
       expect(traceService.error).toHaveBeenCalledWith(
