@@ -7,7 +7,6 @@
   Param,
   Delete,
   HttpStatus,
-  HttpException,
   UseGuards,
   ForbiddenException,
   Query,
@@ -547,7 +546,8 @@ export class QrController {
     // subdocumentos que vinieron del GET con _id de Mongo)
     if (Array.isArray(updateQrDto.data?.urlList)) {
       updateQrDto.data.urlList = updateQrDto.data.urlList.map((item) => {
-        const { _id, ...rest } = item as { _id?: unknown } & typeof item;
+        const { _id: _idOmited, ...rest } = item as { _id?: unknown } & typeof item;
+        void _idOmited; // _id se descarta intencionalmente (sanitización)
         return rest;
       });
     }

@@ -245,8 +245,8 @@ export class MongoQrRepository
       const targetUserId = new Types.ObjectId(targetUserIdString);
 
       // --- 1. LÃ³gica de BÃºsqueda Completa (Sin Omisiones) ---
-      let qrQuery: FilterQuery<QrDocument> = { userId: targetUserId };
-      let petTagQuery: FilterQuery<PetTagDocument> = { userId: targetUserId };
+      const qrQuery: FilterQuery<QrDocument> = { userId: targetUserId };
+      const petTagQuery: FilterQuery<PetTagDocument> = { userId: targetUserId };
 
       if (search) {
         // Condiciones de bÃºsqueda especÃ­ficas para el modelo Qr

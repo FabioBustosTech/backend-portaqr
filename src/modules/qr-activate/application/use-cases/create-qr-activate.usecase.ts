@@ -6,7 +6,6 @@ import type { QrActivate } from '../../domain/entities/qr-activate.entity';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import { QR_ACTIVATE_CREATE_PORT, QR_ACTIVATE_QR_PORT } from '../../domain/constants/qr-activate.tokens';
-import { MethodActivation } from '../../domain/entities/qr-activate.entity';
 
 @Injectable()
 export class CreateQrActivateUseCase {

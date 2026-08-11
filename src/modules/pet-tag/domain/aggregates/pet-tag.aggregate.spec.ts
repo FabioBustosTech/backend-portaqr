@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto';
 import { PetTagAggregate } from './pet-tag.aggregate';
 import type { PetData } from '../entities/pet-tag.entity';
 

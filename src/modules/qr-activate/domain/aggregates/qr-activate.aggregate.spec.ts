@@ -58,6 +58,7 @@ describe('QrActivateAggregate', () => {
 
     it('debe usar PENDING como estado por defecto si no se especifica', () => {
       const { state, ...propsSinEstado } = props;
+      void state; // referencia explícita: se descarta intencionalmente (spec)
       const aggregate = QrActivateAggregate.crear(propsSinEstado);
 
       expect(aggregate.state).toBe(ActivationState.PENDING);

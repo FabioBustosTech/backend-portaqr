@@ -11,7 +11,7 @@
   HttpCode,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CreateQrActivateUseCase } from '../../application/use-cases/create-qr-activate.usecase';
 import { GetAllQrActivateUseCase } from '../../application/use-cases/get-all-qr-activate.usecase';
 import { GetQrActivateUseCase } from '../../application/use-cases/get-qr-activate.usecase';

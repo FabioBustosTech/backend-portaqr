@@ -1,5 +1,5 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
-import type { ICanUpdateQrActivate, ICanGetQrActivate } from '../../domain/ports/queries/qr-activate.port';
+import type { ICanUpdateQrActivate } from '../../domain/ports/queries/qr-activate.port';
 import type { QrActivate } from '../../domain/entities/qr-activate.entity';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';

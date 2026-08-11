@@ -1,6 +1,5 @@
 ﻿import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, SchemaTypes } from 'mongoose';
-import { ApiProperty } from '@nestjs/swagger';
 import { QrType } from '../../../../application/dto/create-qr.dto';
 import { getMaxPdfItemsPerQr } from '../../../../application/pdf-limits.helper';
 import { IsOptional } from 'class-validator';

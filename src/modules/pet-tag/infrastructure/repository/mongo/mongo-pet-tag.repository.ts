@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { customAlphabet } from 'nanoid';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
 import type { TrackingContext } from 'src/common/decorators/tracking.decorator';
-import type { PetTag, PetData } from '../../../domain/entities/pet-tag.entity';
+import type { PetData } from '../../../domain/entities/pet-tag.entity';
 import type {
   ICanGeneratePetTag,
   ICanGetPetTag,
