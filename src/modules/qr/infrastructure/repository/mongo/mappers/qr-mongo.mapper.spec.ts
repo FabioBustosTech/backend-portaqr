@@ -115,7 +115,7 @@ describe('QrMongoMapper', () => {
     });
   });
 });
-describe('QrMongoMapper — listImageUrl (SPEC-002)', () => {
+describe('QrMongoMapper ï¿½ listImageUrl (SPEC-002)', () => {
   it('toEntity preserva data.listImageUrl', () => {
     const doc: any = {
       _id: { toString: () => 'qr-id-3' },
@@ -149,5 +149,84 @@ describe('QrMongoMapper — listImageUrl (SPEC-002)', () => {
     const schemaData = QrMongoMapper.toSchemaData(entity);
 
     expect(schemaData.data).toEqual(entity.data);
+  });
+});
+
+describe('QrMongoMapper â€” itemId al vuelo en urlList (SPEC-005 RF-12)', () => {
+  it('genera un itemId UUID a cada item sin itemId (pre-SPEC-005)', () => {
+    const doc: any = {
+      _id: { toString: () => 'qr-id-5' },
+      idQr: 'QR-5',
+      userId: 'user-5',
+      data: {
+        typeQr: 'list',
+        urlList: [
+          { typeUrl: 'web', url: 'https://a.cl' },
+          { typeUrl: 'vcard', vcard: { nombre: 'A' } },
+        ],
+      },
+      typeQr: 'list',
+    };
+
+    const entity = QrMongoMapper.toEntity(doc);
+
+    expect(entity.data.urlList).toHaveLength(2);
+    for (const item of entity.data.urlList!) {
+      expect(typeof item.itemId).toBe('string');
+      expect(item.itemId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      );
+    }
+    // Los items originales no fueron mutados (copia de data)
+    expect((doc.data.urlList[0] as { itemId?: string }).itemId).toBeUndefined();
+    expect(entity.data.urlList![0].itemId).not.toBe(entity.data.urlList![1].itemId);
+  });
+
+  it('preserva el itemId existente (no lo regenera)', () => {
+    const doc: any = {
+      _id: { toString: () => 'qr-id-6' },
+      idQr: 'QR-6',
+      userId: 'user-6',
+      data: {
+        typeQr: 'list',
+        urlList: [
+          { itemId: 'item-fijo-1', typeUrl: 'pdf', documentUrl: 'https://x.cl/qr-multilink-pdf/QR-6-item-fijo-1.pdf' },
+          { itemId: 'item-fijo-2', typeUrl: 'web', url: 'https://b.cl' },
+        ],
+      },
+      typeQr: 'list',
+    };
+
+    const entity = QrMongoMapper.toEntity(doc);
+
+    expect(entity.data.urlList![0].itemId).toBe('item-fijo-1');
+    expect(entity.data.urlList![1].itemId).toBe('item-fijo-2');
+  });
+
+  it('no altera data cuando urlList estÃ¡ ausente', () => {
+    const doc: any = {
+      _id: { toString: () => 'qr-id-7' },
+      idQr: 'QR-7',
+      userId: 'user-7',
+      data: { typeQr: 'dynamic', url: 'https://c.cl' },
+      typeQr: 'dynamic',
+    };
+
+    const entity = QrMongoMapper.toEntity(doc);
+
+    expect(entity.data).toEqual({ typeQr: 'dynamic', url: 'https://c.cl' });
+  });
+
+  it('no altera data cuando data estÃ¡ ausente', () => {
+    const doc: any = {
+      _id: { toString: () => 'qr-id-8' },
+      idQr: 'QR-8',
+      userId: 'user-8',
+      typeQr: 'static',
+    };
+
+    const entity = QrMongoMapper.toEntity(doc);
+
+    expect(entity.data).toBeUndefined();
   });
 });
