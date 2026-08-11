@@ -13,6 +13,7 @@ const mockFind = jest.fn();
 const mockFindOne = jest.fn();
 const mockFindOneAndUpdate = jest.fn();
 const mockCountDocuments = jest.fn();
+const mockInsertMany = jest.fn();
 
 const modelMock = jest.fn().mockImplementation((data: Record<string, unknown>) => ({
   ...data,
@@ -23,6 +24,7 @@ const modelMock = jest.fn().mockImplementation((data: Record<string, unknown>) =
 (modelMock as unknown as Record<string, unknown>).findOne = mockFindOne;
 (modelMock as unknown as Record<string, unknown>).findOneAndUpdate = mockFindOneAndUpdate;
 (modelMock as unknown as Record<string, unknown>).countDocuments = mockCountDocuments;
+(modelMock as unknown as Record<string, unknown>).insertMany = mockInsertMany;
 
 describe('MongoPetTagRepository', () => {
   let repository: MongoPetTagRepository;
@@ -78,34 +80,56 @@ describe('MongoPetTagRepository', () => {
   });
 
   describe('generateBatch', () => {
-    it('debe generar un lote de placas sin tienda asignada', async () => {
-      mockSave.mockResolvedValue(undefined);
+    /** Construye documentos insertados como devuelve insertMany (sin _id, valores planos) */
+    const buildInsertedDocs = (quantity: number, storeName: string | null = null) =>
+      Array.from({ length: quantity }, (_, i) => ({
+        idQr: `uuid-${i}`,
+        activationPin: `PIN${i}`,
+        status: 'RESERVADO',
+        commercialStatus: storeName ? 'ASIGNADO_COMERCIO' : 'EN_BODEGA',
+        assignedStoreName: storeName,
+      }));
+
+    it('debe generar un lote de placas en 1 sola operación insertMany sin tienda asignada', async () => {
+      const inserted = buildInsertedDocs(2);
+      mockInsertMany.mockResolvedValue(inserted);
 
       const result = await repository.generateBatch(2, '', tracking);
 
-      expect(modelMock).toHaveBeenCalledTimes(2);
-      expect(modelMock).toHaveBeenCalledWith(
+      expect(mockInsertMany).toHaveBeenCalledTimes(1);
+      const docsArg = mockInsertMany.mock.calls[0][0] as Array<Record<string, unknown>>;
+      expect(docsArg).toHaveLength(2);
+      expect(docsArg[0]).toEqual(
         expect.objectContaining({
           status: 'RESERVADO',
           commercialStatus: 'EN_BODEGA',
           assignedStoreName: null,
         }),
       );
-      expect(mockSave).toHaveBeenCalledTimes(2);
+      expect(mockSave).not.toHaveBeenCalled();
+      expect(modelMock).not.toHaveBeenCalled();
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({
         qrId: expect.any(String),
         activationPin: expect.any(String),
         assignedStoreName: null,
       });
+      expect(traceService.log).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.REPOSITORY,
+        'generateBatch:complete',
+        { total: 2 },
+      );
     });
 
     it('debe generar un lote de placas con tienda asignada', async () => {
-      mockSave.mockResolvedValue(undefined);
+      const inserted = buildInsertedDocs(1, 'Tienda Central');
+      mockInsertMany.mockResolvedValue(inserted);
 
       const result = await repository.generateBatch(1, 'Tienda Central', tracking);
 
-      expect(modelMock).toHaveBeenCalledWith(
+      const docsArg = mockInsertMany.mock.calls[0][0] as Array<Record<string, unknown>>;
+      expect(docsArg[0]).toEqual(
         expect.objectContaining({
           commercialStatus: 'ASIGNADO_COMERCIO',
           assignedStoreName: 'Tienda Central',
@@ -114,8 +138,22 @@ describe('MongoPetTagRepository', () => {
       expect(result[0].assignedStoreName).toBe('Tienda Central');
     });
 
+    it('debe generar ids únicos (uuid) y pins únicos (nanoid) por cada placa', async () => {
+      const inserted = buildInsertedDocs(3);
+      mockInsertMany.mockResolvedValue(inserted);
+
+      const result = await repository.generateBatch(3, '', tracking);
+
+      const docsArg = mockInsertMany.mock.calls[0][0] as Array<Record<string, unknown>>;
+      const ids = docsArg.map((d) => d.idQr);
+      const pins = docsArg.map((d) => d.activationPin);
+      expect(new Set(ids).size).toBe(3);
+      expect(new Set(pins).size).toBe(3);
+      expect(result).toHaveLength(3);
+    });
+
     it('debe trazar y lanzar HttpException si el guardado falla', async () => {
-      mockSave.mockRejectedValue(new Error('DB down'));
+      mockInsertMany.mockRejectedValue(new Error('DB down'));
 
       await expect(repository.generateBatch(2, '', tracking)).rejects.toThrow(HttpException);
       expect(traceService.error).toHaveBeenCalledWith(

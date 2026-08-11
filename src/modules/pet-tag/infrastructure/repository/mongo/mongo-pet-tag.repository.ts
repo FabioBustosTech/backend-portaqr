@@ -41,29 +41,23 @@ export class MongoPetTagRepository
       });
 
       const nanoid = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ', 6);
-      const newTags = [];
 
-      for (let i = 0; i < quantity; i++) {
-        const idQr = uuidv4();
-        const activationPin = nanoid();
+      // Construir los documentos y persistir en 1 sola operación batch (SPEC-007 H1)
+      const docs = Array.from({ length: quantity }, () => ({
+        idQr: uuidv4(),
+        activationPin: nanoid(),
+        status: 'RESERVADO',
+        commercialStatus: assignedStoreName ? 'ASIGNADO_COMERCIO' : 'EN_BODEGA',
+        assignedStoreName: assignedStoreName || null,
+      }));
 
-        const tag = new this.petTagModel({
-          idQr,
-          activationPin,
-          status: 'RESERVADO',
-          commercialStatus: assignedStoreName ? 'ASIGNADO_COMERCIO' : 'EN_BODEGA',
-          assignedStoreName: assignedStoreName || null,
-        });
-
-        await tag.save();
-        newTags.push(tag);
-      }
+      const saved = await this.petTagModel.insertMany(docs);
 
       this.traceService.log(tracking, TraceLayer.REPOSITORY, 'generateBatch:complete', {
-        total: newTags.length,
+        total: saved.length,
       });
 
-      return newTags.map((tag) => ({
+      return saved.map((tag) => ({
         qrId: tag.idQr,
         activationPin: tag.activationPin,
         assignedStoreName: tag.assignedStoreName,
