@@ -224,35 +224,35 @@ export class MongoPetTagRepository
         userId,
       });
 
-      const tag = await this.petTagModel
-        .findOne({ idQr, activationPin })
-        .lean();
-
-      if (!tag) {
-        throw new NotFoundException(`No se encontró una placa con ID QR: ${idQr}`);
-      }
-
-      if (tag.status !== 'RESERVADO') {
-        throw new ConflictException(`La placa con ID QR: ${idQr} ya está activa`);
-      }
-
-      if (tag.activationPin !== activationPin) {
-        throw new ConflictException(`PIN de activación incorrecto para la placa con ID QR: ${idQr}`);
-      }
-
+      // 1 round-trip atómico (SPEC-007 H5): el filtro condicional elimina el TOCTOU
       const updatedTag = await this.petTagModel
         .findOneAndUpdate(
-          { idQr },
+          { idQr, activationPin, status: 'RESERVADO' },
           {
-            status: 'ACTIVO',
-            userId: new Types.ObjectId(userId),
-            petData,
-            expiration: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 año desde ahora
-            commercialStatus: 'VENDIDO',
+            $set: {
+              status: 'ACTIVO',
+              userId: new Types.ObjectId(userId),
+              petData,
+              expiration: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 año desde ahora
+              commercialStatus: 'VENDIDO',
+            },
           },
-          { new: true },
+          { new: true, runValidators: true }, // runValidators: no-regresión de enums status/commercialStatus
         )
         .lean();
+
+      if (!updatedTag) {
+        // Rama de error: 1 read para distinguir causa (no afecta el camino feliz)
+        const existing = await this.petTagModel
+          .findOne({ idQr, activationPin })
+          .lean();
+
+        if (!existing) {
+          throw new NotFoundException(`No se encontró una placa con ID QR: ${idQr}`);
+        }
+        // Existe pero no está RESERVADO (o lo activó otra request concurrente)
+        throw new ConflictException(`La placa con ID QR: ${idQr} ya está activa`);
+      }
 
       this.traceService.log(tracking, TraceLayer.REPOSITORY, 'activate:complete', { idQr });
       return updatedTag;
