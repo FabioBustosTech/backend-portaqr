@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger, HttpStatus, HttpException } from '@nestjs/common';
+import { Injectable, Logger, HttpStatus, HttpException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
@@ -15,6 +15,8 @@ import type {
 import { QrSchema, QrDocument } from './schemas/qr.schema';
 import { QrMongoMapper } from './mappers/qr-mongo.mapper';
 import { PetTagSchema, PetTagDocument } from 'src/modules/pet-tag/infrastructure/repository/mongo/schemas/pet-tag.schema';
+// SPEC-008 H3 (R2): input de b�squeda como literal, sin metacaracteres de regex (ReDoS)
+import escapeStringRegexp = require('escape-string-regexp');
 
 @Injectable()
 export class MongoQrRepository
@@ -240,65 +242,79 @@ export class MongoQrRepository
     tracking: TrackingContext,
   ): Promise<{ data: unknown[]; pagination: QrPagination }> {
     try {
-      // Normalizar page/limit a número: el controller los pasa como strings
-      // desde query params y $skip/$limit de aggregate exigen números
-      // (el find().limit() anterior toleraba strings — no-regresión SPEC-007 H3)
+      // Normalizar page/limit a n�mero: el controller los pasa como strings
+      // desde query params y $skip/$limit de aggregate exigen n�meros
+      // (el find().limit() anterior toleraba strings � no-regresi�n SPEC-007 H3)
       const pageNum = Number(page) || 1;
       const limitNum = Number(limit) || 10;
       const skip = (pageNum - 1) * limitNum;
       const targetUserIdString = role === 'admin' && userId2 ? userId2 : userId;
+      // SPEC-008 H5 (R5): ObjectId inválido → 400 en vez de 500 (CastError interna)
+      if (!Types.ObjectId.isValid(targetUserIdString)) {
+        this.traceService.warn(
+          tracking,
+          TraceLayer.REPOSITORY,
+          'findUserByFavorites:invalid-object-id',
+          { targetUserIdString },
+        );
+        throw new BadRequestException(
+          `El ID de usuario no es válido: ${targetUserIdString}`,
+        );
+      }
       // IMPORTANTE (tipos de schema): qr guarda userId como STRING
       // (qr.schema.ts L89) y pet-tag como Types.ObjectId. El find() de Mongoose
       // casteaba el filtro al tipo del schema; el aggregate $match NO castea,
-      // por lo que hay que usar el tipo correcto en cada colección
-      // (no-regresión: $match con ObjectId contra userId string devuelve 0).
+      // por lo que hay que usar el tipo correcto en cada colecci�n
+      // (no-regresi�n: $match con ObjectId contra userId string devuelve 0).
       const targetUserId = new Types.ObjectId(targetUserIdString);
       const qrUserId = targetUserIdString;
       const petTagUserId = targetUserId;
 
-      // --- 1. LÃ³gica de BÃºsqueda Completa (Sin Omisiones) ---
+      // --- 1. Lógica de Búsqueda Completa (Sin Omisiones) ---
       const qrQuery: FilterQuery<QrDocument> = { userId: qrUserId };
       const petTagQuery: FilterQuery<PetTagDocument> = { userId: petTagUserId };
 
       if (search) {
-        // Condiciones de bÃºsqueda especÃ­ficas para el modelo Qr
+        // SPEC-008 H3 (R2): escapar como literal antes de $regex (anti-ReDoS)
+        const safeSearch = escapeStringRegexp(search);
+        // Condiciones de búsqueda específicas para el modelo Qr
         const typeConditions = {
-          social: [{ typeQr: 'social' }, { $or: [{ 'data.username': { $regex: search, $options: 'i' } }, { 'data.platform': { $regex: search, $options: 'i' } }] }],
-          email: [{ typeQr: 'email' }, { 'data.email': { $regex: search, $options: 'i' } }],
-          whatsapp: [{ typeQr: 'whatsapp' }, { $or: [{ 'data.phone': { $regex: search, $options: 'i' } }, { 'data.message': { $regex: search, $options: 'i' } }] }],
-          pet: [{ typeQr: 'pet' }, { $or: [{ 'data.petName': { $regex: search, $options: 'i' } }, { 'data.petBreed': { $regex: search, $options: 'i' } }, { 'data.petData.ownerPhone': { $regex: search, $options: 'i' } }] }],
-          phone: [{ typeQr: 'phone' }, { 'data.phone': { $regex: search, $options: 'i' } }],
-          map: [{ typeQr: 'map' }, { $or: [{ 'data.latitude': { $regex: search, $options: 'i' } }, { 'data.longitude': { $regex: search, $options: 'i' } }, { 'data.address': { $regex: search, $options: 'i' } }] }],
+          social: [{ typeQr: 'social' }, { $or: [{ 'data.username': { $regex: safeSearch, $options: 'i' } }, { 'data.platform': { $regex: safeSearch, $options: 'i' } }] }],
+          email: [{ typeQr: 'email' }, { 'data.email': { $regex: safeSearch, $options: 'i' } }],
+          whatsapp: [{ typeQr: 'whatsapp' }, { $or: [{ 'data.phone': { $regex: safeSearch, $options: 'i' } }, { 'data.message': { $regex: safeSearch, $options: 'i' } }] }],
+          pet: [{ typeQr: 'pet' }, { $or: [{ 'data.petName': { $regex: safeSearch, $options: 'i' } }, { 'data.petBreed': { $regex: safeSearch, $options: 'i' } }, { 'data.petData.ownerPhone': { $regex: safeSearch, $options: 'i' } }] }],
+          phone: [{ typeQr: 'phone' }, { 'data.phone': { $regex: safeSearch, $options: 'i' } }],
+          map: [{ typeQr: 'map' }, { $or: [{ 'data.latitude': { $regex: safeSearch, $options: 'i' } }, { 'data.longitude': { $regex: safeSearch, $options: 'i' } }, { 'data.address': { $regex: safeSearch, $options: 'i' } }] }],
         };
 
         qrQuery['$or'] = [
-          { idQr: { $regex: search, $options: 'i' } },
-          { userId: { $regex: search, $options: 'i' } },
-          { typeQr: { $regex: search, $options: 'i' } },
-          { name: { $regex: search, $options: 'i' } },
-          { 'data.urlList.url': { $regex: search, $options: 'i' } },
-          { 'data.urlList.typeUrl': { $regex: search, $options: 'i' } },
-          { 'data.vcard.fn': { $regex: search, $options: 'i' } },
-          { 'data.vcard.org': { $regex: search, $options: 'i' } },
-          { 'data.vcard.n.firstName': { $regex: search, $options: 'i' } },
-          { 'data.vcard.n.lastName': { $regex: search, $options: 'i' } },
-          { 'data.vcard.nickname': { $regex: search, $options: 'i' } },
+          { idQr: { $regex: safeSearch, $options: 'i' } },
+          { userId: { $regex: safeSearch, $options: 'i' } },
+          { typeQr: { $regex: safeSearch, $options: 'i' } },
+          { name: { $regex: safeSearch, $options: 'i' } },
+          { 'data.urlList.url': { $regex: safeSearch, $options: 'i' } },
+          { 'data.urlList.typeUrl': { $regex: safeSearch, $options: 'i' } },
+          { 'data.vcard.fn': { $regex: safeSearch, $options: 'i' } },
+          { 'data.vcard.org': { $regex: safeSearch, $options: 'i' } },
+          { 'data.vcard.n.firstName': { $regex: safeSearch, $options: 'i' } },
+          { 'data.vcard.n.lastName': { $regex: safeSearch, $options: 'i' } },
+          { 'data.vcard.nickname': { $regex: safeSearch, $options: 'i' } },
           ...Object.values(typeConditions).flat(),
         ];
 
-        // Condiciones de bÃºsqueda especÃ­ficas para el modelo PetTag
+        // Condiciones de búsqueda específicas para el modelo PetTag
         petTagQuery['$or'] = [
-          { qrId: { $regex: search, $options: 'i' } },
-          { activationPin: { $regex: search, $options: 'i' } },
-          { name: { $regex: search, $options: 'i' } },
-          { 'petData.petName': { $regex: search, $options: 'i' } },
-          { 'petData.ownerName': { $regex: search, $options: 'i' } },
+          { qrId: { $regex: safeSearch, $options: 'i' } },
+          { activationPin: { $regex: safeSearch, $options: 'i' } },
+          { name: { $regex: safeSearch, $options: 'i' } },
+          { 'petData.petName': { $regex: safeSearch, $options: 'i' } },
+          { 'petData.ownerName': { $regex: safeSearch, $options: 'i' } },
         ];
       }
 
       // --- 2. Paginar en origen con $facet (SPEC-007 H3) ---
-      // Cada colección trae a lo sumo `limit` docs (2×limit en total a unir),
-      // no la colección completa; el total se calcula en la misma consulta.
+      // Cada colecci�n trae a lo sumo `limit` docs (2�limit en total a unir),
+      // no la colecci�n completa; el total se calcula en la misma consulta.
       const sort = { isFavorite: -1, updatedAt: -1 } as const;
       const [qrFacet, petTagFacet] = await Promise.all([
         this.qrModel
@@ -334,13 +350,13 @@ export class MongoQrRepository
 
       // --- 3. Unificar, Ordenar y Paginar (Sin Mapeo Inverso) ---
 
-      // AÃ±adimos un campo 'resultType' para que el frontend pueda diferenciar, pero NO modificamos la estructura original
+      // Añadimos un campo 'resultType' para que el frontend pueda diferenciar, pero NO modificamos la estructura original
       const allItems = [
         ...qrData.map((item) => ({ ...item, resultType: 'qr' })),
         ...petTagData.map((item) => ({ ...item, resultType: 'pet-tag' })),
       ];
 
-      // Ordenar el array combinado: primero favoritos, luego por fecha de actualizaciÃ³n
+      // Ordenar el array combinado: primero favoritos, luego por fecha de actualización
       allItems.sort((a, b) => {
         const aIsFavorite = a.isFavorite ?? false;
         const bIsFavorite = b.isFavorite ?? false;
@@ -372,9 +388,12 @@ export class MongoQrRepository
         },
       };
     } catch (error) {
+      // SPEC-008 H5 (R5): errores de validación de cliente (ObjectId inválido)
+      // se re-lanzan tal cual (400) — solo los errores internos se convierten en 500
+      if (error instanceof BadRequestException) throw error;
       this.traceService.error(tracking, TraceLayer.REPOSITORY, 'findUserByFavorites:error', error as Error);
       throw new HttpException(
-        'OcurriÃ³ un error al procesar su solicitud.',
+        'Ocurrió un error al procesar su solicitud.',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
@@ -383,26 +402,28 @@ export class MongoQrRepository
   // ---- Helpers privados ----
 
   private buildSearchConditions(search: string): Record<string, unknown> {
+    // SPEC-008 H3 (R2): input como literal antes de $regex (anti-ReDoS)
+    const safeSearch = escapeStringRegexp(search);
     const typeConditions = {
       social: [
         { typeQr: 'social' },
         {
           $or: [
-            { 'data.username': { $regex: search, $options: 'i' } },
-            { 'data.platform': { $regex: search, $options: 'i' } },
+            { 'data.username': { $regex: safeSearch, $options: 'i' } },
+            { 'data.platform': { $regex: safeSearch, $options: 'i' } },
           ],
         },
       ],
       email: [
         { typeQr: 'email' },
-        { 'data.email': { $regex: search, $options: 'i' } },
+        { 'data.email': { $regex: safeSearch, $options: 'i' } },
       ],
       whatsapp: [
         { typeQr: 'whatsapp' },
         {
           $or: [
-            { 'data.phone': { $regex: search, $options: 'i' } },
-            { 'data.message': { $regex: search, $options: 'i' } },
+            { 'data.phone': { $regex: safeSearch, $options: 'i' } },
+            { 'data.message': { $regex: safeSearch, $options: 'i' } },
           ],
         },
       ],
@@ -410,23 +431,23 @@ export class MongoQrRepository
         { typeQr: 'pet' },
         {
           $or: [
-            { 'data.petName': { $regex: search, $options: 'i' } },
-            { 'data.petBreed': { $regex: search, $options: 'i' } },
-            { 'data.petData.ownerPhone': { $regex: search, $options: 'i' } },
+            { 'data.petName': { $regex: safeSearch, $options: 'i' } },
+            { 'data.petBreed': { $regex: safeSearch, $options: 'i' } },
+            { 'data.petData.ownerPhone': { $regex: safeSearch, $options: 'i' } },
           ],
         },
       ],
       phone: [
         { typeQr: 'phone' },
-        { 'data.phone': { $regex: search, $options: 'i' } },
+        { 'data.phone': { $regex: safeSearch, $options: 'i' } },
       ],
       map: [
         { typeQr: 'map' },
         {
           $or: [
-            { 'data.latitude': { $regex: search, $options: 'i' } },
-            { 'data.longitude': { $regex: search, $options: 'i' } },
-            { 'data.address': { $regex: search, $options: 'i' } },
+            { 'data.latitude': { $regex: safeSearch, $options: 'i' } },
+            { 'data.longitude': { $regex: safeSearch, $options: 'i' } },
+            { 'data.address': { $regex: safeSearch, $options: 'i' } },
           ],
         },
       ],
@@ -434,16 +455,16 @@ export class MongoQrRepository
 
     return {
       $or: [
-        { idQr: { $regex: search, $options: 'i' } },
-        { userId: { $regex: search, $options: 'i' } },
-        { typeQr: { $regex: search, $options: 'i' } },
-        { 'data.urlList.url': { $regex: search, $options: 'i' } },
-        { 'data.urlList.typeUrl': { $regex: search, $options: 'i' } },
-        { 'data.vcard.fn': { $regex: search, $options: 'i' } },
-        { 'data.vcard.org': { $regex: search, $options: 'i' } },
-        { 'data.vcard.n.firstName': { $regex: search, $options: 'i' } },
-        { 'data.vcard.n.lastName': { $regex: search, $options: 'i' } },
-        { 'data.vcard.nickname': { $regex: search, $options: 'i' } },
+        { idQr: { $regex: safeSearch, $options: 'i' } },
+        { userId: { $regex: safeSearch, $options: 'i' } },
+        { typeQr: { $regex: safeSearch, $options: 'i' } },
+        { 'data.urlList.url': { $regex: safeSearch, $options: 'i' } },
+        { 'data.urlList.typeUrl': { $regex: safeSearch, $options: 'i' } },
+        { 'data.vcard.fn': { $regex: safeSearch, $options: 'i' } },
+        { 'data.vcard.org': { $regex: safeSearch, $options: 'i' } },
+        { 'data.vcard.n.firstName': { $regex: safeSearch, $options: 'i' } },
+        { 'data.vcard.n.lastName': { $regex: safeSearch, $options: 'i' } },
+        { 'data.vcard.nickname': { $regex: safeSearch, $options: 'i' } },
         ...Object.values(typeConditions).flat(),
       ],
     };

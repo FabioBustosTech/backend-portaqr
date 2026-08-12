@@ -17,6 +17,9 @@ import { Public } from 'src/common/decorators/public.decorator';
 import { Tracking } from '../../../../common/decorators/tracking.decorator';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
+// SPEC-008 H4 (R4): 5 req/min en login/refresh (anti-bruteforce)
+import { Throttle } from '@nestjs/throttler';
+import { SENSITIVE_ENDPOINT_THROTTLE } from 'src/common/config/throttle.config';
 
 @ApiTags('AutenticaciÃ³n')
 @Controller('auth')
@@ -29,6 +32,7 @@ export class AuthController {
   @Post('login')
   @Public()
   @HttpCode(HttpStatus.OK)
+  @Throttle(SENSITIVE_ENDPOINT_THROTTLE)
   @ApiOperation({ summary: 'Iniciar sesiÃ³n' })
   @ApiResponse({ status: 200, description: 'Login exitoso' })
   @ApiResponse({ status: 401, description: 'Credenciales invÃ¡lidas' })
@@ -42,6 +46,7 @@ export class AuthController {
   @Post('refresh')
   @Public()
   @HttpCode(HttpStatus.OK)
+  @Throttle(SENSITIVE_ENDPOINT_THROTTLE)
   @ApiOperation({ summary: 'Refrescar el token de acceso' })
   @ApiResponse({ status: 200, description: 'Token de acceso generado exitosamente.' })
   @ApiResponse({ status: 401, description: 'Token de actualizaciÃ³n invÃ¡lido o expirado.' })

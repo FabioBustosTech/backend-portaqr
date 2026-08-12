@@ -174,6 +174,25 @@ describe('MongoPlanRepository', () => {
       );
     });
 
+    it('debe escapar metacaracteres del término de búsqueda (SPEC-008 H3 — R2 ReDoS, CA-02)', async () => {
+      mockFind.mockReturnValue(buildFindChain([]));
+      mockCountDocuments.mockResolvedValue(0);
+
+      // (a+)+$ con backtracking exponencial → debe llegar a $regex como literal
+      await repository.getAll(1, 10, '(a+)+$', tracking);
+
+      const escaped = '\\(a\\+\\)\\+\\$';
+      expect(mockFind).toHaveBeenCalledWith(
+        expect.objectContaining({
+          $or: [
+            { name: { $regex: escaped, $options: 'i' } },
+            { description: { $regex: escaped, $options: 'i' } },
+            { typeQr: { $regex: escaped, $options: 'i' } },
+          ],
+        }),
+      );
+    });
+
     it('debe calcular hasNextPage y hasPrevPage correctamente', async () => {
       mockFind.mockReturnValue(buildFindChain([doc, doc, doc]));
       mockCountDocuments.mockResolvedValue(25);

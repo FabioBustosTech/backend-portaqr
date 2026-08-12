@@ -201,6 +201,22 @@ describe('MongoQrActivateRepository', () => {
       });
     });
 
+    it('debe escapar metacaracteres del término de búsqueda (SPEC-008 H3 — R2 ReDoS, CA-02)', async () => {
+      mockFind.mockReturnValue(mockQuery([]));
+      mockCountDocuments.mockResolvedValue(0);
+
+      // (a+)+$ con backtracking exponencial → debe llegar a $regex como literal
+      await repository.getAll(1, 10, '(a+)+$', undefined, tracking);
+
+      const escaped = '\\(a\\+\\)\\+\\$';
+      expect(mockFind).toHaveBeenCalledWith({
+        $or: [
+          { descriptionAdministrator: { $regex: escaped, $options: 'i' } },
+          { 'WebpayTransaction.id': { $regex: escaped, $options: 'i' } },
+        ],
+      });
+    });
+
     it('debe consultar sin filtros cuando no hay search', async () => {
       mockFind.mockReturnValue(mockQuery([]));
       mockCountDocuments.mockResolvedValue(0);

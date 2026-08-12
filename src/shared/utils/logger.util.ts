@@ -12,7 +12,8 @@ export class CustomLogger extends Logger {
     return parts.join(' ');
   }
 
-  log(message: string, context?: string, method?: string, trackingId?: string, trace?: string) {
+  // SPEC-008-B: trace solo lo usa error() — se quita de log/warn/debug/verbose
+  log(message: string, context?: string, method?: string, trackingId?: string) {
     super.log(
       this.formatMessage(message, context, method, trackingId),
       context
@@ -27,21 +28,21 @@ export class CustomLogger extends Logger {
     );
   }
 
-  warn(message: string, context?: string, method?: string, trackingId?: string, trace?: string) {
+  warn(message: string, context?: string, method?: string, trackingId?: string) {
     super.warn(
       this.formatMessage(message, context, method, trackingId),
       context
     );
   }
 
-  debug(message: string, context?: string, method?: string, trackingId?: string, trace?: string) {
+  debug(message: string, context?: string, method?: string, trackingId?: string) {
     super.debug(
       this.formatMessage(message, context, method, trackingId),
       context
     );
   }
 
-  verbose(message: string, context?: string, method?: string, trackingId?: string, trace?: string) {
+  verbose(message: string, context?: string, method?: string, trackingId?: string) {
     super.verbose(
       this.formatMessage(message, context, method, trackingId),
       context

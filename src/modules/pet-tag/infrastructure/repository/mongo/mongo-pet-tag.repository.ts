@@ -16,6 +16,8 @@ import type {
 } from '../../../domain/ports/queries/pet-tag.port';
 import { PetTagSchema, PetTagDocument } from './schemas/pet-tag.schema';
 import { PetTagMongoMapper } from './mappers/pet-tag-mongo.mapper';
+// SPEC-008 H3 (R2): input de búsqueda como literal, sin metacaracteres de regex (ReDoS)
+import escapeStringRegexp = require('escape-string-regexp');
 
 @Injectable()
 export class MongoPetTagRepository
@@ -93,12 +95,17 @@ export class MongoPetTagRepository
         mongoQuery.commercialStatus = query.commercialStatus;
       }
       if (query.storeName) {
-        mongoQuery.assignedStoreName = { $regex: query.storeName, $options: 'i' };
+        // SPEC-008 H3 (R2): input como literal antes de $regex (anti-ReDoS)
+        mongoQuery.assignedStoreName = {
+          $regex: escapeStringRegexp(query.storeName),
+          $options: 'i',
+        };
       }
 
       // Agregar búsqueda por texto si se especifica
       if (query.search) {
-        const searchRegex = { $regex: query.search, $options: 'i' };
+        // SPEC-008 H3 (R2): input como literal antes de $regex (anti-ReDoS)
+        const searchRegex = { $regex: escapeStringRegexp(query.search), $options: 'i' };
         mongoQuery.$or = [
           { idQr: searchRegex },
           { activationPin: searchRegex },

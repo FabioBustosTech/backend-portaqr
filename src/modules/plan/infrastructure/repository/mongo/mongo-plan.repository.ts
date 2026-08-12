@@ -1,4 +1,4 @@
-ï»¿import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
@@ -13,6 +13,8 @@ import type {
 } from '../../../domain/ports/queries/plan.port';
 import { PlanSchema, PlanDocument } from './schemas/plan.schema';
 import { PlanMongoMapper } from './mappers/plan-mongo.mapper';
+// SPEC-008 H3 (R2): input de búsqueda como literal, sin metacaracteres de regex (ReDoS)
+import escapeStringRegexp = require('escape-string-regexp');
 
 @Injectable()
 export class MongoPlanRepository
@@ -55,10 +57,12 @@ export class MongoPlanRepository
 
       const query: any = {};
       if (search) {
+        // SPEC-008 H3 (R2): input como literal antes de $regex (anti-ReDoS)
+        const safeSearch = escapeStringRegexp(search);
         query.$or = [
-          { name: { $regex: search, $options: 'i' } },
-          { description: { $regex: search, $options: 'i' } },
-          { typeQr: { $regex: search, $options: 'i' } },
+          { name: { $regex: safeSearch, $options: 'i' } },
+          { description: { $regex: safeSearch, $options: 'i' } },
+          { typeQr: { $regex: safeSearch, $options: 'i' } },
         ];
       }
 

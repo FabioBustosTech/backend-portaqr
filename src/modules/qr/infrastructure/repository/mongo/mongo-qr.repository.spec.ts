@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { HttpException } from '@nestjs/common';
+import { HttpException, BadRequestException } from '@nestjs/common';
 import { MongoQrRepository } from './mongo-qr.repository';
 import { QrSchema, QrDocument } from './schemas/qr.schema';
 import {
@@ -41,6 +41,19 @@ const petTagModelMock = jest.fn() as unknown as Model<PetTagDocument>;
 (petTagModelMock as unknown as Record<string, unknown>).find = mockPetTagFind;
 (petTagModelMock as unknown as Record<string, unknown>).countDocuments = mockPetTagCountDocuments;
 (petTagModelMock as unknown as Record<string, unknown>).aggregate = mockPetTagAggregate;
+
+/** Recolecta todos los valores $regex de un query/aggregate Mongo (SPEC-008 H3 — anti-ReDoS). */
+function collectRegexValues(node: unknown, out: string[] = []): string[] {
+  if (Array.isArray(node)) {
+    for (const item of node) collectRegexValues(item, out);
+  } else if (node && typeof node === 'object') {
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (key === '$regex') out.push(String(value));
+      else collectRegexValues(value, out);
+    }
+  }
+  return out;
+}
 
 /** Crea un mock de query encadenable (sort/limit/skip/lean/select/exec) */
 const createQueryMock = (result: unknown, reject = false) => {
@@ -719,6 +732,29 @@ describe('MongoQrRepository', () => {
       );
     });
 
+    it('debe escapar metacaracteres del término de búsqueda (SPEC-008 H3 — R2 ReDoS, CA-02)', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
+      mockPetTagAggregate.mockReturnValue(createAggregateFacetResult([], 0));
+
+      // (a+)+$ con backtracking exponencial → debe llegar a $regex como literal
+      await repository.findUserByFavorites(userId, 1, 10, '(a+)+$', '', '', tracking);
+
+      const qrMatch = (mockAggregate.mock.calls[0][0] as Array<Record<string, unknown>>)[0].$match;
+      const petTagMatch = (mockPetTagAggregate.mock.calls[0][0] as Array<Record<string, unknown>>)[0].$match;
+
+      const qrRegexes = collectRegexValues(qrMatch);
+      const petTagRegexes = collectRegexValues(petTagMatch);
+
+      const escaped = '\\(a\\+\\)\\+\\$';
+      expect(qrRegexes.length).toBeGreaterThan(0);
+      expect(petTagRegexes.length).toBeGreaterThan(0);
+      // Ningún $regex crudo con el payload — todos escapados
+      expect(qrRegexes).not.toContain('(a+)+$');
+      expect(petTagRegexes).not.toContain('(a+)+$');
+      expect(qrRegexes.every((v) => v === escaped)).toBe(true);
+      expect(petTagRegexes.every((v) => v === escaped)).toBe(true);
+    });
+
     it('debe usar userId2 cuando el rol es admin y se entrega userId2', async () => {
       mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
       mockPetTagAggregate.mockReturnValue(createAggregateFacetResult([], 0));
@@ -829,16 +865,33 @@ describe('MongoQrRepository', () => {
       );
     });
 
-    it('debe lanzar HttpException cuando el userId no es un ObjectId válido', async () => {
+    it('debe lanzar BadRequestException (400) cuando el userId no es un ObjectId válido (SPEC-008 H5 — R5, CA-07)', async () => {
       await expect(
         repository.findUserByFavorites('user-invalido', 1, 10, '', '', '', tracking),
-      ).rejects.toThrow(HttpException);
-      expect(traceService.error).toHaveBeenCalledWith(
+      ).rejects.toThrow(BadRequestException);
+      // 400, no 500: se traza como warn (cliente inválido), sin tocar la BD
+      expect(traceService.error).not.toHaveBeenCalledWith(
         tracking,
         TraceLayer.REPOSITORY,
         'findUserByFavorites:error',
         expect.any(Error),
       );
+      expect(traceService.warn).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.REPOSITORY,
+        'findUserByFavorites:invalid-object-id',
+        { targetUserIdString: 'user-invalido' },
+      );
+      expect(mockAggregate).not.toHaveBeenCalled();
+      expect(mockPetTagAggregate).not.toHaveBeenCalled();
+    });
+
+    it('debe lanzar BadRequestException (400) con userId2 inválido en modo admin (SPEC-008 H5 — R5)', async () => {
+      await expect(
+        repository.findUserByFavorites(userId, 1, 10, '', 'admin', 'no-object-id', tracking),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockAggregate).not.toHaveBeenCalled();
+      expect(mockPetTagAggregate).not.toHaveBeenCalled();
     });
   });
 });

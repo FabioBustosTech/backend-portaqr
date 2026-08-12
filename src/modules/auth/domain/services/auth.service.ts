@@ -1,12 +1,7 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtAuthService } from './jwt.service';
 import type { JwtPayload, AuthTokenResponse } from '../ports/in/jwt-service.port';
-import type {
-  IAuthService,
-  LoginDto,
-  RefreshTokenDto,
-  AuthResponse,
-} from '../ports/in/auth-service.port';
+import type { IAuthService, LoginDto, AuthResponse } from '../ports/in/auth-service.port';
 import { PasswordService } from '../../../users/domain/services/password.service';
 import { GetUserUseCase } from '../../../users/application/use-cases/get-user.usecase';
 import { UpdateUserUseCase } from '../../../users/application/use-cases/update-user.usecase';

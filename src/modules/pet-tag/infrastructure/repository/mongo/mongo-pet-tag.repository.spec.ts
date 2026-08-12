@@ -26,6 +26,19 @@ const modelMock = jest.fn().mockImplementation((data: Record<string, unknown>) =
 (modelMock as unknown as Record<string, unknown>).countDocuments = mockCountDocuments;
 (modelMock as unknown as Record<string, unknown>).insertMany = mockInsertMany;
 
+/** Recolecta todos los valores $regex de un query Mongo (SPEC-008 H3 — verificación anti-ReDoS). */
+function collectRegexValues(node: unknown, out: string[] = []): string[] {
+  if (Array.isArray(node)) {
+    for (const item of node) collectRegexValues(item, out);
+  } else if (node && typeof node === 'object') {
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (key === '$regex') out.push(String(value));
+      else collectRegexValues(value, out);
+    }
+  }
+  return out;
+}
+
 describe('MongoPetTagRepository', () => {
   let repository: MongoPetTagRepository;
   let traceService: jest.Mocked<TraceService>;
@@ -233,6 +246,31 @@ describe('MongoPetTagRepository', () => {
           $or: expect.any(Array),
         }),
       );
+    });
+
+    it('debe escapar metacaracteres de search y storeName (SPEC-008 H3 — R2 ReDoS, CA-02)', async () => {
+      mockFind.mockReturnValue(buildFindChain(results));
+      mockCountDocuments.mockResolvedValue(1);
+
+      // (a+)+$ con backtracking exponencial → debe llegar a $regex como literal
+      await repository.findReserved(
+        { storeName: '(a+)+$', search: '.*' },
+        tracking,
+      );
+
+      const escapedStore = '\\(a\\+\\)\\+\\$';
+      const escapedSearch = '\\.\\*';
+      const findCall = mockFind.mock.calls[0][0];
+
+      expect(findCall.assignedStoreName).toEqual({
+        $regex: escapedStore,
+        $options: 'i',
+      });
+      // Todos los $regex del $or usan el término escapado (nunca '.*' crudo)
+      const regexValues = collectRegexValues(findCall.$or);
+      expect(regexValues.length).toBeGreaterThan(0);
+      expect(regexValues).not.toContain('.*');
+      expect(regexValues.every((v) => v === escapedSearch)).toBe(true);
     });
 
     it('debe construir el filtro de fechas con startDate y endDate', async () => {

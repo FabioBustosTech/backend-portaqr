@@ -5,6 +5,7 @@ import type { ICanSendContactEmail } from '../../domain/ports/queries/mail.port'
 import type { ContactMessage } from '../../domain/entities/contact-message.entity';
 import type { TrackingContext } from 'src/common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
+import { escapeHtml } from 'src/common/utils/escape-html.util';
 
 @Injectable()
 export class NodemailerContactAdapter implements ICanSendContactEmail {
@@ -31,17 +32,23 @@ export class NodemailerContactAdapter implements ICanSendContactEmail {
       email: message.email,
     });
 
+    // El mensaje es multilínea (Textarea del frontend): dentro de <p>...</p> los
+    // \n se colapsan como espacios, por eso se convierten en <br> DESPUÉS del
+    // escape (los <br> generados son inofensivos; cualquier <br> del usuario ya
+    // fue escapado a &lt;br&gt; o eliminado por stripHtml en el DTO).
+    const mensajeHtml = escapeHtml(message.mensaje).replace(/\r\n|\r|\n/g, '<br>');
+
     const mailOptions = {
       from: this.configService.get('EMAIL_FROM'),
       to: this.configService.get('SMTP_USER'),
       subject: `Formulario de Contacto: ${message.asunto}`,
       html: `
         <h2>Nuevo mensaje de contacto</h2>
-        <p><strong>Nombre:</strong> ${message.nombre}</p>
-        <p><strong>Email:</strong> ${message.email}</p>
-        <p><strong>Asunto:</strong> ${message.asunto}</p>
+        <p><strong>Nombre:</strong> ${escapeHtml(message.nombre)}</p>
+        <p><strong>Email:</strong> ${escapeHtml(message.email)}</p>
+        <p><strong>Asunto:</strong> ${escapeHtml(message.asunto)}</p>
         <h3>Mensaje:</h3>
-        <p>${message.mensaje}</p>
+        <p>${mensajeHtml}</p>
       `,
     };
 

@@ -146,6 +146,24 @@ describe('MongoQrFreeGenerationRepository', () => {
       );
     });
 
+    it('debe escapar metacaracteres del término de búsqueda (SPEC-008 H3 — R2 ReDoS, CA-02)', async () => {
+      mockFind.mockReturnValue(buildFindChain([]));
+      mockCountDocuments.mockResolvedValue(0);
+
+      // (a+)+$ con backtracking exponencial → debe llegar a $regex como literal
+      await repository.getAll(1, 10, '(a+)+$', tracking);
+
+      const escaped = '\\(a\\+\\)\\+\\$';
+      expect(mockFind).toHaveBeenCalledWith(
+        expect.objectContaining({
+          $or: [
+            { email: { $regex: escaped, $options: 'i' } },
+            { 'information.data': { $regex: escaped, $options: 'i' } },
+          ],
+        }),
+      );
+    });
+
     it('debe trazar y re-lanzar el error si la consulta falla', async () => {
       mockFind.mockReturnValue({
         skip: jest.fn().mockReturnThis(),

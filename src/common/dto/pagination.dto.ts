@@ -1,4 +1,4 @@
-import { IsOptional, IsInt, Min, Max, IsString, IsIn } from 'class-validator';
+import { IsOptional, IsInt, Min, Max, IsString, IsIn, MaxLength } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -33,6 +33,8 @@ export class PaginationDto {
   })
   @IsOptional()
   @IsString()
+  // SPEC-008 H3 (R2): límite de longitud del término (anti-ReDoS, evita queries gigantes)
+  @MaxLength(100, { message: 'La búsqueda no puede superar los 100 caracteres.' })
   search?: string;
 
   @ApiPropertyOptional({
