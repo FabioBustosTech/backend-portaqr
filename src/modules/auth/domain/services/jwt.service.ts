@@ -13,7 +13,11 @@ export class JwtAuthService implements IJwtService {
   constructor(
     private readonly jwtService: JwtServiceCore,
     private readonly configService: ConfigService,
-  ) {}
+  ) {
+    // SPEC-009 A6: validación temprana en bootstrap — si NODE_ENV=production y
+    // faltan las llaves, el proceso NO arranca (throw dentro de loadJwtKeys).
+    loadJwtKeys(this.configService);
+  }
 
   async generateTokens(user: User): Promise<AuthTokenResponse> {
     const { privateKey } = loadJwtKeys(this.configService);
