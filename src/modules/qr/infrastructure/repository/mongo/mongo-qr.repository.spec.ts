@@ -659,9 +659,10 @@ describe('MongoQrRepository', () => {
       expect(mockAggregate).toHaveBeenCalledTimes(1);
       expect(mockPetTagAggregate).toHaveBeenCalledTimes(1);
       // Paginación en BD: $skip/$limit dentro del $facet, no fetch completo
+      // QR filtra por userId string (schema L89); pet-tag por ObjectId (schema L68)
       expect(mockAggregate).toHaveBeenCalledWith(
         expect.arrayContaining([
-          expect.objectContaining({ $match: expect.objectContaining({ userId: expect.any(Types.ObjectId) }) }),
+          expect.objectContaining({ $match: expect.objectContaining({ userId: userId }) }),
           expect.objectContaining({ $sort: { isFavorite: -1, updatedAt: -1 } }),
           expect.objectContaining({
             $facet: {
@@ -669,6 +670,11 @@ describe('MongoQrRepository', () => {
               total: [{ $count: 'v' }],
             },
           }),
+        ]),
+      );
+      expect(mockPetTagAggregate).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ $match: expect.objectContaining({ userId: expect.any(Types.ObjectId) }) }),
         ]),
       );
       expect(mockFind).not.toHaveBeenCalled();
@@ -719,9 +725,10 @@ describe('MongoQrRepository', () => {
 
       await repository.findUserByFavorites(userId, 1, 10, '', 'admin', userId2, tracking);
 
+      // QR: userId string; pet-tag: ObjectId
       expect(mockAggregate).toHaveBeenCalledWith(
         expect.arrayContaining([
-          expect.objectContaining({ $match: expect.objectContaining({ userId: expect.any(Types.ObjectId) }) }),
+          expect.objectContaining({ $match: expect.objectContaining({ userId: userId2 }) }),
         ]),
       );
       expect(mockPetTagAggregate).toHaveBeenCalledWith(
@@ -739,7 +746,7 @@ describe('MongoQrRepository', () => {
 
       expect(mockAggregate).toHaveBeenCalledWith(
         expect.arrayContaining([
-          expect.objectContaining({ $match: expect.objectContaining({ userId: expect.any(Types.ObjectId) }) }),
+          expect.objectContaining({ $match: expect.objectContaining({ userId: userId }) }),
         ]),
       );
       expect(mockPetTagAggregate).toHaveBeenCalledWith(

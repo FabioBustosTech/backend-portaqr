@@ -247,11 +247,18 @@ export class MongoQrRepository
       const limitNum = Number(limit) || 10;
       const skip = (pageNum - 1) * limitNum;
       const targetUserIdString = role === 'admin' && userId2 ? userId2 : userId;
+      // IMPORTANTE (tipos de schema): qr guarda userId como STRING
+      // (qr.schema.ts L89) y pet-tag como Types.ObjectId. El find() de Mongoose
+      // casteaba el filtro al tipo del schema; el aggregate $match NO castea,
+      // por lo que hay que usar el tipo correcto en cada colección
+      // (no-regresión: $match con ObjectId contra userId string devuelve 0).
       const targetUserId = new Types.ObjectId(targetUserIdString);
+      const qrUserId = targetUserIdString;
+      const petTagUserId = targetUserId;
 
       // --- 1. LÃ³gica de BÃºsqueda Completa (Sin Omisiones) ---
-      const qrQuery: FilterQuery<QrDocument> = { userId: targetUserId };
-      const petTagQuery: FilterQuery<PetTagDocument> = { userId: targetUserId };
+      const qrQuery: FilterQuery<QrDocument> = { userId: qrUserId };
+      const petTagQuery: FilterQuery<PetTagDocument> = { userId: petTagUserId };
 
       if (search) {
         // Condiciones de bÃºsqueda especÃ­ficas para el modelo Qr
