@@ -32,6 +32,12 @@ export class NodemailerContactAdapter implements ICanSendContactEmail {
       email: message.email,
     });
 
+    // El mensaje es multilínea (Textarea del frontend): dentro de <p>...</p> los
+    // \n se colapsan como espacios, por eso se convierten en <br> DESPUÉS del
+    // escape (los <br> generados son inofensivos; cualquier <br> del usuario ya
+    // fue escapado a &lt;br&gt; o eliminado por stripHtml en el DTO).
+    const mensajeHtml = escapeHtml(message.mensaje).replace(/\r\n|\r|\n/g, '<br>');
+
     const mailOptions = {
       from: this.configService.get('EMAIL_FROM'),
       to: this.configService.get('SMTP_USER'),
@@ -42,7 +48,7 @@ export class NodemailerContactAdapter implements ICanSendContactEmail {
         <p><strong>Email:</strong> ${escapeHtml(message.email)}</p>
         <p><strong>Asunto:</strong> ${escapeHtml(message.asunto)}</p>
         <h3>Mensaje:</h3>
-        <p>${escapeHtml(message.mensaje)}</p>
+        <p>${mensajeHtml}</p>
       `,
     };
 

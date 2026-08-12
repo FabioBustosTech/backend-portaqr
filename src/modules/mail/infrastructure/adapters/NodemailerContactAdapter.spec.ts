@@ -185,5 +185,71 @@ describe('NodemailerContactAdapter', () => {
         expect(mailOptions.html).toContain('Quisiera saber los precios');
       });
     });
+
+    describe('saltos de línea del mensaje (Textarea multilínea)', () => {
+      it('convierte \n en <br> para que el admin vea el formato original', async () => {
+        mockSendMail.mockResolvedValue({ messageId: 'x' });
+
+        await adapter.sendContactForm(
+          { ...message, mensaje: 'Línea 1\nLínea 2\nLínea 3' },
+          tracking,
+        );
+
+        const mailOptions = mockSendMail.mock.calls[0][0];
+        expect(mailOptions.html).toContain('Línea 1<br>Línea 2<br>Línea 3');
+      });
+
+      it('normaliza \r\n y \r a <br> (Windows/Mac)', async () => {
+        mockSendMail.mockResolvedValue({ messageId: 'x' });
+
+        await adapter.sendContactForm(
+          { ...message, mensaje: 'a\r\nb\rc' },
+          tracking,
+        );
+
+        const mailOptions = mockSendMail.mock.calls[0][0];
+        expect(mailOptions.html).toContain('a<br>b<br>c');
+        expect(mailOptions.html).not.toContain('\r');
+        // El contenido del <p> del mensaje no conserva \n/\r crudos
+        // (el \n de indentación del template es legítimo y no está en el contenido)
+        const mensajeContent = mailOptions.html.match(/<h3>Mensaje:<\/h3>\s*<p>([\s\S]*?)<\/p>/)[1];
+        expect(mensajeContent).not.toContain('\n');
+        expect(mensajeContent).not.toContain('\r');
+      });
+
+      it('el usuario NO puede inyectar <br> propio: se escapa como texto (orden escape → salto)', async () => {
+        mockSendMail.mockResolvedValue({ messageId: 'x' });
+
+        await adapter.sendContactForm(
+          { ...message, mensaje: 'real<br>malicioso' },
+          tracking,
+        );
+
+        const mailOptions = mockSendMail.mock.calls[0][0];
+        // El <br> del usuario llega escapado como texto, no como tag
+        expect(mailOptions.html).toContain('real&lt;br&gt;malicioso');
+        expect(mailOptions.html).not.toContain('real<br>malicioso');
+      });
+
+      it('payload XSS con saltos de línea no genera HTML ejecutable (solo <br> seguros)', async () => {
+        mockSendMail.mockResolvedValue({ messageId: 'x' });
+
+        const attack = '</p>\n<img\nsrc=x\nonerror=alert(1)>\n<script>bad()</script>';
+        await adapter.sendContactForm({ ...message, mensaje: attack }, tracking);
+
+        const mailOptions = mockSendMail.mock.calls[0][0];
+        // No hay tags crudos del payload (el </p> del template es legítimo;
+        // el texto onerror=alert(1) permanece visible pero escapado, no ejecutable)
+        expect(mailOptions.html).not.toContain('<img');
+        expect(mailOptions.html).not.toContain('<script');
+        // Los únicos tags abiertos son los del template (p/strong/h2/h3) + <br>
+        const openTags = mailOptions.html.match(/<(?![\/]?br\b)[a-z][a-z0-9]*/gi) ?? [];
+        const allowedTemplateTags = ['p', 'strong', 'h2', 'h3'];
+        for (const tag of openTags) {
+          const name = tag.replace(/[<]/g, '').toLowerCase();
+          expect(allowedTemplateTags).toContain(name);
+        }
+      });
+    });
   });
 });
