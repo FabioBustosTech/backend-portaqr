@@ -240,7 +240,12 @@ export class MongoQrRepository
     tracking: TrackingContext,
   ): Promise<{ data: unknown[]; pagination: QrPagination }> {
     try {
-      const skip = (page - 1) * limit;
+      // Normalizar page/limit a número: el controller los pasa como strings
+      // desde query params y $skip/$limit de aggregate exigen números
+      // (el find().limit() anterior toleraba strings — no-regresión SPEC-007 H3)
+      const pageNum = Number(page) || 1;
+      const limitNum = Number(limit) || 10;
+      const skip = (pageNum - 1) * limitNum;
       const targetUserIdString = role === 'admin' && userId2 ? userId2 : userId;
       const targetUserId = new Types.ObjectId(targetUserIdString);
 
@@ -295,7 +300,7 @@ export class MongoQrRepository
             { $sort: sort },
             {
               $facet: {
-                data: [{ $skip: skip }, { $limit: limit }],
+                data: [{ $skip: skip }, { $limit: limitNum }],
                 total: [{ $count: 'v' }],
               },
             },
@@ -307,7 +312,7 @@ export class MongoQrRepository
             { $sort: sort },
             {
               $facet: {
-                data: [{ $skip: skip }, { $limit: limit }],
+                data: [{ $skip: skip }, { $limit: limitNum }],
                 total: [{ $count: 'v' }],
               },
             },
@@ -353,10 +358,10 @@ export class MongoQrRepository
         pagination: {
           total,
           totalPages,
-          currentPage: page.toString(),
-          limit: limit.toString(),
-          hasNextPage: page < totalPages,
-          hasPrevPage: page > 1,
+          currentPage: pageNum.toString(),
+          limit: limitNum.toString(),
+          hasNextPage: pageNum < totalPages,
+          hasPrevPage: pageNum > 1,
         },
       };
     } catch (error) {

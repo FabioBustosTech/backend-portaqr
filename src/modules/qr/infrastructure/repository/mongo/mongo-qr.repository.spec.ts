@@ -781,6 +781,31 @@ describe('MongoQrRepository', () => {
       });
     });
 
+    it('debe normalizar page/limit string a número (no-regresión: $limit exige número — bug encontrado por E2E)', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([qrFav], 2));
+      mockPetTagAggregate.mockReturnValue(createAggregateFacetResult([petTagDoc], 1));
+
+      // El controller pasa query params como strings ("page=2&limit=1")
+      const result = await repository.findUserByFavorites(
+        userId,
+        '2' as unknown as number,
+        '1' as unknown as number,
+        '',
+        '',
+        '',
+        tracking,
+      );
+
+      const qrAggregateCall = mockAggregate.mock.calls[0][0] as Array<Record<string, unknown>>;
+      const qrFacet = qrAggregateCall.find((s) => s.$facet)?.$facet as {
+        data: Array<Record<string, unknown>>;
+      };
+      // $skip/$limit numéricos (no strings) — Mongo rechaza $limit: "1"
+      expect(qrFacet.data).toEqual([{ $skip: 1 }, { $limit: 1 }]);
+      expect(result.pagination.currentPage).toBe('2');
+      expect(result.pagination.limit).toBe('1');
+    });
+
     it('debe lanzar HttpException y trazar el error si la consulta falla', async () => {
       mockAggregate.mockReturnValue({
         exec: jest.fn().mockRejectedValue(new Error('DB down')),
