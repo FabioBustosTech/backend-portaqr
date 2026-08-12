@@ -137,12 +137,11 @@ describe('ForgotPasswordUseCase', () => {
       expect(diffSeconds).toBeLessThanOrEqual(3600);
     });
 
-    it('debe lanzar NotFoundException si el usuario no existe', async () => {
+    it('SPEC-009 A4: email no registrado → NO lanza (respuesta genérica 200), no actualiza ni envía correo', async () => {
       reader.getByEmail.mockResolvedValue(null);
 
-      await expect(
-        useCase.execute('nadie@test.com', tracking),
-      ).rejects.toThrow(NotFoundException);
+      // Antes lanzaba NotFoundException (revelaba la existencia del email) — ahora responde genérico
+      await expect(useCase.execute('nadie@test.com', tracking)).resolves.toBeUndefined();
       expect(updater.update).not.toHaveBeenCalled();
       expect(emailService.sendPasswordResetEmail).not.toHaveBeenCalled();
     });

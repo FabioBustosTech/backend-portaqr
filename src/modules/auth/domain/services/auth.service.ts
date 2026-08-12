@@ -30,11 +30,10 @@ export class AuthService implements IAuthService {
     });
 
     const user = await this.getUserUseCase.executeByUsername(dto.username, tracking);
-    if (!user) {
-      throw new UnauthorizedException('El email o nombre de usuario no existe');
-    }
 
-    if (!user.password) {
+    // SPEC-009 A4: mensaje homogéneo — no revelar si la cuenta existe
+    // (mismo mensaje y mismo status para usuario inexistente y contraseña incorrecta)
+    if (!user || !user.password) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
@@ -43,7 +42,7 @@ export class AuthService implements IAuthService {
       user.password,
     );
     if (!passwordValida) {
-      throw new UnauthorizedException('Contraseña incorrecta');
+      throw new UnauthorizedException('Credenciales inválidas');
     }
 
     await this.updateUserUseCase.updateLastLogin(user.id, tracking);

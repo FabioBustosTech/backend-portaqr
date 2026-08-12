@@ -347,13 +347,41 @@ describe('UsersController', () => {
   });
 
   describe('findOne', () => {
-    it('debe retornar el usuario sin password', async () => {
+    it('debe retornar el usuario sin password (ownership: dueño)', async () => {
       getUserUseCase.execute.mockResolvedValue(mockUser);
 
-      const result = await controller.findOne('user-1', tracking);
+      const result = await controller.findOne(
+        '507f1f77bcf86cd799439011',
+        { id: '507f1f77bcf86cd799439011', role: 'user' },
+        tracking,
+      );
 
-      expect(getUserUseCase.execute).toHaveBeenCalledWith('user-1', tracking);
+      expect(getUserUseCase.execute).toHaveBeenCalledWith('507f1f77bcf86cd799439011', tracking);
       expect(result).not.toHaveProperty('password');
+      expect(result.id).toBe('user-1');
+    });
+
+    it('SPEC-009 A4: 403 si el autenticado no es el dueño (no admin)', async () => {
+      getUserUseCase.execute.mockResolvedValue(mockUser);
+
+      await expect(
+        controller.findOne(
+          '507f1f77bcf86cd799439011',
+          { id: '507f1f77bcf86cd799439012', role: 'user' },
+          tracking,
+        ),
+      ).rejects.toThrow('No tiene permiso para ver este usuario.');
+      expect(getUserUseCase.execute).not.toHaveBeenCalled();
+    });
+
+    it('SPEC-009 A4: admin puede ver cualquier usuario', async () => {
+      getUserUseCase.execute.mockResolvedValue(mockUser);
+
+      const result = await controller.findOne(
+        '507f1f77bcf86cd799439011',
+        { id: '507f1f77bcf86cd799439099', role: 'admin' },
+        tracking,
+      );
       expect(result.id).toBe('user-1');
     });
   });

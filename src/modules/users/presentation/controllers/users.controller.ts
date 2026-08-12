@@ -163,9 +163,9 @@ export class UsersController {
   }
 
   @Get('search')
-  @Roles('admin', 'user')
+  @Roles('admin')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Buscar usuario por username/email' })
+  @ApiOperation({ summary: 'Buscar usuario por username/email (solo admin — SPEC-009 A4)' })
   async findByUsername(
     @Query('username') username: string,
     @Tracking() tracking: TrackingContext,
@@ -208,10 +208,22 @@ export class UsersController {
   @Roles('admin', 'user')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Obtener el Usuario por id' })
-  async findOne(@Param('id') id: string, @Tracking() tracking: TrackingContext) {
+  async findOne(
+    @Param('id') id: string,
+    @GetUser() user: AuthenticatedUser,
+    @Tracking() tracking: TrackingContext,
+  ) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'GET /users/:id', { id });
-    const user = await this.getUserUseCase.execute(id, tracking);
-    const { password: _password, ...result } = user;
+
+    if (!isValidObjectId(id)) {
+      throw new BadRequestException('ID de usuario inválido.');
+    }
+
+    // SPEC-009 A4: patrón estándar — solo el propio usuario o admin
+    assertOwnerOrAdmin(id, user, 'No tiene permiso para ver este usuario.');
+
+    const found = await this.getUserUseCase.execute(id, tracking);
+    const { password: _password, ...result } = found;
     void _password;
     return result;
   }

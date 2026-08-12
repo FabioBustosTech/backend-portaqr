@@ -1,4 +1,4 @@
-﻿import { Injectable, Inject, NotFoundException, Logger } from '@nestjs/common';
+﻿import { Injectable, Inject, Logger } from '@nestjs/common';
 import type { ICanGetUser } from '../../domain/ports/queries/get-user.port';
 import type { ICanUpdateUser } from '../../domain/ports/queries/create-user.port';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
@@ -26,7 +26,15 @@ export class ForgotPasswordUseCase {
 
     const user = await this.reader.getByEmail(email, tracking);
     if (!user) {
-      throw new NotFoundException('Usuario no encontrado');
+      // SPEC-009 A4: respuesta genérica — NO revelar si el email existe
+      // (el controller responde 200 "si el correo existe, recibirás un código").
+      this.traceService.log(
+        tracking,
+        TraceLayer.USE_CASE,
+        'ForgotPasswordUseCase - email no registrado (respuesta genérica)',
+        { email },
+      );
+      return;
     }
 
     const resetCode = Math.random().toString(36).substring(2, 8).toUpperCase();
