@@ -235,7 +235,7 @@ describe('AuthService', () => {
       expect(jwtAuthService.generateTokens).not.toHaveBeenCalled();
     });
 
-    it('SPEC-009 A8: REUSO de un token revocado → revoca TODA la familia (tokenVersion++) y 401', async () => {
+    it('SPEC-009 A8: REUSO fuera de la ventana de gracia (>60s) → revoca TODA la familia y 401', async () => {
       jwtAuthService.verifyRefreshToken.mockReturnValue({
         sub: validObjectId,
         email: mockUser.email,
@@ -245,12 +245,12 @@ describe('AuthService', () => {
         tokenVersion: 0,
       });
       getUserUseCase.execute.mockResolvedValue(mockUser);
-      // El token existe pero ya fue revocado (rotado antes) → señal de robo
+      // El token existe pero fue revocado hace >60s (robo real, no race del cliente)
       refreshTokenStore.findByHash.mockResolvedValue({
         userId: validObjectId,
         tokenHash: 'hash',
         expiresAt: new Date(Date.now() + 1000),
-        revokedAt: new Date(),
+        revokedAt: new Date(Date.now() - 2 * 60_000),
       } as never);
 
       await expect(service.refreshToken('refresh-token', tracking)).rejects.toThrow(
@@ -259,6 +259,34 @@ describe('AuthService', () => {
       expect(incrementTokenVersionUseCase.execute).toHaveBeenCalledWith(validObjectId, tracking);
       expect(refreshTokenStore.revokeAllByUser).toHaveBeenCalledWith(validObjectId, tracking);
       expect(jwtAuthService.generateTokens).not.toHaveBeenCalled();
+    });
+
+    it('SPEC-009 A8: REUSO dentro de la ventana (race del cliente) → rota de nuevo SIN matar familia', async () => {
+      jwtAuthService.verifyRefreshToken.mockReturnValue({
+        sub: validObjectId,
+        email: mockUser.email,
+        userName: mockUser.userName,
+        role: mockUser.role,
+        isEmailVerified: true,
+        tokenVersion: 0,
+      });
+      getUserUseCase.execute.mockResolvedValue(mockUser);
+      jwtAuthService.generateTokens.mockResolvedValue(mockTokens);
+      // Revocado hace 5s: request concurrente del mismo cliente (frontend dispara
+      // varios refreshes a la vez) → rotar de nuevo sin revocar la familia
+      refreshTokenStore.findByHash.mockResolvedValue({
+        userId: validObjectId,
+        tokenHash: 'hash',
+        expiresAt: new Date(Date.now() + 1000),
+        revokedAt: new Date(Date.now() - 5_000),
+      } as never);
+
+      const result = await service.refreshToken('refresh-token', tracking);
+
+      expect(result).toEqual(mockTokens);
+      expect(incrementTokenVersionUseCase.execute).not.toHaveBeenCalled();
+      expect(refreshTokenStore.revokeAllByUser).not.toHaveBeenCalled();
+      expect(refreshTokenStore.create).toHaveBeenCalled();
     });
 
     it('debe lanzar UnauthorizedException si el sub no es un ObjectId válido', async () => {

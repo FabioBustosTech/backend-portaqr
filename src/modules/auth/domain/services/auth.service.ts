@@ -104,8 +104,22 @@ export class AuthService implements IAuthService {
     }
 
     if (stored.revokedAt) {
-      // SPEC-009 A8: REUSO de un token ya rotado → señal de robo →
-      // revocar TODA la familia (tokenVersion++) y responder 401
+      // SPEC-009 A8: reuso de un token ya rotado. El frontend dispara refreshes
+      // CONCURRENTES (varios route handlers a la vez) → el 2º llega con el token
+      // revocado por el 1º. Ventana de gracia: dentro de 60s es un race del propio
+      // cliente (se rota de nuevo); fuera de la ventana es un ROBO → revocar familia.
+      const graceMs = 60_000;
+      const revokedAgo = Date.now() - stored.revokedAt.getTime();
+      if (revokedAgo < graceMs) {
+        this.logger.warn(
+          `Reuso dentro de la ventana de gracia (race del cliente) para user ${user.id} — rotando de nuevo`,
+        );
+        const tokens = await this.jwtAuthService.generateTokens(user);
+        await this.persistRefreshToken(user.id, tokens.refreshToken, tracking);
+        return tokens;
+      }
+
+      // Reuso real (fuera de la ventana) → señal de robo → revocar TODA la familia
       this.logger.warn(
         `Reuso de refresh token revocado (posible robo) para user ${user.id} — revocando familia`,
       );
