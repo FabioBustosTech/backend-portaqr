@@ -15,8 +15,12 @@ export interface User {
   lastLogin?: Date;
   verificationCode?: string;
   verificationCodeExpires?: Date;
+  /** SPEC-009 A5: intentos fallidos de verify-email (tras 5 → se invalida el código) */
+  verificationAttempts?: number;
   passwordResetCode?: string;
   passwordResetExpires?: Date;
+  /** SPEC-009 A5: intentos fallidos de reset-password (tras 5 → se invalida el código) */
+  passwordResetAttempts?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -36,8 +40,10 @@ export class UserEntity implements User {
   lastLogin?: Date;
   verificationCode?: string;
   verificationCodeExpires?: Date;
+  verificationAttempts?: number;
   passwordResetCode?: string;
   passwordResetExpires?: Date;
+  passwordResetAttempts?: number;
   createdAt?: Date;
   updatedAt?: Date;
 
@@ -56,8 +62,10 @@ export class UserEntity implements User {
     this.lastLogin = data.lastLogin;
     this.verificationCode = data.verificationCode;
     this.verificationCodeExpires = data.verificationCodeExpires;
+    this.verificationAttempts = data.verificationAttempts ?? 0;
     this.passwordResetCode = data.passwordResetCode;
     this.passwordResetExpires = data.passwordResetExpires;
+    this.passwordResetAttempts = data.passwordResetAttempts ?? 0;
     this.createdAt = data.createdAt;
     this.updatedAt = data.updatedAt;
   }

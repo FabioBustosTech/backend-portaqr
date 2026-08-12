@@ -86,6 +86,7 @@ describe('VerifyEmailUseCase', () => {
           isEmailVerified: true,
           verificationCode: undefined,
           verificationCodeExpires: undefined,
+          verificationAttempts: 0,
         },
         tracking,
       );
@@ -130,13 +131,37 @@ describe('VerifyEmailUseCase', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('debe lanzar BadRequestException si el código es inválido', async () => {
+    it('SPEC-009 A5: código inválido incrementa verificationAttempts (1 fallo)', async () => {
       reader.getById.mockResolvedValue(baseUser);
 
       await expect(
         useCase.execute('user-1', 'WRONG99', tracking),
       ).rejects.toThrow(BadRequestException);
-      expect(updater.update).not.toHaveBeenCalled();
+      expect(updater.update).toHaveBeenCalledWith(
+        'user-1',
+        { verificationAttempts: 1 },
+        tracking,
+      );
+    });
+
+    it('SPEC-009 A5: 5 fallos → invalida el código (responde expirado y borra)', async () => {
+      reader.getById.mockResolvedValue({
+        ...baseUser,
+        verificationAttempts: 4,
+      });
+
+      await expect(
+        useCase.execute('user-1', 'WRONG99', tracking),
+      ).rejects.toThrow('El cÃ³digo de verificaciÃ³n ha expirado');
+      expect(updater.update).toHaveBeenCalledWith(
+        'user-1',
+        {
+          verificationCode: undefined,
+          verificationCodeExpires: undefined,
+          verificationAttempts: 0,
+        },
+        tracking,
+      );
     });
 
     it('debe lanzar BadRequestException si el código ha expirado', async () => {

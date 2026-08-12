@@ -18,8 +18,10 @@ export class UserMongoMapper {
       lastLogin: doc.lastLogin,
       verificationCode: doc.verificationCode,
       verificationCodeExpires: doc.verificationCodeExpires,
+      verificationAttempts: doc.verificationAttempts ?? 0,
       passwordResetCode: doc.passwordResetCode,
       passwordResetExpires: doc.passwordResetExpires,
+      passwordResetAttempts: doc.passwordResetAttempts ?? 0,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     };
@@ -40,8 +42,10 @@ export class UserMongoMapper {
       lastLogin: user.lastLogin,
       verificationCode: user.verificationCode,
       verificationCodeExpires: user.verificationCodeExpires,
+      verificationAttempts: user.verificationAttempts,
       passwordResetCode: user.passwordResetCode,
       passwordResetExpires: user.passwordResetExpires,
+      passwordResetAttempts: user.passwordResetAttempts,
     };
   }
 }

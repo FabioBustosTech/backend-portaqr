@@ -4,6 +4,7 @@ import type { ICanUpdateUser } from '../../domain/ports/queries/create-user.port
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import { USER_GET_PORT, USER_UPDATE_PORT } from '../../domain/constants/user.tokens';
+import { generateVerificationCode as generateVerificationCodeUtil } from '../../../../common/utils/code-generator.util';
 import { EmailService } from '../../../../shared/email/email.service';
 import { ConfigService } from '@nestjs/config';
 
@@ -33,7 +34,7 @@ export class ResendVerificationCodeUseCase {
       throw new BadRequestException('El email ya estÃ¡ verificado');
     }
 
-    const verificationCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const verificationCode = generateVerificationCodeUtil() // SPEC-009 A5: CSPRNG;
     const expiryTime = new Date();
     const expirySeconds = parseInt(this.configService.get('EMAIL_VERIFICATION_EXPIRY')) || 3600;
     expiryTime.setSeconds(expiryTime.getSeconds() + expirySeconds);
