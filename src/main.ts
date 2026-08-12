@@ -1,8 +1,9 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { ResponseLoggerInterceptor } from './interceptors/response-logger.interceptor';
 import { LegacyIdAliasInterceptor } from './interceptors/legacy-id-alias.interceptor';
+import { createAppValidationPipe } from './common/config/validation-pipe.config';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -10,7 +11,12 @@ async function bootstrap() {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'], // Habilitamos todos los niveles de log
   });
 
-  app.useGlobalPipes(new ValidationPipe());
+  // SPEC-008 H2 (R3): ValidationPipe con whitelist + forbidNonWhitelisted + transform
+  // - whitelist: elimina propiedades no declaradas en DTOs (mass-assignment)
+  // - forbidNonWhitelisted: 400 si llega un campo desconocido (detección temprana)
+  // - transform + enableImplicitConversion: false → los @Type(() => Number/Date)
+  //   corren explícitamente; page/limit llegan tipados sin coerción implícita
+  app.useGlobalPipes(createAppValidationPipe());
   app.useGlobalInterceptors(new ResponseLoggerInterceptor());
   app.useGlobalInterceptors(new LegacyIdAliasInterceptor());
 
