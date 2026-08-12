@@ -24,11 +24,20 @@ export class MongoRefreshTokenRepository implements IRefreshTokenStore {
     this.traceService.log(tracking, TraceLayer.REPOSITORY, 'RefreshToken.create', {
       userId: data.userId,
     });
-    const doc = await this.model.create({
-      userId: new Types.ObjectId(data.userId),
-      tokenHash: data.tokenHash,
-      expiresAt: data.expiresAt,
-    });
+    // SPEC-009 A8: upsert idempotente — los refreshes concurrentes pueden generar el
+    // MISMO token en el mismo segundo (mismo iat → mismo hash). Si el hash ya existe,
+    // no debe fallar (E11000) sino conservar el documento (rotación ya registrada).
+    const doc = await this.model.findOneAndUpdate(
+      { tokenHash: data.tokenHash },
+      {
+        $setOnInsert: {
+          userId: new Types.ObjectId(data.userId),
+          tokenHash: data.tokenHash,
+          expiresAt: data.expiresAt,
+        },
+      },
+      { upsert: true, new: true },
+    );
     return {
       id: doc._id.toString(),
       userId: doc.userId.toString(),
