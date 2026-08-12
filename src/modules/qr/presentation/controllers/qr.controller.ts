@@ -28,6 +28,9 @@ import { GetPaginatedQrsByUserUseCase } from '../../application/use-cases/get-pa
 import { GetFavoritesQrsUseCase } from '../../application/use-cases/get-favorites-qrs.usecase';
 import { GetRecentActiveQrUseCase } from '../../application/use-cases/get-recent-active-qr.usecase';
 import { GetPublicQrUseCase } from '../../application/use-cases/get-public-qr.usecase';
+// SPEC-008 H5 (R6): DTOs de paginación tipados para @Query()
+import { PaginationDto } from 'src/common/dto/pagination.dto';
+import { FavoriteQueryDto } from '../../application/dto/favorite-query.dto';
 import { UpdateQrUseCase } from '../../application/use-cases/update-qr.usecase';
 import { DeleteQrUseCase } from '../../application/use-cases/delete-qr.usecase';
 import { CreateQrDto, QrType } from '../../application/dto/create-qr.dto';
@@ -404,11 +407,14 @@ export class QrController {
   @ApiResponse({ status: 403, description: 'Prohibido - No tiene los permisos necesarios' })
   @HttpCode(HttpStatus.OK)
   async findAll(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-    @Query('search') search: string = '',
+    // SPEC-008 H5 (R6): @Query() tipado con PaginationDto — page/limit validados
+    // (IsInt/Min/Max, @Type(() => Number)) en vez de @Query('page') page: number
+    @Query() query: PaginationDto,
     @Tracking() tracking: TrackingContext,
   ) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const search = query.search ?? '';
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'GET /qr', { page, limit, search });
     return this.getAllQrUseCase.execute(page, limit, search, tracking);
   }
@@ -449,10 +455,8 @@ export class QrController {
   @ApiResponse({ status: 401, description: 'No autorizado' })
   @ApiResponse({ status: 403, description: 'Prohibido - No tiene los permisos necesarios' })
   async findUserByFavorites(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-    @Query('search') search: string = '',
-    @Query('userId') userId: string = '',
+    // SPEC-008 H5 (R5/R6): @Query() tipado con FavoriteQueryDto (PaginationDto + userId)
+    @Query() query: FavoriteQueryDto,
     @GetUser() user: User,
     @Tracking() tracking: TrackingContext,
   ) {
@@ -462,13 +466,13 @@ export class QrController {
 
     // Si el usuario es admin y se proporciona un userId, usar ese userId
     // Si no, usar el id del usuario actual
-    const targetUserId = user.role === 'admin' && userId ? userId : user.id;
+    const targetUserId = user.role === 'admin' && query.userId ? query.userId : user.id;
 
     return this.getFavoritesQrsUseCase.execute(
       user.id, // userId (siempre el id del usuario actual)
-      page,
-      limit,
-      search,
+      query.page ?? 1,
+      query.limit ?? 10,
+      query.search ?? '',
       user.role,
       targetUserId, // userId2 (el id del usuario a buscar)
       tracking,
@@ -670,16 +674,15 @@ export class QrController {
   @ApiResponse({ status: 403, description: 'Prohibido - No tiene los permisos necesarios' })
   async findPaginatedByUser(
     @Param('userId') userId: string,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-    @Query('search') search: string = '',
+    // SPEC-008 H5 (R6): @Query() tipado con PaginationDto
+    @Query() query: PaginationDto,
     @GetUser() user: User,
     @Tracking() tracking: TrackingContext,
   ) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'GET /qr/user/:userId/paginated', {
       userId,
-      page,
-      limit,
+      page: query.page,
+      limit: query.limit,
     });
 
     // Validar que el usuario solo pueda ver sus propios QRs a menos que sea admin
@@ -692,7 +695,13 @@ export class QrController {
       throw new ForbiddenException('Solo puedes ver tus propios QRs');
     }
 
-    return this.getPaginatedQrsByUserUseCase.execute(userId, page, limit, search, tracking);
+    return this.getPaginatedQrsByUserUseCase.execute(
+      userId,
+      query.page ?? 1,
+      query.limit ?? 10,
+      query.search ?? '',
+      tracking,
+    );
   }
 
   @Get('public/:id')

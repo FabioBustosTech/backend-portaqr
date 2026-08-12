@@ -1,4 +1,4 @@
-import { Injectable, Logger, HttpStatus, HttpException } from '@nestjs/common';
+import { Injectable, Logger, HttpStatus, HttpException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
@@ -15,7 +15,7 @@ import type {
 import { QrSchema, QrDocument } from './schemas/qr.schema';
 import { QrMongoMapper } from './mappers/qr-mongo.mapper';
 import { PetTagSchema, PetTagDocument } from 'src/modules/pet-tag/infrastructure/repository/mongo/schemas/pet-tag.schema';
-// SPEC-008 H3 (R2): input de búsqueda como literal, sin metacaracteres de regex (ReDoS)
+// SPEC-008 H3 (R2): input de bï¿½squeda como literal, sin metacaracteres de regex (ReDoS)
 import escapeStringRegexp = require('escape-string-regexp');
 
 @Injectable()
@@ -242,18 +242,30 @@ export class MongoQrRepository
     tracking: TrackingContext,
   ): Promise<{ data: unknown[]; pagination: QrPagination }> {
     try {
-      // Normalizar page/limit a número: el controller los pasa como strings
-      // desde query params y $skip/$limit de aggregate exigen números
-      // (el find().limit() anterior toleraba strings — no-regresión SPEC-007 H3)
+      // Normalizar page/limit a nï¿½mero: el controller los pasa como strings
+      // desde query params y $skip/$limit de aggregate exigen nï¿½meros
+      // (el find().limit() anterior toleraba strings ï¿½ no-regresiï¿½n SPEC-007 H3)
       const pageNum = Number(page) || 1;
       const limitNum = Number(limit) || 10;
       const skip = (pageNum - 1) * limitNum;
       const targetUserIdString = role === 'admin' && userId2 ? userId2 : userId;
+      // SPEC-008 H5 (R5): ObjectId invÃ¡lido â†’ 400 en vez de 500 (CastError interna)
+      if (!Types.ObjectId.isValid(targetUserIdString)) {
+        this.traceService.warn(
+          tracking,
+          TraceLayer.REPOSITORY,
+          'findUserByFavorites:invalid-object-id',
+          { targetUserIdString },
+        );
+        throw new BadRequestException(
+          `El ID de usuario no es vÃ¡lido: ${targetUserIdString}`,
+        );
+      }
       // IMPORTANTE (tipos de schema): qr guarda userId como STRING
       // (qr.schema.ts L89) y pet-tag como Types.ObjectId. El find() de Mongoose
       // casteaba el filtro al tipo del schema; el aggregate $match NO castea,
-      // por lo que hay que usar el tipo correcto en cada colección
-      // (no-regresión: $match con ObjectId contra userId string devuelve 0).
+      // por lo que hay que usar el tipo correcto en cada colecciï¿½n
+      // (no-regresiï¿½n: $match con ObjectId contra userId string devuelve 0).
       const targetUserId = new Types.ObjectId(targetUserIdString);
       const qrUserId = targetUserIdString;
       const petTagUserId = targetUserId;
@@ -301,8 +313,8 @@ export class MongoQrRepository
       }
 
       // --- 2. Paginar en origen con $facet (SPEC-007 H3) ---
-      // Cada colección trae a lo sumo `limit` docs (2×limit en total a unir),
-      // no la colección completa; el total se calcula en la misma consulta.
+      // Cada colecciï¿½n trae a lo sumo `limit` docs (2ï¿½limit en total a unir),
+      // no la colecciï¿½n completa; el total se calcula en la misma consulta.
       const sort = { isFavorite: -1, updatedAt: -1 } as const;
       const [qrFacet, petTagFacet] = await Promise.all([
         this.qrModel
@@ -376,6 +388,9 @@ export class MongoQrRepository
         },
       };
     } catch (error) {
+      // SPEC-008 H5 (R5): errores de validaciÃ³n de cliente (ObjectId invÃ¡lido)
+      // se re-lanzan tal cual (400) â€” solo los errores internos se convierten en 500
+      if (error instanceof BadRequestException) throw error;
       this.traceService.error(tracking, TraceLayer.REPOSITORY, 'findUserByFavorites:error', error as Error);
       throw new HttpException(
         'OcurriÃ³ un error al procesar su solicitud.',

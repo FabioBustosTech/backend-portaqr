@@ -533,3 +533,124 @@ describe('QrController — PATCH /qr/:id con items PDF (SPEC-005 RF-15/RF-16)', 
     expect(mocks.storageService.deleteObject).not.toHaveBeenCalled();
   });
 });
+
+// ── SPEC-008 H5 (R5/R6): paginación tipada con DTOs en query ──────────────────
+describe('QrController — @Query() tipado con DTOs (SPEC-008 H5 — R6)', () => {
+  // El helper createController solo expone en mocks lo que se pasa por overrides
+  function createControllerWithUseCases() {
+    return createController({
+      getAllQrUseCase: { execute: jest.fn() },
+      getFavoritesQrsUseCase: { execute: jest.fn() },
+      getPaginatedQrsByUserUseCase: { execute: jest.fn() },
+    });
+  }
+
+  describe('findAll (GET /qr)', () => {
+    it('pasa page/limit/search al use-case con defaults cuando el query está vacío', async () => {
+      const { controller, mocks } = createControllerWithUseCases();
+
+      await controller.findAll({} as any, tracking);
+
+      expect(mocks.getAllQrUseCase.execute).toHaveBeenCalledWith(1, 10, '', tracking);
+    });
+
+    it('pasa page/limit/search tipados desde el DTO', async () => {
+      const { controller, mocks } = createControllerWithUseCases();
+
+      await controller.findAll({ page: 2, limit: 50, search: 'hola' } as any, tracking);
+
+      expect(mocks.getAllQrUseCase.execute).toHaveBeenCalledWith(2, 50, 'hola', tracking);
+    });
+  });
+
+  describe('findUserByFavorites (GET /qr/user/favorites)', () => {
+    it('usa el userId del usuario logueado para rol user', async () => {
+      const { controller, mocks } = createControllerWithUseCases();
+
+      await controller.findUserByFavorites(
+        { page: 1, limit: 10, search: '', userId: 'otro-user' } as any,
+        makeUser('user'),
+        tracking,
+      );
+
+      expect(mocks.getFavoritesQrsUseCase.execute).toHaveBeenCalledWith(
+        'user-1', // userId del usuario actual
+        1,
+        10,
+        '',
+        'user',
+        'user-1', // targetUserId = usuario actual (no admin)
+        tracking,
+      );
+    });
+
+    it('usa query.userId como target para rol admin (SPEC-008 H5 — R5)', async () => {
+      const { controller, mocks } = createControllerWithUseCases();
+
+      await controller.findUserByFavorites(
+        { page: 3, limit: 25, search: 'rex', userId: 'target-id-1' } as any,
+        makeUser('admin'),
+        tracking,
+      );
+
+      expect(mocks.getFavoritesQrsUseCase.execute).toHaveBeenCalledWith(
+        'user-1',
+        3,
+        25,
+        'rex',
+        'admin',
+        'target-id-1',
+        tracking,
+      );
+    });
+  });
+
+  describe('findPaginatedByUser (GET /qr/user/:userId/paginated)', () => {
+    it('pasa page/limit/search desde el DTO', async () => {
+      const { controller, mocks } = createControllerWithUseCases();
+
+      await controller.findPaginatedByUser(
+        'user-1',
+        { page: 2, limit: 20, search: 'abc' } as any,
+        makeUser('user'),
+        tracking,
+      );
+
+      expect(mocks.getPaginatedQrsByUserUseCase.execute).toHaveBeenCalledWith(
+        'user-1',
+        2,
+        20,
+        'abc',
+        tracking,
+      );
+    });
+
+    it('usa defaults (1/10/“”) cuando el query está vacío', async () => {
+      const { controller, mocks } = createControllerWithUseCases();
+
+      await controller.findPaginatedByUser(
+        'user-1',
+        {} as any,
+        makeUser('user'),
+        tracking,
+      );
+
+      expect(mocks.getPaginatedQrsByUserUseCase.execute).toHaveBeenCalledWith(
+        'user-1',
+        1,
+        10,
+        '',
+        tracking,
+      );
+    });
+
+    it('rechaza (403) cuando un usuario no-admin pide QRs de otro usuario', async () => {
+      const { controller, mocks } = createControllerWithUseCases();
+
+      await expect(
+        controller.findPaginatedByUser('otro-user', {} as any, makeUser('user'), tracking),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mocks.getPaginatedQrsByUserUseCase.execute).not.toHaveBeenCalled();
+    });
+  });
+});

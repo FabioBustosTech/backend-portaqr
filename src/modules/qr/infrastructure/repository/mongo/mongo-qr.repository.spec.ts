@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { HttpException } from '@nestjs/common';
+import { HttpException, BadRequestException } from '@nestjs/common';
 import { MongoQrRepository } from './mongo-qr.repository';
 import { QrSchema, QrDocument } from './schemas/qr.schema';
 import {
@@ -865,16 +865,33 @@ describe('MongoQrRepository', () => {
       );
     });
 
-    it('debe lanzar HttpException cuando el userId no es un ObjectId válido', async () => {
+    it('debe lanzar BadRequestException (400) cuando el userId no es un ObjectId válido (SPEC-008 H5 — R5, CA-07)', async () => {
       await expect(
         repository.findUserByFavorites('user-invalido', 1, 10, '', '', '', tracking),
-      ).rejects.toThrow(HttpException);
-      expect(traceService.error).toHaveBeenCalledWith(
+      ).rejects.toThrow(BadRequestException);
+      // 400, no 500: se traza como warn (cliente inválido), sin tocar la BD
+      expect(traceService.error).not.toHaveBeenCalledWith(
         tracking,
         TraceLayer.REPOSITORY,
         'findUserByFavorites:error',
         expect.any(Error),
       );
+      expect(traceService.warn).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.REPOSITORY,
+        'findUserByFavorites:invalid-object-id',
+        { targetUserIdString: 'user-invalido' },
+      );
+      expect(mockAggregate).not.toHaveBeenCalled();
+      expect(mockPetTagAggregate).not.toHaveBeenCalled();
+    });
+
+    it('debe lanzar BadRequestException (400) con userId2 inválido en modo admin (SPEC-008 H5 — R5)', async () => {
+      await expect(
+        repository.findUserByFavorites(userId, 1, 10, '', 'admin', 'no-object-id', tracking),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockAggregate).not.toHaveBeenCalled();
+      expect(mockPetTagAggregate).not.toHaveBeenCalled();
     });
   });
 });
