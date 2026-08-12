@@ -2,6 +2,7 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -22,6 +23,21 @@ import { RequestLoggerEntryMiddleware } from './middleware/request-logger-entry.
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    // SPEC-008 H4 (R4): rate limiting global — 10 req/min por defecto
+    // (configurable con THROTTLE_TTL/THROTTLE_LIMIT). Reglas más agresivas
+    // (5/min) en @Throttle de login/refresh/registro/contacto.
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        throttlers: [
+          {
+            ttl: Number(configService.get<number>('THROTTLE_TTL')) || 60,
+            limit: Number(configService.get<number>('THROTTLE_LIMIT')) || 10,
+          },
+        ],
+      }),
     }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
@@ -45,6 +61,8 @@ import { RequestLoggerEntryMiddleware } from './middleware/request-logger-entry.
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // SPEC-008 H4 (R4): throttler como guard global (junto a JwtAuthGuard)
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule implements NestModule {

@@ -6,6 +6,9 @@ import { Public } from 'src/common/decorators/public.decorator';
 import { Tracking } from 'src/common/decorators/tracking.decorator';
 import type { TrackingContext } from 'src/common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
+// SPEC-008 H4 (R4): 5 req/min en contacto (anti-spam, refuerza SPEC-006)
+import { Throttle } from '@nestjs/throttler';
+import { SENSITIVE_ENDPOINT_THROTTLE } from 'src/common/config/throttle.config';
 
 @ApiTags('mail')
 @Controller('mail')
@@ -18,6 +21,7 @@ export class MailController {
   @Post('contact')
   @Public()
   @HttpCode(HttpStatus.OK)
+  @Throttle(SENSITIVE_ENDPOINT_THROTTLE)
   @ApiOperation({ summary: 'Enviar formulario de contacto' })
   @ApiResponse({ status: 200, description: 'Email enviado exitosamente' })
   async sendContactForm(

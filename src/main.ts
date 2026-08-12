@@ -4,6 +4,9 @@ import { Logger } from '@nestjs/common';
 import { ResponseLoggerInterceptor } from './interceptors/response-logger.interceptor';
 import { LegacyIdAliasInterceptor } from './interceptors/legacy-id-alias.interceptor';
 import { createAppValidationPipe } from './common/config/validation-pipe.config';
+import { HELMET_OPTIONS, parseCorsOrigins } from './common/config/security.config';
+// SPEC-008 H4 (R4): helmet (headers seguros) — CJS/ESM dual, usa export default
+import helmet from 'helmet';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -20,11 +23,20 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ResponseLoggerInterceptor());
   app.useGlobalInterceptors(new LegacyIdAliasInterceptor());
 
-  // Habilitar CORS para todos los orígenes
+  // SPEC-008 H4 (R4): helmet — headers de seguridad (CSP, nosniff, X-Frame-Options…)
+  // CSP con style-src 'unsafe-inline' para no romper los templates EJS de email.
+  app.use(helmet(HELMET_OPTIONS));
+
+  // SPEC-008 H4 (R4): CORS whitelist — CORS_ORIGINS separado por comas en prod,
+  // '*' (o vacío) en dev. Bloquea orígenes no autorizados.
+  const corsOrigins = parseCorsOrigins(process.env.CORS_ORIGINS);
+  logger.log(
+    `CORS: orígenes permitidos = ${Array.isArray(corsOrigins) ? corsOrigins.join(', ') : corsOrigins}`,
+  );
   app.enableCors({
-    origin: '*',
+    origin: corsOrigins,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    allowedHeaders: 'Content-Type,Accept,Authorization'
+    allowedHeaders: 'Content-Type,Accept,Authorization',
   });
 
   const port = process.env.SERVER_PORT || 3001;

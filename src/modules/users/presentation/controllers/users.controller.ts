@@ -33,6 +33,9 @@ import { GetUser } from '../../../../common/decorators/user.decorator';
 import { Tracking } from '../../../../common/decorators/tracking.decorator';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
+// SPEC-008 H4 (R4): 5 req/min en registro (anti-bruteforce de cuentas)
+import { Throttle } from '@nestjs/throttler';
+import { SENSITIVE_ENDPOINT_THROTTLE } from 'src/common/config/throttle.config';
 
 interface AuthenticatedUser {
   id: string;
@@ -120,6 +123,7 @@ export class UsersController {
   @Post()
   @Public()
   @HttpCode(HttpStatus.CREATED)
+  @Throttle(SENSITIVE_ENDPOINT_THROTTLE)
   @ApiOperation({ summary: 'Crear un nuevo Usuario' })
   @ApiResponse({ status: 201, description: 'Usuario creado exitosamente' })
   async create(
