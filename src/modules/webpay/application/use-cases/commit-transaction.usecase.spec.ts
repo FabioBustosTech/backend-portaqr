@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { InternalServerErrorException } from '@nestjs/common';
 import { CommitTransactionUseCase } from './commit-transaction.usecase';
-import type { ICanGetTransaction, ICanUpdateTransaction } from '../../domain/ports/queries/transaction.port';
+import type { ICanUpdateTransaction } from '../../domain/ports/queries/transaction.port';
 import type { IWebpayGateway, CommitTransactionResult } from '../../infrastructure/adapters/transbank-webpay.gateway';
 import {
   TRANSACTION_GET_PORT,
@@ -14,7 +14,6 @@ import type { WebpayTransaction } from '../../domain/entities/webpay-transaction
 
 describe('CommitTransactionUseCase', () => {
   let useCase: CommitTransactionUseCase;
-  let reader: jest.Mocked<ICanGetTransaction>;
   let updater: jest.Mocked<ICanUpdateTransaction>;
   let gateway: jest.Mocked<IWebpayGateway>;
   let traceService: jest.Mocked<TraceService>;
@@ -82,7 +81,6 @@ describe('CommitTransactionUseCase', () => {
     }).compile();
 
     useCase = module.get(CommitTransactionUseCase);
-    reader = module.get(TRANSACTION_GET_PORT);
     updater = module.get(TRANSACTION_UPDATE_PORT);
     gateway = module.get(WEBPAY_GATEWAY_PORT);
     traceService = module.get(TraceService);

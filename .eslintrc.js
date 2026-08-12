@@ -22,5 +22,8 @@ module.exports = {
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-explicit-any': 'off',
     'prettier/prettier':0,
+    // SPEC-008-B: parámetros intencionalmente no usados (firmas de decorators,
+    // callbacks de passport, etc.) se prefijan con _ — convención estándar TS
+    '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
   },
 };

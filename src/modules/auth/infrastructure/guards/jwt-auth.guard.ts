@@ -30,7 +30,8 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     }
   }
 
-  handleRequest(err: any, user: any, info: any) {
+  // _info: passport inyecta el 3er arg (info del token) — no se usa (SPEC-008-B)
+  handleRequest(err: any, user: any, _info: any) {
     if (err || !user) {
       throw err || new UnauthorizedException();
     }

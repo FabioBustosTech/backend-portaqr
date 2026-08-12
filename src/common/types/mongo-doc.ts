@@ -1,5 +1,6 @@
 /** Doc Mongoose tipado para mappers */
-export interface MongoDoc<T> {
+// SPEC-008-B: el generic <T> nunca se usaba (no hay callers con tipo) → se quita
+export interface MongoDoc {
   _id?: unknown;
   __v?: number;
   [key: string]: unknown;

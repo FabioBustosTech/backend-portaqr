@@ -1,6 +1,5 @@
 import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
 import { CustomLogger } from '../shared/utils/logger.util';
 
 @Injectable()
@@ -16,9 +15,10 @@ export class ResponseLoggerInterceptor implements NestInterceptor {
     // Capturamos el cuerpo de la respuesta interceptando `res.send`
     let responseBody: any = null;
     const originalSend = res.send;
-    res.send = function (body: any): Response {
-      responseBody = body;
-      return originalSend.apply(this, arguments);
+    // SPEC-008-B: rest params en vez de `arguments` (prefer-rest-params)
+    res.send = function (...args: any[]): Response {
+      responseBody = args[0];
+      return originalSend.apply(this, args);
     };
 
     // El evento 'finish' se dispara cuando la respuesta se ha completado
