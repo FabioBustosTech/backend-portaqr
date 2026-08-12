@@ -1,8 +1,10 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { CreateScanUseCase } from './create-scan.usecase';
 import { CreateScanDto } from '../dto/create-scan.dto';
 import { ScanEntity } from '../../domain/entities/scan.entity';
 import { SCAN_CREATE_PORT } from '../../domain/constants/scan.tokens';
+import { GetQrUseCase } from '../../../qr/application/use-cases/get-qr.usecase';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import type { Scan } from '../../domain/entities/scan.entity';
@@ -12,6 +14,7 @@ describe('CreateScanUseCase', () => {
   let useCase: CreateScanUseCase;
   let creator: jest.Mocked<ICanCreateScan>;
   let traceService: jest.Mocked<TraceService>;
+  let getQrUseCase: jest.Mocked<GetQrUseCase>;
 
   const tracking: TrackingContext = { trackingId: 't-1', sessionId: 's-1' };
 
@@ -50,6 +53,10 @@ describe('CreateScanUseCase', () => {
           },
         },
         {
+          provide: GetQrUseCase,
+          useValue: { execute: jest.fn() },
+        },
+        {
           provide: TraceService,
           useValue: {
             log: jest.fn(),
@@ -64,6 +71,9 @@ describe('CreateScanUseCase', () => {
     useCase = module.get(CreateScanUseCase);
     creator = module.get(SCAN_CREATE_PORT);
     traceService = module.get(TraceService);
+    getQrUseCase = module.get(GetQrUseCase);
+    // SPEC-009 A9: el QR existe y pertenece a user-1 (dueño real del escaneo)
+    getQrUseCase.execute.mockResolvedValue({ idQr: validDto.idQr, userId: 'user-1' } as never);
   });
 
   it('debe estar definido', () => {
@@ -93,19 +103,27 @@ describe('CreateScanUseCase', () => {
       expect(result).toEqual(mockSavedScan);
     });
 
-    it('debe aplicar valores por defecto de ScanEntity cuando el DTO omite campos opcionales', async () => {
+    it('SPEC-009 A9: el userId del body se IGNORA — el dueño real se toma del QR', async () => {
       const minimalDto = { userId: 'user-2' } as CreateScanDto;
-      creator.create.mockResolvedValue({ ...mockSavedScan, userId: 'user-2' });
+      creator.create.mockResolvedValue({ ...mockSavedScan, userId: 'user-1' });
 
       await useCase.execute(minimalDto, tracking);
 
       const [scanArg] = creator.create.mock.calls[0];
       expect(scanArg.idQr).toBe('');
-      expect(scanArg.userId).toBe('user-2');
+      expect(scanArg.userId).toBe('user-1'); // dueño real del QR (mock), no 'user-2' del body
       expect(scanArg.origen).toBe('desconocido');
       expect(scanArg.successful).toBe(true);
       expect(scanArg.location).toBeUndefined();
       expect(scanArg.device).toBeUndefined();
+    });
+
+    it('SPEC-009 A9: lanza NotFoundException si el QR no existe (no crea documento)', async () => {
+      getQrUseCase.execute.mockRejectedValue(new NotFoundException('QR no encontrado'));
+      creator.create.mockResolvedValue(mockSavedScan);
+
+      await expect(useCase.execute(validDto, tracking)).rejects.toThrow(NotFoundException);
+      expect(creator.create).not.toHaveBeenCalled();
     });
 
     it('debe registrar trazas de entrada y de creación', async () => {
@@ -117,7 +135,7 @@ describe('CreateScanUseCase', () => {
         tracking,
         TraceLayer.USE_CASE,
         'CreateScanUseCase - input',
-        expect.objectContaining({ idQr: validDto.idQr, userId: validDto.userId }),
+        expect.objectContaining({ idQr: validDto.idQr }),
       );
       expect(traceService.log).toHaveBeenCalledWith(
         tracking,

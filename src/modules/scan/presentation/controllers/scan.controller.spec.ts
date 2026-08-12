@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { ScanController } from './scan.controller';
 import { CreateScanUseCase } from '../../application/use-cases/create-scan.usecase';
@@ -7,6 +7,7 @@ import { GetRecentScansUseCase } from '../../application/use-cases/get-recent-sc
 import { GetDailyScanStatsUseCase } from '../../application/use-cases/get-daily-scan-stats.usecase';
 import { GetLocationScanStatsUseCase } from '../../application/use-cases/get-location-scan-stats.usecase';
 import { GetDeviceScanStatsUseCase } from '../../application/use-cases/get-device-scan-stats.usecase';
+import { GetQrUseCase } from '../../../qr/application/use-cases/get-qr.usecase';
 import { CreateScanDto } from '../../application/dto/create-scan.dto';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
@@ -21,6 +22,7 @@ describe('ScanController', () => {
   let getLocationScanStatsUseCase: jest.Mocked<GetLocationScanStatsUseCase>;
   let getDeviceScanStatsUseCase: jest.Mocked<GetDeviceScanStatsUseCase>;
   let traceService: jest.Mocked<TraceService>;
+  let getQrUseCase: jest.Mocked<GetQrUseCase>;
 
   const tracking: TrackingContext = { trackingId: 't-1', sessionId: 's-1' };
 
@@ -42,6 +44,9 @@ describe('ScanController', () => {
   const mockDailyStats = [{ date: '2024-01-01', total: 10 }];
   const mockLocationStats = [{ city: 'Madrid', count: 50 }];
   const mockDeviceStats = [{ platform: 'iOS', count: 60 }];
+
+  // SPEC-009 A7: el QR del dueño (user-1) para los checks de ownership
+  const mockQr = { idQr: 'qr-1', userId: 'user-1', active: true } as never;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -72,6 +77,10 @@ describe('ScanController', () => {
           useValue: { execute: jest.fn() },
         },
         {
+          provide: GetQrUseCase,
+          useValue: { execute: jest.fn() },
+        },
+        {
           provide: TraceService,
           useValue: {
             log: jest.fn(),
@@ -91,6 +100,8 @@ describe('ScanController', () => {
     getLocationScanStatsUseCase = module.get(GetLocationScanStatsUseCase);
     getDeviceScanStatsUseCase = module.get(GetDeviceScanStatsUseCase);
     traceService = module.get(TraceService);
+    getQrUseCase = module.get(GetQrUseCase);
+    getQrUseCase.execute.mockResolvedValue(mockQr);
   });
 
   it('debe estar definido', () => {
@@ -125,7 +136,7 @@ describe('ScanController', () => {
     it('debe retornar las estadísticas del QR delegando en el use case', async () => {
       getScanStatsUseCase.execute.mockResolvedValue(mockStats);
 
-      const result = await controller.getStats('qr-1', tracking);
+      const result = await controller.getStats('qr-1', { id: 'user-1', role: 'user' }, tracking);
 
       expect(getScanStatsUseCase.execute).toHaveBeenCalledWith('qr-1', tracking);
       expect(result).toEqual(mockStats);
@@ -134,7 +145,7 @@ describe('ScanController', () => {
     it('debe lanzar NotFoundException y registrar un warning cuando no hay estadísticas', async () => {
       getScanStatsUseCase.execute.mockResolvedValue(null);
 
-      await expect(controller.getStats('qr-inexistente', tracking)).rejects.toThrow(
+      await expect(controller.getStats('qr-inexistente', { id: 'user-1', role: 'user' }, tracking)).rejects.toThrow(
         NotFoundException,
       );
 
@@ -149,7 +160,7 @@ describe('ScanController', () => {
     it('debe registrar la traza del GET /scan/:idQr/stats', async () => {
       getScanStatsUseCase.execute.mockResolvedValue(mockStats);
 
-      await controller.getStats('qr-1', tracking);
+      await controller.getStats('qr-1', { id: 'user-1', role: 'user' }, tracking);
 
       expect(traceService.log).toHaveBeenCalledWith(
         tracking,
@@ -164,7 +175,7 @@ describe('ScanController', () => {
     it('debe retornar los escaneos recientes delegando con el limit recibido', async () => {
       getRecentScansUseCase.execute.mockResolvedValue([mockScan]);
 
-      const result = await controller.getRecentScans('qr-1', 5, tracking);
+      const result = await controller.getRecentScans('qr-1', 5, { id: 'user-1', role: 'user' }, tracking);
 
       expect(getRecentScansUseCase.execute).toHaveBeenCalledWith('qr-1', 5, tracking);
       expect(result).toEqual([mockScan]);
@@ -173,7 +184,7 @@ describe('ScanController', () => {
     it('debe usar el limit por defecto (10) cuando no se recibe query param', async () => {
       getRecentScansUseCase.execute.mockResolvedValue([]);
 
-      const result = await controller.getRecentScans('qr-1', undefined, tracking);
+      const result = await controller.getRecentScans('qr-1', undefined, { id: 'user-1', role: 'user' }, tracking);
 
       expect(getRecentScansUseCase.execute).toHaveBeenCalledWith('qr-1', 10, tracking);
       expect(result).toEqual([]);
@@ -184,7 +195,7 @@ describe('ScanController', () => {
     it('debe retornar las estadísticas diarias delegando con los días recibidos', async () => {
       getDailyScanStatsUseCase.execute.mockResolvedValue(mockDailyStats);
 
-      const result = await controller.getDailyStats('qr-1', 7, tracking);
+      const result = await controller.getDailyStats('qr-1', 7, { id: 'user-1', role: 'user' }, tracking);
 
       expect(getDailyScanStatsUseCase.execute).toHaveBeenCalledWith('qr-1', 7, tracking);
       expect(result).toEqual(mockDailyStats);
@@ -193,7 +204,7 @@ describe('ScanController', () => {
     it('debe usar los días por defecto (30) cuando no se recibe query param', async () => {
       getDailyScanStatsUseCase.execute.mockResolvedValue([]);
 
-      const result = await controller.getDailyStats('qr-1', undefined, tracking);
+      const result = await controller.getDailyStats('qr-1', undefined, { id: 'user-1', role: 'user' }, tracking);
 
       expect(getDailyScanStatsUseCase.execute).toHaveBeenCalledWith('qr-1', 30, tracking);
       expect(result).toEqual([]);
@@ -204,7 +215,7 @@ describe('ScanController', () => {
     it('debe retornar las estadísticas de ubicaciones delegando en el use case', async () => {
       getLocationScanStatsUseCase.execute.mockResolvedValue(mockLocationStats);
 
-      const result = await controller.getLocationStats('qr-1', tracking);
+      const result = await controller.getLocationStats('qr-1', { id: 'user-1', role: 'user' }, tracking);
 
       expect(getLocationScanStatsUseCase.execute).toHaveBeenCalledWith('qr-1', tracking);
       expect(result).toEqual(mockLocationStats);
@@ -215,7 +226,7 @@ describe('ScanController', () => {
     it('debe retornar las estadísticas de dispositivos delegando en el use case', async () => {
       getDeviceScanStatsUseCase.execute.mockResolvedValue(mockDeviceStats);
 
-      const result = await controller.getDeviceStats('qr-1', tracking);
+      const result = await controller.getDeviceStats('qr-1', { id: 'user-1', role: 'user' }, tracking);
 
       expect(getDeviceScanStatsUseCase.execute).toHaveBeenCalledWith('qr-1', tracking);
       expect(result).toEqual(mockDeviceStats);
