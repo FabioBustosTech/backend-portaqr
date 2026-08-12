@@ -126,6 +126,8 @@ describe('NodemailerContactAdapter', () => {
     });
 
     describe('escape HTML en la salida (SPEC-008 H1 — R1 XSS, CA-01)', () => {
+      // Defensa en profundidad: aunque el DTO ya limpia el HTML en la entrada
+      // (stripHtml), el adapter escapa por si recibe contenido sin transformar.
       const payloads: Array<[string, string, string]> = [
         ['mensaje', '</p><img src=x onerror=alert(1)>', '&lt;/p&gt;&lt;img src=x onerror=alert(1)&gt;'],
         ['nombre', '<script>alert("x")</script>', '&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;'],
