@@ -5,6 +5,7 @@ import type { ICanSendContactEmail } from '../../domain/ports/queries/mail.port'
 import type { ContactMessage } from '../../domain/entities/contact-message.entity';
 import type { TrackingContext } from 'src/common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
+import { escapeHtml } from 'src/common/utils/escape-html.util';
 
 @Injectable()
 export class NodemailerContactAdapter implements ICanSendContactEmail {
@@ -37,11 +38,11 @@ export class NodemailerContactAdapter implements ICanSendContactEmail {
       subject: `Formulario de Contacto: ${message.asunto}`,
       html: `
         <h2>Nuevo mensaje de contacto</h2>
-        <p><strong>Nombre:</strong> ${message.nombre}</p>
-        <p><strong>Email:</strong> ${message.email}</p>
-        <p><strong>Asunto:</strong> ${message.asunto}</p>
+        <p><strong>Nombre:</strong> ${escapeHtml(message.nombre)}</p>
+        <p><strong>Email:</strong> ${escapeHtml(message.email)}</p>
+        <p><strong>Asunto:</strong> ${escapeHtml(message.asunto)}</p>
         <h3>Mensaje:</h3>
-        <p>${message.mensaje}</p>
+        <p>${escapeHtml(message.mensaje)}</p>
       `,
     };
 

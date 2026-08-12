@@ -124,5 +124,64 @@ describe('NodemailerContactAdapter', () => {
         'Conexión rechazada',
       );
     });
+
+    describe('escape HTML en la salida (SPEC-008 H1 — R1 XSS, CA-01)', () => {
+      const payloads: Array<[string, string, string]> = [
+        ['mensaje', '</p><img src=x onerror=alert(1)>', '&lt;/p&gt;&lt;img src=x onerror=alert(1)&gt;'],
+        ['nombre', '<script>alert("x")</script>', '&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;'],
+        ['asunto', '<b onclick="hack()">asunto</b>', '&lt;b onclick=&quot;hack()&quot;&gt;asunto&lt;/b&gt;'],
+        ['email', 'a@b.cl"><img src=x onerror=alert(1)>', 'a@b.cl&quot;&gt;&lt;img src=x onerror=alert(1)&gt;'],
+      ];
+
+      it.each(payloads)(
+        'escapa %s inyectado con HTML malicioso (CA-01)',
+        async (field, malicious, expected) => {
+          mockSendMail.mockResolvedValue({ messageId: 'x' });
+
+          const maliciousMessage: ContactMessage = {
+            ...message,
+            [field]: malicious,
+          };
+
+          await adapter.sendContactForm(maliciousMessage, tracking);
+
+          const mailOptions = mockSendMail.mock.calls[0][0];
+          expect(mailOptions.html).toContain(expected);
+          // Ningún tag del payload debe sobrevivir interpretable
+          // (el texto visible sí permanece, pero siempre escapado)
+          expect(mailOptions.html).not.toContain('<img');
+          expect(mailOptions.html).not.toContain('<script>');
+          expect(mailOptions.html).not.toContain('<iframe');
+          expect(mailOptions.html).not.toContain('</p><'); // cierre+etiqueta: técnica del payload
+        },
+      );
+
+      it('muestra el texto visible del payload aunque esté escapado (CA-01)', async () => {
+        mockSendMail.mockResolvedValue({ messageId: 'x' });
+
+        const attack = '</p><img src=x onerror=alert(1)>';
+        await adapter.sendContactForm({ ...message, mensaje: attack }, tracking);
+
+        const mailOptions = mockSendMail.mock.calls[0][0];
+        // El texto se preserva para el admin…
+        expect(mailOptions.html).toContain('img src=x onerror=alert(1)');
+        // …pero sin HTML ejecutable (solo los tags del template legítimo)
+        expect(mailOptions.html).not.toContain('</p><');
+        expect(mailOptions.html).not.toContain('<img');
+        expect(mailOptions.html).not.toContain('<script');
+        expect(mailOptions.html).not.toContain('<iframe');
+      });
+
+      it('no altera mensajes legítimos con acentos (regresión)', async () => {
+        mockSendMail.mockResolvedValue({ messageId: 'x' });
+
+        await adapter.sendContactForm(message, tracking);
+
+        const mailOptions = mockSendMail.mock.calls[0][0];
+        expect(mailOptions.html).toContain('Ana Gómez');
+        expect(mailOptions.html).toContain('ana@ejemplo.com');
+        expect(mailOptions.html).toContain('Quisiera saber los precios');
+      });
+    });
   });
 });
