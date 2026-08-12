@@ -154,10 +154,26 @@ describe('MongoUserRepository', () => {
       });
     });
 
-    it('debe consultar solo por rol cuando no hay búsqueda', async () => {
+    it('debe escapar metacaracteres del término de búsqueda (SPEC-008 H3 — R2 ReDoS, CA-02)', async () => {
       mockFind.mockReturnValue(mockQuery([]));
       mockCountDocuments.mockResolvedValue(0);
 
+      // (a+)+$ con backtracking exponencial → debe llegar a $regex como literal
+      await repository.getAll(1, 10, '(a+)+$', tracking);
+
+      const escaped = '\\(a\\+\\)\\+\\$';
+      expect(mockFind).toHaveBeenCalledWith({
+        role: 'user',
+        $or: [
+          { userName: { $regex: escaped, $options: 'i' } },
+          { email: { $regex: escaped, $options: 'i' } },
+        ],
+      });
+    });
+
+    it('debe consultar solo por rol cuando no hay búsqueda', async () => {
+      mockFind.mockReturnValue(mockQuery([]));
+      mockCountDocuments.mockResolvedValue(0);
       await repository.getAll(1, 10, undefined, tracking);
 
       expect(mockFind).toHaveBeenCalledWith({ role: 'user' });

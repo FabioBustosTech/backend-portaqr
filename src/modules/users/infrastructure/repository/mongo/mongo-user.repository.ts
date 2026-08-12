@@ -1,4 +1,4 @@
-ï»¿import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { TraceService, TraceLayer } from '../../../../../common/services/trace.service';
@@ -7,6 +7,8 @@ import type { ICanGetAllUser, ICanGetUser } from '../../../domain/ports/queries/
 import type { ICanCreateUser, ICanUpdateUser, ICanDeleteUser, ICanCheckUser } from '../../../domain/ports/queries/create-user.port';
 import { UserSchema, UserDocument } from './schemas/user.schema';
 import { UserMongoMapper } from './mappers/user-mongo.mapper';
+// SPEC-008 H3 (R2): input de búsqueda como literal, sin metacaracteres de regex (ReDoS)
+import escapeStringRegexp = require('escape-string-regexp');
 import type { PaginatedResult } from '../../../../../common/dto/pagination.dto';
 import type { TrackingContext } from '../../../../../common/decorators/tracking.decorator';
 
@@ -39,9 +41,11 @@ export class MongoUserRepository
       const filter: Record<string, unknown> = { role: 'user' };
 
       if (search) {
+        // SPEC-008 H3 (R2): input como literal antes de $regex (anti-ReDoS)
+        const safeSearch = escapeStringRegexp(search);
         filter.$or = [
-          { userName: { $regex: search, $options: 'i' } },
-          { email: { $regex: search, $options: 'i' } },
+          { userName: { $regex: safeSearch, $options: 'i' } },
+          { email: { $regex: safeSearch, $options: 'i' } },
         ];
       }
 

@@ -1,7 +1,7 @@
 // src/modules/pet-tag/application/dto/query-reserved-tags.dto.ts
 
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsInt, Min, Max, IsEnum, IsDateString } from 'class-validator';
+import { IsOptional, IsString, IsInt, Min, Max, IsEnum, IsDateString, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer'; // 1. Importar Type
 
 export class QueryReservedTagsDto {
@@ -23,6 +23,7 @@ export class QueryReservedTagsDto {
   @ApiPropertyOptional({ description: 'Buscar por ID o PIN de activación' })
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'La búsqueda no puede superar los 100 caracteres.' })
   search?: string;
 
   @ApiPropertyOptional({ description: 'Estado de la placa', enum: ['RESERVADO', 'ACTIVO', 'INACTIVO'] })
@@ -38,6 +39,7 @@ export class QueryReservedTagsDto {
   @ApiPropertyOptional({ description: 'Filtrar por nombre de comercio asignado' })
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'El nombre de comercio no puede superar los 100 caracteres.' })
   storeName?: string; // <-- NUEVO FILTRO
 
   @ApiPropertyOptional({ description: 'Fecha de creación mínima (YYYY-MM-DD)' })

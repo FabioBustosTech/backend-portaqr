@@ -42,6 +42,19 @@ const petTagModelMock = jest.fn() as unknown as Model<PetTagDocument>;
 (petTagModelMock as unknown as Record<string, unknown>).countDocuments = mockPetTagCountDocuments;
 (petTagModelMock as unknown as Record<string, unknown>).aggregate = mockPetTagAggregate;
 
+/** Recolecta todos los valores $regex de un query/aggregate Mongo (SPEC-008 H3 — anti-ReDoS). */
+function collectRegexValues(node: unknown, out: string[] = []): string[] {
+  if (Array.isArray(node)) {
+    for (const item of node) collectRegexValues(item, out);
+  } else if (node && typeof node === 'object') {
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (key === '$regex') out.push(String(value));
+      else collectRegexValues(value, out);
+    }
+  }
+  return out;
+}
+
 /** Crea un mock de query encadenable (sort/limit/skip/lean/select/exec) */
 const createQueryMock = (result: unknown, reject = false) => {
   const exec = reject
@@ -717,6 +730,29 @@ describe('MongoQrRepository', () => {
           expect.objectContaining({ $match: expect.objectContaining({ $or: expect.any(Array) }) }),
         ]),
       );
+    });
+
+    it('debe escapar metacaracteres del término de búsqueda (SPEC-008 H3 — R2 ReDoS, CA-02)', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
+      mockPetTagAggregate.mockReturnValue(createAggregateFacetResult([], 0));
+
+      // (a+)+$ con backtracking exponencial → debe llegar a $regex como literal
+      await repository.findUserByFavorites(userId, 1, 10, '(a+)+$', '', '', tracking);
+
+      const qrMatch = (mockAggregate.mock.calls[0][0] as Array<Record<string, unknown>>)[0].$match;
+      const petTagMatch = (mockPetTagAggregate.mock.calls[0][0] as Array<Record<string, unknown>>)[0].$match;
+
+      const qrRegexes = collectRegexValues(qrMatch);
+      const petTagRegexes = collectRegexValues(petTagMatch);
+
+      const escaped = '\\(a\\+\\)\\+\\$';
+      expect(qrRegexes.length).toBeGreaterThan(0);
+      expect(petTagRegexes.length).toBeGreaterThan(0);
+      // Ningún $regex crudo con el payload — todos escapados
+      expect(qrRegexes).not.toContain('(a+)+$');
+      expect(petTagRegexes).not.toContain('(a+)+$');
+      expect(qrRegexes.every((v) => v === escaped)).toBe(true);
+      expect(petTagRegexes.every((v) => v === escaped)).toBe(true);
     });
 
     it('debe usar userId2 cuando el rol es admin y se entrega userId2', async () => {

@@ -1,4 +1,4 @@
-ï»¿import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
@@ -11,6 +11,8 @@ import type {
 } from '../../../domain/ports/queries/qr-free-generation.port';
 import { QrFreeGenerationSchema, QrFreeGenerationDocument } from './schemas/qr-free-generation.schema';
 import { QrFreeGenerationMongoMapper } from './mappers/qr-free-generation-mongo.mapper';
+// SPEC-008 H3 (R2): input de búsqueda como literal, sin metacaracteres de regex (ReDoS)
+import escapeStringRegexp = require('escape-string-regexp');
 
 @Injectable()
 export class MongoQrFreeGenerationRepository
@@ -60,10 +62,12 @@ export class MongoQrFreeGenerationRepository
       let query: any = {};
 
       if (search) {
+        // SPEC-008 H3 (R2): input como literal antes de $regex (anti-ReDoS)
+        const safeSearch = escapeStringRegexp(search);
         query = {
           $or: [
-            { email: { $regex: search, $options: 'i' } },
-            { 'information.data': { $regex: search, $options: 'i' } },
+            { email: { $regex: safeSearch, $options: 'i' } },
+            { 'information.data': { $regex: safeSearch, $options: 'i' } },
           ],
         };
       }
