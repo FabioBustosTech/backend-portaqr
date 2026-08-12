@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { QrActivateController } from './qr-activate.controller';
 import { CreateQrActivateUseCase } from '../../application/use-cases/create-qr-activate.usecase';
 import { GetAllQrActivateUseCase } from '../../application/use-cases/get-all-qr-activate.usecase';
@@ -31,7 +31,7 @@ describe('QrActivateController', () => {
   const tracking: TrackingContext = { trackingId: 't-1', sessionId: 's-1' };
 
   const mockActivation: QrActivate = {
-    id: 'act-1',
+    id: '507f1f77bcf86cd799439011',
     methodActivation: MethodActivation.WEBPAY,
     state: ActivationState.PENDING,
     price: { TotalPrice: 100, TotalTax: 19 },
@@ -141,7 +141,7 @@ describe('QrActivateController', () => {
     it('debe delegar la creación al use-case y retornar la activación', async () => {
       createQrActivateUseCase.execute.mockResolvedValue(mockActivation);
 
-      const result = await controller.create(createDto, tracking);
+      const result = await controller.create(createDto, { id: 'user-1', role: 'user' }, tracking);
 
       expect(traceService.log).toHaveBeenCalledWith(
         tracking,
@@ -149,7 +149,7 @@ describe('QrActivateController', () => {
         'POST /qr-activate',
         { methodActivation: createDto.methodActivation },
       );
-      expect(createQrActivateUseCase.execute).toHaveBeenCalledWith(createDto, tracking);
+      expect(createQrActivateUseCase.execute).toHaveBeenCalledWith(createDto, { id: 'user-1', role: 'user' }, tracking);
       expect(result).toEqual(mockActivation);
     });
 
@@ -163,9 +163,9 @@ describe('QrActivateController', () => {
         methodActivation: MethodActivation.ADMIN,
       });
 
-      const result = await controller.create(adminDto, tracking);
+      const result = await controller.create(adminDto, { id: 'admin-1', role: 'admin' }, tracking);
 
-      expect(createQrActivateUseCase.executeAdmin).toHaveBeenCalledWith(adminDto, tracking);
+      expect(createQrActivateUseCase.executeAdmin).toHaveBeenCalledWith(adminDto, { id: 'admin-1', role: 'admin' }, tracking);
       expect(createQrActivateUseCase.execute).not.toHaveBeenCalled();
       expect(result.methodActivation).toBe(MethodActivation.ADMIN);
     });
@@ -177,9 +177,9 @@ describe('QrActivateController', () => {
       };
       createQrActivateUseCase.execute.mockResolvedValue(mockActivation);
 
-      await controller.create(webpayDto, tracking);
+      await controller.create(webpayDto, { id: 'user-1', role: 'user' }, tracking);
 
-      expect(createQrActivateUseCase.execute).toHaveBeenCalledWith(webpayDto, tracking);
+      expect(createQrActivateUseCase.execute).toHaveBeenCalledWith(webpayDto, { id: 'user-1', role: 'user' }, tracking);
       expect(createQrActivateUseCase.executeAdmin).not.toHaveBeenCalled();
     });
 
@@ -190,9 +190,9 @@ describe('QrActivateController', () => {
       };
       createQrActivateUseCase.execute.mockResolvedValue(mockActivation);
 
-      await controller.create(transferDto, tracking);
+      await controller.create(transferDto, { id: 'user-1', role: 'user' }, tracking);
 
-      expect(createQrActivateUseCase.execute).toHaveBeenCalledWith(transferDto, tracking);
+      expect(createQrActivateUseCase.execute).toHaveBeenCalledWith(transferDto, { id: 'user-1', role: 'user' }, tracking);
       expect(createQrActivateUseCase.executeAdmin).not.toHaveBeenCalled();
     });
   });
@@ -201,7 +201,7 @@ describe('QrActivateController', () => {
     it('debe delegar la paginación al use case con todos los parámetros', async () => {
       getAllQrActivateUseCase.execute.mockResolvedValue(mockPaginated);
 
-      const result = await controller.findAll(1, 10, 'user', tracking, 'WEBPAY');
+      const result = await controller.findAll({ id: 'user-1', role: 'user' }, 1, 10, 'user', 'WEBPAY', tracking);
 
       expect(traceService.log).toHaveBeenCalledWith(
         tracking,
@@ -214,6 +214,7 @@ describe('QrActivateController', () => {
         10,
         'user',
         'WEBPAY',
+        'user-1',
         tracking,
       );
       expect(result).toEqual(mockPaginated);
@@ -222,13 +223,14 @@ describe('QrActivateController', () => {
     it('debe pasar methodActivation undefined cuando no se envía', async () => {
       getAllQrActivateUseCase.execute.mockResolvedValue(mockPaginated);
 
-      await controller.findAll(1, 10, '', tracking, undefined);
+      await controller.findAll({ id: 'user-1', role: 'user' }, 1, 10, '', undefined, tracking);
 
       expect(getAllQrActivateUseCase.execute).toHaveBeenCalledWith(
         1,
         10,
         '',
         undefined,
+        'user-1',
         tracking,
       );
     });
@@ -236,13 +238,14 @@ describe('QrActivateController', () => {
     it('debe aplicar los valores por defecto cuando no se envían query params', async () => {
       getAllQrActivateUseCase.execute.mockResolvedValue(mockPaginated);
 
-      await controller.findAll(undefined as never, undefined as never, undefined as never, tracking, undefined);
+      await controller.findAll({ id: 'user-1', role: 'user' }, undefined as never, undefined as never, undefined as never, undefined, tracking);
 
       expect(getAllQrActivateUseCase.execute).toHaveBeenCalledWith(
         1,
         10,
         '',
         undefined,
+        'user-1',
         tracking,
       );
     });
@@ -252,15 +255,15 @@ describe('QrActivateController', () => {
     it('debe delegar la búsqueda por ID al use case', async () => {
       getQrActivateUseCase.execute.mockResolvedValue(mockActivation);
 
-      const result = await controller.findOne('act-1', tracking);
+      const result = await controller.findOne('507f1f77bcf86cd799439011', { id: 'user-1', role: 'user' }, tracking);
 
       expect(traceService.log).toHaveBeenCalledWith(
         tracking,
         TraceLayer.CONTROLLER,
         'GET /qr-activate/:id',
-        { id: 'act-1' },
+        { id: '507f1f77bcf86cd799439011' },
       );
-      expect(getQrActivateUseCase.execute).toHaveBeenCalledWith('act-1', tracking);
+      expect(getQrActivateUseCase.execute).toHaveBeenCalledWith('507f1f77bcf86cd799439011', tracking);
       expect(result).toEqual(mockActivation);
     });
   });
@@ -275,7 +278,7 @@ describe('QrActivateController', () => {
         tracking,
         TraceLayer.CONTROLLER,
         'PATCH /qr-activate/webpay/:token_ws',
-        { token_ws: 'token-ws-1' },
+        { tokenPreview: 'token-ws…' },
       );
       expect(updateWebpayQrActivateUseCase.execute).toHaveBeenCalledWith(
         'token-ws-1',
@@ -288,17 +291,19 @@ describe('QrActivateController', () => {
   describe('update', () => {
     it('debe delegar la actualización al use case', async () => {
       updateQrActivateUseCase.execute.mockResolvedValue(mockActivation);
+      // SPEC-009 A3: el ownership carga la activación antes de actualizar
+      getQrActivateUseCase.execute.mockResolvedValue(mockActivation);
 
-      const result = await controller.update('act-1', updateDto, tracking);
+      const result = await controller.update('507f1f77bcf86cd799439011', updateDto, { id: 'user-1', role: 'user' }, tracking);
 
       expect(traceService.log).toHaveBeenCalledWith(
         tracking,
         TraceLayer.CONTROLLER,
         'PATCH /qr-activate/:id',
-        { id: 'act-1' },
+        { id: '507f1f77bcf86cd799439011' },
       );
       expect(updateQrActivateUseCase.execute).toHaveBeenCalledWith(
-        'act-1',
+        '507f1f77bcf86cd799439011',
         updateDto,
         tracking,
       );
@@ -310,16 +315,16 @@ describe('QrActivateController', () => {
     it('debe eliminar la activación y retornar mensaje de éxito', async () => {
       deleteQrActivateUseCase.execute.mockResolvedValue(undefined);
 
-      const result = await controller.remove('act-1', tracking);
+      const result = await controller.remove('507f1f77bcf86cd799439011', tracking);
 
       expect(traceService.log).toHaveBeenCalledWith(
         tracking,
         TraceLayer.CONTROLLER,
         'DELETE /qr-activate/:id',
-        { id: 'act-1' },
+        { id: '507f1f77bcf86cd799439011' },
       );
-      expect(deleteQrActivateUseCase.execute).toHaveBeenCalledWith('act-1', tracking);
-      expect(result).toEqual({ message: 'ActivaciÃ³n eliminada exitosamente' });
+      expect(deleteQrActivateUseCase.execute).toHaveBeenCalledWith('507f1f77bcf86cd799439011', tracking);
+      expect(result).toEqual({ message: 'Activaci\u00f3n eliminada exitosamente' });
     });
   });
 });

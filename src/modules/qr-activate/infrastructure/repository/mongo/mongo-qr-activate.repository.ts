@@ -8,7 +8,7 @@ import { QrActivateSchema, QrActivateDocument } from './schemas/qr-activate.sche
 import { QrActivateMongoMapper } from './mappers/qr-activate-mongo.mapper';
 import type { PaginatedResult } from '../../../../../common/dto/pagination.dto';
 import type { TrackingContext } from '../../../../../common/decorators/tracking.decorator';
-// SPEC-008 H3 (R2): input de búsqueda como literal, sin metacaracteres de regex (ReDoS)
+// SPEC-008 H3 (R2): input de bï¿½squeda como literal, sin metacaracteres de regex (ReDoS)
 import escapeStringRegexp = require('escape-string-regexp');
 
 @Injectable()
@@ -43,10 +43,15 @@ export class MongoQrActivateRepository
     limit: number,
     search: string | undefined,
     methodActivation: string | undefined,
+    userId: string | undefined,
     tracking: TrackingContext,
   ): Promise<PaginatedResult<QrActivate>> {
     try {
       const query: Record<string, unknown> = {};
+      // SPEC-009 A3: filtro de ownership â€” un usuario solo ve sus activaciones (salvo admin)
+      if (userId) {
+        query.userId = userId;
+      }
       const isBooleanString = (str: string) =>
         str.toLowerCase() === 'true' || str.toLowerCase() === 'false';
       const searchBoolean = search ? (isBooleanString(search) ? search.toLowerCase() === 'true' : null) : null;
@@ -107,7 +112,7 @@ export class MongoQrActivateRepository
       const doc = await this.model
         .findById(id)
         .populate('userId', '_id email name')
-        // NOTA: qrList.qrCode es UUID string (idQr), no ObjectId — no populable (fix 2026-08-07)
+        // NOTA: qrList.qrCode es UUID string (idQr), no ObjectId ï¿½ no populable (fix 2026-08-07)
         .populate('qrList.plan', 'name description')
         .populate('adminId', '_id name')
         .lean()

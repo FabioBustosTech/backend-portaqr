@@ -12,6 +12,7 @@ export interface ICanGetQrActivate {
     limit: number,
     search: string | undefined,
     methodActivation: string | undefined,
+    userId: string | undefined,
     tracking: TrackingContext,
   ): Promise<PaginatedResult<QrActivate>>;
   getById(id: string, tracking: TrackingContext): Promise<QrActivate | null>;

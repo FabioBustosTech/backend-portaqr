@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { MongoQrActivateRepository } from './mongo-qr-activate.repository';
@@ -171,7 +171,7 @@ describe('MongoQrActivateRepository', () => {
       mockFind.mockReturnValue(mockQuery([doc]));
       mockCountDocuments.mockResolvedValue(1);
 
-      const result = await repository.getAll(1, 10, 'true', undefined, tracking);
+      const result = await repository.getAll(1, 10, 'true', undefined, undefined, tracking);
 
       expect(mockFind).toHaveBeenCalledWith({ sendDocument: true });
       expect(mockCountDocuments).toHaveBeenCalledWith({ sendDocument: true });
@@ -182,7 +182,7 @@ describe('MongoQrActivateRepository', () => {
       mockFind.mockReturnValue(mockQuery([]));
       mockCountDocuments.mockResolvedValue(0);
 
-      await repository.getAll(1, 10, 'FALSE', undefined, tracking);
+      await repository.getAll(1, 10, 'FALSE', undefined, undefined, tracking);
 
       expect(mockFind).toHaveBeenCalledWith({ sendDocument: false });
     });
@@ -191,7 +191,7 @@ describe('MongoQrActivateRepository', () => {
       mockFind.mockReturnValue(mockQuery([]));
       mockCountDocuments.mockResolvedValue(0);
 
-      await repository.getAll(1, 10, 'admin', undefined, tracking);
+      await repository.getAll(1, 10, 'admin', undefined, undefined, tracking);
 
       expect(mockFind).toHaveBeenCalledWith({
         $or: [
@@ -206,7 +206,7 @@ describe('MongoQrActivateRepository', () => {
       mockCountDocuments.mockResolvedValue(0);
 
       // (a+)+$ con backtracking exponencial → debe llegar a $regex como literal
-      await repository.getAll(1, 10, '(a+)+$', undefined, tracking);
+      await repository.getAll(1, 10, '(a+)+$', undefined, undefined, tracking);
 
       const escaped = '\\(a\\+\\)\\+\\$';
       expect(mockFind).toHaveBeenCalledWith({
@@ -221,7 +221,7 @@ describe('MongoQrActivateRepository', () => {
       mockFind.mockReturnValue(mockQuery([]));
       mockCountDocuments.mockResolvedValue(0);
 
-      await repository.getAll(1, 10, undefined, undefined, tracking);
+      await repository.getAll(1, 10, undefined, undefined, undefined, tracking);
 
       expect(mockFind).toHaveBeenCalledWith({});
     });
@@ -230,7 +230,7 @@ describe('MongoQrActivateRepository', () => {
       mockFind.mockReturnValue(mockQuery([]));
       mockCountDocuments.mockResolvedValue(0);
 
-      await repository.getAll(1, 10, undefined, 'WEBPAY', tracking);
+      await repository.getAll(1, 10, undefined, 'WEBPAY', undefined, tracking);
 
       expect(mockFind).toHaveBeenCalledWith({ methodActivation: 'WEBPAY' });
     });
@@ -239,7 +239,7 @@ describe('MongoQrActivateRepository', () => {
       mockFind.mockReturnValue(mockQuery([doc]));
       mockCountDocuments.mockResolvedValue(25);
 
-      const result = await repository.getAll(2, 10, undefined, undefined, tracking);
+      const result = await repository.getAll(2, 10, undefined, undefined, undefined, tracking);
 
       expect(result.totalPages).toBe(3);
       expect(result.hasNextPage).toBe(true);
@@ -256,7 +256,7 @@ describe('MongoQrActivateRepository', () => {
         exec: jest.fn().mockRejectedValue(new Error('DB down')),
       });
 
-      await expect(repository.getAll(1, 10, undefined, undefined, tracking)).rejects.toThrow(
+      await expect(repository.getAll(1, 10, undefined, undefined, undefined, tracking)).rejects.toThrow(
         'DB down',
       );
       expect(traceService.error).toHaveBeenCalledWith(

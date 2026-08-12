@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { UpdateQrActivateUseCase } from './update-qr-activate.usecase';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
@@ -32,8 +32,7 @@ describe('UpdateQrActivateUseCase', () => {
 
   const dto: UpdateQrActivateDto = {
     description: 'Activación actualizada',
-    sendDocument: true,
-  };
+      };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({

@@ -15,93 +15,14 @@ import {
   IsBoolean,
   ValidateIf
 } from 'class-validator';
-import { MethodActivation, ActivationState, WebpayState, DocumentType } from '../../domain/entities/qr-activate.entity';
-
-export class TransferDateDto {
-  @ApiProperty({
-    description: 'Monto de la transferencia',
-    example: 99.99
-  })
-  @IsNumber({}, { message: 'El monto debe ser un nÃºmero' })
-  @Min(0, { message: 'El monto debe ser mayor a 0' })
-  @IsNotEmpty({ message: 'El monto es requerido' })
-  tranferAmount: number;
-
-  @ApiProperty({
-    description: 'Cuenta de origen',
-    example: '1234567890'
-  })
-  @IsString({ message: 'La cuenta de origen debe ser una cadena de texto' })
-  @IsNotEmpty({ message: 'La cuenta de origen es requerida' })
-  originAccount: string;
-
-  @ApiProperty({
-    description: 'Cuenta de destino',
-    example: '0987654321'
-  })
-  @IsString({ message: 'La cuenta de destino debe ser una cadena de texto' })
-  @IsNotEmpty({ message: 'La cuenta de destino es requerida' })
-  destinationAccount: string;
-
-  @ApiProperty({
-    description: 'Banco de origen',
-    example: 'Banco Estado'
-  })
-  @IsString({ message: 'El banco de origen debe ser una cadena de texto' })
-  @IsNotEmpty({ message: 'El banco de origen es requerido' })
-  originBank: string;
-
-  @ApiProperty({
-    description: 'Banco de destino',
-    example: 'Banco Santander'
-  })
-  @IsString({ message: 'El banco de destino debe ser una cadena de texto' })
-  @IsNotEmpty({ message: 'El banco de destino es requerido' })
-  destinationBank: string;
-
-  @ApiProperty({
-    description: 'Fecha de transacciÃ³n',
-    example: '2024-03-21T10:00:00Z'
-  })
-  @IsDate({ message: 'La fecha debe ser vÃ¡lida' })
-  @Type(() => Date)
-  transationDate: Date;
-}
-
-export class WebpayDataDto {
-  @ApiProperty({
-    description: 'ID de la transacciÃ³n',
-    example: 'tx-123456'
-  })
-  @IsString({ message: 'El ID debe ser una cadena de texto' })
-  @IsOptional()
-  id?: string;
-
-  @ApiProperty({
-    description: 'Fecha de la transacciÃ³n',
-    example: '2024-03-21T10:00:00Z'
-  })
-  @IsDate({ message: 'La fecha debe ser vÃ¡lida' })
-  @IsOptional()
-  @Type(() => Date)
-  date?: Date;
-
-  @ApiProperty({
-    description: 'Estado de la transacciÃ³n Webpay',
-    enum: WebpayState,
-    example: WebpayState.ACTIVE
-  })
-  @IsEnum(WebpayState, { message: 'El estado debe ser vÃ¡lido' })
-  @IsOptional()
-  state?: WebpayState;
-}
+import { MethodActivation, DocumentType } from '../../domain/entities/qr-activate.entity';
 
 export class PriceDataDto {
   @ApiProperty({
     description: 'Precio total',
     example: 99.99
   })
-  @IsNumber({}, { message: 'El precio total debe ser un nÃºmero' })
+  @IsNumber({}, { message: 'El precio total debe ser un número' })
   @Min(0, { message: 'El precio total debe ser mayor a 0' })
   @IsNotEmpty({ message: 'El precio total es requerido' })
   TotalPrice: number;
@@ -110,7 +31,7 @@ export class PriceDataDto {
     description: 'Descuento total',
     example: 10
   })
-  @IsNumber({}, { message: 'El descuento debe ser un nÃºmero' })
+  @IsNumber({}, { message: 'El descuento debe ser un número' })
   @Min(0, { message: 'El descuento debe ser mayor o igual a 0' })
   @IsOptional()
   TotalDiscount?: number;
@@ -119,7 +40,7 @@ export class PriceDataDto {
     description: 'Impuesto total',
     example: 19
   })
-  @IsNumber({}, { message: 'El impuesto debe ser un nÃºmero' })
+  @IsNumber({}, { message: 'El impuesto debe ser un número' })
   @Min(0, { message: 'El impuesto debe ser mayor o igual a 0' })
   @IsNotEmpty({ message: 'El impuesto total es requerido' })
   TotalTax: number;
@@ -127,7 +48,7 @@ export class PriceDataDto {
 
 export class QRElementDto {
   @ApiProperty({
-    description: 'ID del cÃ³digo QR',
+    description: 'ID del código QR',
     example: '507f1f77bcf86cd799439011'
   })
   @IsString({ message: 'El ID del QR debe ser una cadena de texto' })
@@ -138,26 +59,26 @@ export class QRElementDto {
     description: 'Precio del QR',
     example: 99.99
   })
-  @IsNumber({}, { message: 'El precio debe ser un nÃºmero' })
+  @IsNumber({}, { message: 'El precio debe ser un número' })
   @Min(0, { message: 'El precio debe ser mayor a 0' })
   @IsNotEmpty({ message: 'El precio es requerido' })
   price: number;
 
   @ApiProperty({
-    description: 'Fecha de expiraciÃ³n',
+    description: 'Fecha de expiración',
     example: '2024-12-31T23:59:59.999Z'
   })
-  @IsDate({ message: 'La fecha de expiraciÃ³n debe ser vÃ¡lida' })
+  @IsDate({ message: 'La fecha de expiración debe ser válida' })
   @Type(() => Date)
-  @IsNotEmpty({ message: 'La fecha de expiraciÃ³n es requerida' })
+  @IsNotEmpty({ message: 'La fecha de expiración es requerida' })
   expirationDate: Date;
 
   @ApiProperty({
-    description: 'DuraciÃ³n del plan',
+    description: 'Duración del plan',
     example: '12 meses'
   })
-  @IsString({ message: 'La duraciÃ³n debe ser una cadena de texto' })
-  @IsNotEmpty({ message: 'La duraciÃ³n es requerida' })
+  @IsString({ message: 'La duración debe ser una cadena de texto' })
+  @IsNotEmpty({ message: 'La duración es requerida' })
   duration: string;
 }
 
@@ -171,11 +92,11 @@ export class InvoiceDataDto {
   rut: string;
 
   @ApiProperty({
-    description: 'DirecciÃ³n de la empresa',
+    description: 'Dirección de la empresa',
     example: 'Av. Principal 123'
   })
-  @IsString({ message: 'La direcciÃ³n debe ser una cadena de texto' })
-  @IsNotEmpty({ message: 'La direcciÃ³n es requerida' })
+  @IsString({ message: 'La dirección debe ser una cadena de texto' })
+  @IsNotEmpty({ message: 'La dirección es requerida' })
   direccion: string;
 
   @ApiProperty({
@@ -187,68 +108,38 @@ export class InvoiceDataDto {
   giro: string;
 
   @ApiProperty({
-    description: 'RazÃ³n social de la empresa',
+    description: 'Razón social de la empresa',
     example: 'Empresa S.A.'
   })
-  @IsString({ message: 'La razÃ³n social debe ser una cadena de texto' })
-  @IsNotEmpty({ message: 'La razÃ³n social es requerida' })
+  @IsString({ message: 'La razón social debe ser una cadena de texto' })
+  @IsNotEmpty({ message: 'La razón social es requerida' })
   razonSocial: string;
 }
 
 export class CreateQrActivateDto {
   @ApiProperty({
-    description: 'MÃ©todo de activaciÃ³n',
+    description: 'Método de activación',
     enum: MethodActivation,
     example: MethodActivation.WEBPAY
   })
-  @IsEnum(MethodActivation, { message: 'El mÃ©todo de activaciÃ³n debe ser WEBPAY, TRANSFER o ADMIN' })
-  @IsNotEmpty({ message: 'El mÃ©todo de activaciÃ³n es requerido' })
+  @IsEnum(MethodActivation, { message: 'El método de activación debe ser WEBPAY, TRANSFER o ADMIN' })
+  @IsNotEmpty({ message: 'El método de activación es requerido' })
   methodActivation: MethodActivation;
 
   @ApiProperty({
-    description: 'Estado de activaciÃ³n',
-    enum: ActivationState,
-    default: ActivationState.PENDING,
-    example: ActivationState.PENDING
-  })
-  @IsEnum(ActivationState, { message: 'El estado debe ser PENDING, ACTIVE o ADMIN' })
-  @IsOptional()
-  state?: ActivationState = ActivationState.PENDING;
-
-  @ApiProperty({
-    description: 'Fecha de activaciÃ³n',
-    example: '2024-03-21T10:00:00Z'
-  })
-  @IsDate({ message: 'La fecha de activaciÃ³n debe ser vÃ¡lida' })
-  @IsOptional()
-  @Type(() => Date)
-  activationDate?: Date;
-
-  @ApiProperty({
-    description: 'Datos de transferencia',
-    type: TransferDateDto,
+    description: 'Token de la transacción Webpay (solo el token — el backend arma WebpayTransaction internamente)',
+    example: 'tok-123456',
     required: false
   })
   @IsOptional()
-  @ValidateNested({ message: 'Los datos de transferencia no son vÃ¡lidos' })
-  @Type(() => TransferDateDto)
-  TransferDate?: TransferDateDto;
-
-  @ApiProperty({
-    description: 'Datos de transacciÃ³n Webpay',
-    type: WebpayDataDto,
-    required: false
-  })
-  @IsOptional()
-  @ValidateNested({ message: 'Los datos de Webpay no son vÃ¡lidos' })
-  @Type(() => WebpayDataDto)
-  WebpayTransaction?: WebpayDataDto;
+  @IsString({ message: 'El token de Webpay debe ser una cadena de texto' })
+  webpayToken?: string;
 
   @ApiProperty({
     description: 'Datos de precio',
     type: PriceDataDto
   })
-  @ValidateNested({ message: 'Los datos de precio no son vÃ¡lidos' })
+  @ValidateNested({ message: 'Los datos de precio no son válidos' })
   @Type(() => PriceDataDto)
   @IsNotEmpty({ message: 'Los datos de precio son requeridos' })
   @Validate((value: PriceDataDto, args: ValidationArguments) => {
@@ -268,13 +159,13 @@ export class CreateQrActivateDto {
     type: [QRElementDto]
   })
   @IsArray({ message: 'La lista de QRs debe ser un array' })
-  @ValidateNested({ each: true, message: 'Cada elemento de la lista de QRs debe ser vÃ¡lido' })
+  @ValidateNested({ each: true, message: 'Cada elemento de la lista de QRs debe ser válido' })
   @Type(() => QRElementDto)
   @IsNotEmpty({ message: 'La lista de QRs es requerida' })
   qrList: QRElementDto[];
 
   @ApiProperty({
-    description: 'ID del usuario',
+    description: 'ID del usuario dueño de la activación (solo admin puede indicar un cliente)',
     example: '507f1f77bcf86cd799439011'
   })
   @IsString({ message: 'El ID de usuario debe ser una cadena de texto' })
@@ -282,15 +173,15 @@ export class CreateQrActivateDto {
   userId: string;
 
   @ApiProperty({
-    description: 'DescripciÃ³n adicional',
+    description: 'Descripción adicional',
     required: false
   })
   @IsOptional()
-  @IsString({ message: 'La descripciÃ³n debe ser una cadena de texto' })
+  @IsString({ message: 'La descripción debe ser una cadena de texto' })
   description?: string;
 
   @ApiProperty({
-    description: 'ID del administrador que crea la activaciÃ³n',
+    description: 'ID del administrador que crea la activación',
     example: '507f1f77bcf86cd799439011',
     required: false
   })
@@ -299,32 +190,12 @@ export class CreateQrActivateDto {
   adminId?: string;
 
   @ApiProperty({
-    description: 'DescripciÃ³n del administrador',
+    description: 'Descripción del administrador',
     required: false
   })
   @IsOptional()
-  @IsString({ message: 'La descripciÃ³n del administrador debe ser una cadena de texto' })
+  @IsString({ message: 'La descripción del administrador debe ser una cadena de texto' })
   descriptionAdministrator?: string;
-
-  @ApiProperty({
-    description: 'Fecha de Ãºltima actualizaciÃ³n',
-    example: '2024-03-21T10:00:00Z',
-    required: false
-  })
-  @IsOptional()
-  @IsDate({ message: 'La fecha de actualizaciÃ³n debe ser vÃ¡lida' })
-  @Type(() => Date)
-  updatedAt?: Date;
-  
-  @ApiProperty({
-    description: 'Fecha de creaciÃ³n',
-    example: '2024-03-21T10:00:00Z',
-    required: false
-  })
-  @IsOptional()
-  @IsDate({ message: 'La fecha de creaciÃ³n debe ser vÃ¡lida' })
-  @Type(() => Date)
-  createdAt?: Date;
 
   @ApiProperty({
     description: 'Tipo de documento',
@@ -336,12 +207,12 @@ export class CreateQrActivateDto {
   documentType: DocumentType;
 
   @ApiProperty({
-    description: 'Datos de facturaciÃ³n',
+    description: 'Datos de facturación',
     type: InvoiceDataDto,
     required: false
   })
   @ValidateIf((o) => o.documentType === DocumentType.FACTURA)
-  @ValidateNested({ message: 'Los datos de facturaciÃ³n no son vÃ¡lidos' })
+  @ValidateNested({ message: 'Los datos de facturación no son válidos' })
   @Type(() => InvoiceDataDto)
   invoiceData?: InvoiceDataDto;
 

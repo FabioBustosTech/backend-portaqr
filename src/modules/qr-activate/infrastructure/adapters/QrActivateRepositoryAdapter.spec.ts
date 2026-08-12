@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { QrActivateRepositoryAdapter } from './QrActivateRepositoryAdapter';
 import { MongoQrActivateRepository } from '../repository/mongo/mongo-qr-activate.repository';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
@@ -84,9 +84,9 @@ describe('QrActivateRepositoryAdapter', () => {
     it('debe delegar la consulta paginada al repositorio mongo', async () => {
       mongoRepository.getAll.mockResolvedValue(paginated);
 
-      const result = await adapter.getAll(1, 10, 'admin', 'WEBPAY', tracking);
+      const result = await adapter.getAll(1, 10, 'admin', 'WEBPAY', undefined, tracking);
 
-      expect(mongoRepository.getAll).toHaveBeenCalledWith(1, 10, 'admin', 'WEBPAY', tracking);
+      expect(mongoRepository.getAll).toHaveBeenCalledWith(1, 10, 'admin', 'WEBPAY', undefined, tracking);
       expect(result).toEqual(paginated);
     });
   });

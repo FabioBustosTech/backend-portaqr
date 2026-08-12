@@ -19,6 +19,7 @@ export class GetAllQrActivateUseCase {
     limit: number,
     search: string | undefined,
     methodActivation: string | undefined,
+    userId: string | undefined,
     tracking: TrackingContext,
   ): Promise<PaginatedResult<QrActivate>> {
     this.traceService.log(tracking, TraceLayer.USE_CASE, 'GetAllQrActivateUseCase', {
@@ -26,7 +27,9 @@ export class GetAllQrActivateUseCase {
       limit,
       search,
       methodActivation,
+      // SPEC-009 A3: userId se loguea solo si viene (filtro de ownership)
+      ...(userId ? { userId } : {}),
     });
-    return this.reader.getAll(page, limit, search, methodActivation, tracking);
+    return this.reader.getAll(page, limit, search, methodActivation, userId, tracking);
   }
 }
