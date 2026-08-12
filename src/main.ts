@@ -7,6 +7,8 @@ import { createAppValidationPipe } from './common/config/validation-pipe.config'
 import { HELMET_OPTIONS, parseCorsOrigins } from './common/config/security.config';
 // SPEC-008 H4 (R4): helmet (headers seguros) — CJS/ESM dual, usa export default
 import helmet from 'helmet';
+// SPEC-008 H5b (H6): strip de $ y . en body/query/params (defensa en profundidad)
+import { MongoSanitizeInterceptor } from './interceptors/mongo-sanitize.interceptor';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -26,6 +28,13 @@ async function bootstrap() {
   // SPEC-008 H4 (R4): helmet — headers de seguridad (CSP, nosniff, X-Frame-Options…)
   // CSP con style-src 'unsafe-inline' para no romper los templates EJS de email.
   app.use(helmet(HELMET_OPTIONS));
+
+  // SPEC-008 H5b (H6, defensa en profundidad): elimina claves con $ y . de
+  // body/query/params ANTES del ValidationPipe — protege endpoints futuros sin DTO.
+  // Interceptor global (no middleware): corre tras el body-parser de Nest y
+  // antes del pipe (un app.use() vería req.body aún undefined).
+  // (La Capa 2 ya bloquea operadores NoSQL vía forbidNonWhitelisted.)
+  app.useGlobalInterceptors(new MongoSanitizeInterceptor());
 
   // SPEC-008 H4 (R4): CORS whitelist — CORS_ORIGINS separado por comas en prod,
   // '*' (o vacío) en dev. Bloquea orígenes no autorizados.

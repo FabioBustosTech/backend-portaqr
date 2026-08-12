@@ -3,13 +3,14 @@
  *   CA-05 → headers helmet (nosniff, CSP) presentes; CORS bloquea orígenes no listados
  *   CA-06 → throttler: >N requests en TTL → 429; @Throttle por-ruta con límite menor
  */
-import { Controller, Get, Module, Post } from '@nestjs/common';
+import { Controller, Get, Module, Post, Body } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule, Throttle } from '@nestjs/throttler';
 import { Test, TestingModule } from '@nestjs/testing';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import * as request from 'supertest';
 import helmet from 'helmet';
+import { MongoSanitizeInterceptor } from './interceptors/mongo-sanitize.interceptor';
 import { HELMET_OPTIONS, parseCorsOrigins } from './common/config/security.config';
 import { SENSITIVE_ENDPOINT_THROTTLE } from './common/config/throttle.config';
 
@@ -27,6 +28,13 @@ class ProbeController {
   postSensitive(): { ok: true } {
     return { ok: true };
   }
+
+  // Endpoint SIN DTO (simula un futuro endpoint sin validación) para probar
+  // la defensa en profundidad de mongoSanitize (SPEC-008 H6).
+  @Post('raw')
+  postRaw(@Body() body: Record<string, unknown>): { received: unknown } {
+    return { received: body };
+  }
 }
 
 @Module({ controllers: [ProbeController] })
@@ -42,6 +50,7 @@ describe('Perímetro — helmet + CORS (SPEC-008 H4 — R4, CA-05)', () => {
 
     app = moduleFixture.createNestApplication<NestExpressApplication>();
     app.use(helmet(HELMET_OPTIONS));
+    app.useGlobalInterceptors(new MongoSanitizeInterceptor());
     app.enableCors({
       origin: parseCorsOrigins('https://app.portaqr.cl'),
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
@@ -86,6 +95,61 @@ describe('Perímetro — helmet + CORS (SPEC-008 H4 — R4, CA-05)', () => {
       .set('Origin', 'https://evil.example.com')
       .expect(200);
     expect(res.headers['access-control-allow-origin']).toBeUndefined();
+  });
+});
+
+describe('mongoSanitize — defensa en profundidad (SPEC-008 H6)', () => {
+  let app: NestExpressApplication;
+
+  beforeAll(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [ProbeModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication<NestExpressApplication>();
+    app.useGlobalInterceptors(new MongoSanitizeInterceptor());
+    await app.init();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('elimina operadores $ de un body sin DTO (endpoint futuro sin validación)', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/probe/raw')
+      .send({ name: { $ne: '' }, email: 'a@b.cl' })
+      .expect(201);
+
+    // $ne se elimina (default de express-mongo-sanitize v2: sin reemplazo)
+    expect(res.body.received.name).toEqual({});
+    expect(res.body.received.email).toBe('a@b.cl');
+  });
+
+  it('elimina claves anidadas con $ en arrays y objetos profundos', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/probe/raw')
+      .send({
+        list: [{ $gt: 5 }, { $where: 'sleep(1)' }],
+        nested: { deep: { $regex: '.*' } },
+      })
+      .expect(201);
+
+    expect(res.body.received.list).toEqual([{}, {}]);
+    expect(res.body.received.nested.deep).toEqual({});
+  });
+
+  it('no altera payloads legítimos sin caracteres prohibidos', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/probe/raw')
+      .send({ nombre: 'Ana', email: 'ana@a.cl', mensaje: 'Hola 100% real' })
+      .expect(201);
+
+    expect(res.body.received).toEqual({
+      nombre: 'Ana',
+      email: 'ana@a.cl',
+      mensaje: 'Hola 100% real',
+    });
   });
 });
 
