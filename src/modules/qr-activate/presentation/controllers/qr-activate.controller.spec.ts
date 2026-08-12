@@ -152,6 +152,49 @@ describe('QrActivateController', () => {
       expect(createQrActivateUseCase.execute).toHaveBeenCalledWith(createDto, tracking);
       expect(result).toEqual(mockActivation);
     });
+
+    it('debe usar executeAdmin cuando methodActivation es ADMIN (SPEC-007 H2: activa QRs en batch)', async () => {
+      const adminDto: CreateQrActivateDto = {
+        ...createDto,
+        methodActivation: MethodActivation.ADMIN,
+      };
+      createQrActivateUseCase.executeAdmin.mockResolvedValue({
+        ...mockActivation,
+        methodActivation: MethodActivation.ADMIN,
+      });
+
+      const result = await controller.create(adminDto, tracking);
+
+      expect(createQrActivateUseCase.executeAdmin).toHaveBeenCalledWith(adminDto, tracking);
+      expect(createQrActivateUseCase.execute).not.toHaveBeenCalled();
+      expect(result.methodActivation).toBe(MethodActivation.ADMIN);
+    });
+
+    it('debe usar execute (sin activación batch) para WEBPAY', async () => {
+      const webpayDto: CreateQrActivateDto = {
+        ...createDto,
+        methodActivation: MethodActivation.WEBPAY,
+      };
+      createQrActivateUseCase.execute.mockResolvedValue(mockActivation);
+
+      await controller.create(webpayDto, tracking);
+
+      expect(createQrActivateUseCase.execute).toHaveBeenCalledWith(webpayDto, tracking);
+      expect(createQrActivateUseCase.executeAdmin).not.toHaveBeenCalled();
+    });
+
+    it('debe usar execute para TRANSFER', async () => {
+      const transferDto: CreateQrActivateDto = {
+        ...createDto,
+        methodActivation: MethodActivation.TRANSFER,
+      };
+      createQrActivateUseCase.execute.mockResolvedValue(mockActivation);
+
+      await controller.create(transferDto, tracking);
+
+      expect(createQrActivateUseCase.execute).toHaveBeenCalledWith(transferDto, tracking);
+      expect(createQrActivateUseCase.executeAdmin).not.toHaveBeenCalled();
+    });
   });
 
   describe('findAll', () => {

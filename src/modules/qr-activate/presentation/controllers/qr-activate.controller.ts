@@ -53,6 +53,11 @@ export class QrActivateController {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'POST /qr-activate', {
       methodActivation: createQrActivateDto.methodActivation,
     });
+    // SPEC-007 H2: la activación admin activa los QRs en batch (executeAdmin con activateMany).
+    // Sin este cableado, el flujo ADMIN crea el registro pero deja los QRs inactivos.
+    if (createQrActivateDto.methodActivation === 'ADMIN') {
+      return this.createQrActivateUseCase.executeAdmin(createQrActivateDto, tracking);
+    }
     return this.createQrActivateUseCase.execute(createQrActivateDto, tracking);
   }
 
