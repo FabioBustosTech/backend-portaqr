@@ -142,6 +142,38 @@ export class MongoQrRepository
     }
   }
 
+  async activateMany(
+    qrCodes: string[],
+    expiration: Date,
+    tracking: TrackingContext,
+  ): Promise<{ matchedCount: number; modifiedCount: number }> {
+    try {
+      this.traceService.log(tracking, TraceLayer.REPOSITORY, 'activateMany:init', {
+        total: qrCodes.length,
+      });
+
+      const result = await this.qrModel
+        .updateMany(
+          { idQr: { $in: qrCodes } },
+          { $set: { active: true, expiration } },
+        )
+        .exec();
+
+      this.traceService.log(tracking, TraceLayer.REPOSITORY, 'activateMany:complete', {
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount,
+      });
+
+      return {
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount,
+      };
+    } catch (error) {
+      this.traceService.error(tracking, TraceLayer.REPOSITORY, 'activateMany:error', error as Error);
+      throw error;
+    }
+  }
+
   async delete(id: string, tracking: TrackingContext): Promise<boolean> {
     try {
       const result = await this.qrModel.findOneAndDelete({ idQr: id }).exec();
@@ -208,13 +240,25 @@ export class MongoQrRepository
     tracking: TrackingContext,
   ): Promise<{ data: unknown[]; pagination: QrPagination }> {
     try {
-      const skip = (page - 1) * limit;
+      // Normalizar page/limit a número: el controller los pasa como strings
+      // desde query params y $skip/$limit de aggregate exigen números
+      // (el find().limit() anterior toleraba strings — no-regresión SPEC-007 H3)
+      const pageNum = Number(page) || 1;
+      const limitNum = Number(limit) || 10;
+      const skip = (pageNum - 1) * limitNum;
       const targetUserIdString = role === 'admin' && userId2 ? userId2 : userId;
+      // IMPORTANTE (tipos de schema): qr guarda userId como STRING
+      // (qr.schema.ts L89) y pet-tag como Types.ObjectId. El find() de Mongoose
+      // casteaba el filtro al tipo del schema; el aggregate $match NO castea,
+      // por lo que hay que usar el tipo correcto en cada colección
+      // (no-regresión: $match con ObjectId contra userId string devuelve 0).
       const targetUserId = new Types.ObjectId(targetUserIdString);
+      const qrUserId = targetUserIdString;
+      const petTagUserId = targetUserId;
 
       // --- 1. LÃ³gica de BÃºsqueda Completa (Sin Omisiones) ---
-      let qrQuery: FilterQuery<QrDocument> = { userId: targetUserId };
-      let petTagQuery: FilterQuery<PetTagDocument> = { userId: targetUserId };
+      const qrQuery: FilterQuery<QrDocument> = { userId: qrUserId };
+      const petTagQuery: FilterQuery<PetTagDocument> = { userId: petTagUserId };
 
       if (search) {
         // Condiciones de bÃºsqueda especÃ­ficas para el modelo Qr
@@ -252,20 +296,48 @@ export class MongoQrRepository
         ];
       }
 
-      // --- 2. Obtener Datos y Totales en Paralelo ---
-      const [qrResults, petTagResults, totalQrs, totalPetTags] = await Promise.all([
-        this.qrModel.find(qrQuery).lean().exec(),
-        this.petTagModel.find(petTagQuery).lean().exec(),
-        this.qrModel.countDocuments(qrQuery),
-        this.petTagModel.countDocuments(petTagQuery),
+      // --- 2. Paginar en origen con $facet (SPEC-007 H3) ---
+      // Cada colección trae a lo sumo `limit` docs (2×limit en total a unir),
+      // no la colección completa; el total se calcula en la misma consulta.
+      const sort = { isFavorite: -1, updatedAt: -1 } as const;
+      const [qrFacet, petTagFacet] = await Promise.all([
+        this.qrModel
+          .aggregate([
+            { $match: qrQuery },
+            { $sort: sort },
+            {
+              $facet: {
+                data: [{ $skip: skip }, { $limit: limitNum }],
+                total: [{ $count: 'v' }],
+              },
+            },
+          ])
+          .exec(),
+        this.petTagModel
+          .aggregate([
+            { $match: petTagQuery },
+            { $sort: sort },
+            {
+              $facet: {
+                data: [{ $skip: skip }, { $limit: limitNum }],
+                total: [{ $count: 'v' }],
+              },
+            },
+          ])
+          .exec(),
       ]);
+
+      const qrData = qrFacet[0]?.data ?? [];
+      const petTagData = petTagFacet[0]?.data ?? [];
+      const totalQrs = qrFacet[0]?.total?.[0]?.v ?? 0;
+      const totalPetTags = petTagFacet[0]?.total?.[0]?.v ?? 0;
 
       // --- 3. Unificar, Ordenar y Paginar (Sin Mapeo Inverso) ---
 
       // AÃ±adimos un campo 'resultType' para que el frontend pueda diferenciar, pero NO modificamos la estructura original
       const allItems = [
-        ...qrResults.map((item) => ({ ...item, resultType: 'qr' })),
-        ...petTagResults.map((item) => ({ ...item, resultType: 'pet-tag' })),
+        ...qrData.map((item) => ({ ...item, resultType: 'qr' })),
+        ...petTagData.map((item) => ({ ...item, resultType: 'pet-tag' })),
       ];
 
       // Ordenar el array combinado: primero favoritos, luego por fecha de actualizaciÃ³n
@@ -280,24 +352,23 @@ export class MongoQrRepository
       });
 
       const total = totalQrs + totalPetTags;
-      const paginatedData = allItems.slice(skip, skip + limit);
       const totalPages = Math.ceil(total / limit);
 
       this.traceService.log(tracking, TraceLayer.REPOSITORY, 'findUserByFavorites:complete', {
         total,
         totalPages,
-        results: paginatedData.length,
+        results: allItems.length,
       });
 
       return {
-        data: paginatedData,
+        data: allItems,
         pagination: {
           total,
           totalPages,
-          currentPage: page.toString(),
-          limit: limit.toString(),
-          hasNextPage: page < totalPages,
-          hasPrevPage: page > 1,
+          currentPage: pageNum.toString(),
+          limit: limitNum.toString(),
+          hasNextPage: pageNum < totalPages,
+          hasPrevPage: pageNum > 1,
         },
       };
     } catch (error) {

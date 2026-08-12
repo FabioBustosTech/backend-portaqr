@@ -13,6 +13,7 @@ const mockFind = jest.fn();
 const mockFindOne = jest.fn();
 const mockFindOneAndUpdate = jest.fn();
 const mockCountDocuments = jest.fn();
+const mockInsertMany = jest.fn();
 
 const modelMock = jest.fn().mockImplementation((data: Record<string, unknown>) => ({
   ...data,
@@ -23,6 +24,7 @@ const modelMock = jest.fn().mockImplementation((data: Record<string, unknown>) =
 (modelMock as unknown as Record<string, unknown>).findOne = mockFindOne;
 (modelMock as unknown as Record<string, unknown>).findOneAndUpdate = mockFindOneAndUpdate;
 (modelMock as unknown as Record<string, unknown>).countDocuments = mockCountDocuments;
+(modelMock as unknown as Record<string, unknown>).insertMany = mockInsertMany;
 
 describe('MongoPetTagRepository', () => {
   let repository: MongoPetTagRepository;
@@ -78,34 +80,56 @@ describe('MongoPetTagRepository', () => {
   });
 
   describe('generateBatch', () => {
-    it('debe generar un lote de placas sin tienda asignada', async () => {
-      mockSave.mockResolvedValue(undefined);
+    /** Construye documentos insertados como devuelve insertMany (sin _id, valores planos) */
+    const buildInsertedDocs = (quantity: number, storeName: string | null = null) =>
+      Array.from({ length: quantity }, (_, i) => ({
+        idQr: `uuid-${i}`,
+        activationPin: `PIN${i}`,
+        status: 'RESERVADO',
+        commercialStatus: storeName ? 'ASIGNADO_COMERCIO' : 'EN_BODEGA',
+        assignedStoreName: storeName,
+      }));
+
+    it('debe generar un lote de placas en 1 sola operación insertMany sin tienda asignada', async () => {
+      const inserted = buildInsertedDocs(2);
+      mockInsertMany.mockResolvedValue(inserted);
 
       const result = await repository.generateBatch(2, '', tracking);
 
-      expect(modelMock).toHaveBeenCalledTimes(2);
-      expect(modelMock).toHaveBeenCalledWith(
+      expect(mockInsertMany).toHaveBeenCalledTimes(1);
+      const docsArg = mockInsertMany.mock.calls[0][0] as Array<Record<string, unknown>>;
+      expect(docsArg).toHaveLength(2);
+      expect(docsArg[0]).toEqual(
         expect.objectContaining({
           status: 'RESERVADO',
           commercialStatus: 'EN_BODEGA',
           assignedStoreName: null,
         }),
       );
-      expect(mockSave).toHaveBeenCalledTimes(2);
+      expect(mockSave).not.toHaveBeenCalled();
+      expect(modelMock).not.toHaveBeenCalled();
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({
         qrId: expect.any(String),
         activationPin: expect.any(String),
         assignedStoreName: null,
       });
+      expect(traceService.log).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.REPOSITORY,
+        'generateBatch:complete',
+        { total: 2 },
+      );
     });
 
     it('debe generar un lote de placas con tienda asignada', async () => {
-      mockSave.mockResolvedValue(undefined);
+      const inserted = buildInsertedDocs(1, 'Tienda Central');
+      mockInsertMany.mockResolvedValue(inserted);
 
       const result = await repository.generateBatch(1, 'Tienda Central', tracking);
 
-      expect(modelMock).toHaveBeenCalledWith(
+      const docsArg = mockInsertMany.mock.calls[0][0] as Array<Record<string, unknown>>;
+      expect(docsArg[0]).toEqual(
         expect.objectContaining({
           commercialStatus: 'ASIGNADO_COMERCIO',
           assignedStoreName: 'Tienda Central',
@@ -114,8 +138,22 @@ describe('MongoPetTagRepository', () => {
       expect(result[0].assignedStoreName).toBe('Tienda Central');
     });
 
+    it('debe generar ids únicos (uuid) y pins únicos (nanoid) por cada placa', async () => {
+      const inserted = buildInsertedDocs(3);
+      mockInsertMany.mockResolvedValue(inserted);
+
+      const result = await repository.generateBatch(3, '', tracking);
+
+      const docsArg = mockInsertMany.mock.calls[0][0] as Array<Record<string, unknown>>;
+      const ids = docsArg.map((d) => d.idQr);
+      const pins = docsArg.map((d) => d.activationPin);
+      expect(new Set(ids).size).toBe(3);
+      expect(new Set(pins).size).toBe(3);
+      expect(result).toHaveLength(3);
+    });
+
     it('debe trazar y lanzar HttpException si el guardado falla', async () => {
-      mockSave.mockRejectedValue(new Error('DB down'));
+      mockInsertMany.mockRejectedValue(new Error('DB down'));
 
       await expect(repository.generateBatch(2, '', tracking)).rejects.toThrow(HttpException);
       expect(traceService.error).toHaveBeenCalledWith(
@@ -299,16 +337,15 @@ describe('MongoPetTagRepository', () => {
   });
 
   describe('update', () => {
-    it('debe actualizar los campos de la placa y guardar', async () => {
-      const tag = {
-        petData: null,
-        name: 'Viejo',
-        isFavorite: false,
-        commercialStatus: 'EN_BODEGA',
-        save: mockSave,
+    it('debe actualizar la placa en 1 findOneAndUpdate con los campos enviados', async () => {
+      const updatedTag = {
+        idQr: 'qr-1',
+        petData,
+        name: 'Nuevo',
+        isFavorite: true,
+        commercialStatus: 'VENDIDO',
       };
-      mockFindOne.mockResolvedValue(tag);
-      mockSave.mockResolvedValue(tag);
+      mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(updatedTag) });
 
       const result = await repository.update(
         'qr-1',
@@ -317,40 +354,51 @@ describe('MongoPetTagRepository', () => {
         tracking,
       );
 
-      expect(mockFindOne).toHaveBeenCalledWith({
-        idQr: 'qr-1',
-        userId: expect.anything(),
-      });
-      expect(tag.petData).toEqual(petData);
-      expect(tag.name).toBe('Nuevo');
-      expect(tag.isFavorite).toBe(true);
-      expect(tag.commercialStatus).toBe('VENDIDO');
-      expect(mockSave).toHaveBeenCalledTimes(1);
-      expect(result).toBe(tag);
+      expect(mockFindOneAndUpdate).toHaveBeenCalledTimes(1);
+      expect(mockFindOneAndUpdate).toHaveBeenCalledWith(
+        { idQr: 'qr-1', userId: expect.anything() },
+        {
+          $set: {
+            petData,
+            name: 'Nuevo',
+            isFavorite: true,
+            commercialStatus: 'VENDIDO',
+          },
+        },
+        { new: true, runValidators: true },
+      );
+      expect(mockFindOne).not.toHaveBeenCalled();
+      expect(mockSave).not.toHaveBeenCalled();
+      expect(result).toEqual(updatedTag);
     });
 
-    it('debe conservar los valores existentes cuando no se envían campos', async () => {
-      const tag = {
+    it('debe conservar los valores existentes cuando no se envían campos (solo campos presentes en $set)', async () => {
+      const updatedTag = {
+        idQr: 'qr-1',
         petData,
         name: 'Rex',
         isFavorite: true,
         commercialStatus: 'VENDIDO',
-        save: mockSave,
       };
-      mockFindOne.mockResolvedValue(tag);
-      mockSave.mockResolvedValue(tag);
+      mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(updatedTag) });
 
       const result = await repository.update('qr-1', VALID_USER_ID, {}, tracking);
 
-      expect(tag.petData).toEqual(petData);
-      expect(tag.name).toBe('Rex');
-      expect(tag.isFavorite).toBe(true);
-      expect(tag.commercialStatus).toBe('VENDIDO');
-      expect(result).toBe(tag);
+      const updateCall = mockFindOneAndUpdate.mock.calls[0][1] as {
+        $set: Record<string, unknown>;
+      };
+      // petData undefined no debe incluirse en el $set (Mongoose lo ignora)
+      expect(updateCall.$set).toEqual({ petData: undefined });
+      expect(mockFindOneAndUpdate).toHaveBeenCalledWith(
+        { idQr: 'qr-1', userId: expect.anything() },
+        expect.objectContaining({ $set: expect.any(Object) }),
+        { new: true, runValidators: true },
+      );
+      expect(result).toEqual(updatedTag);
     });
 
     it('debe lanzar error cuando la placa no existe o no pertenece al usuario', async () => {
-      mockFindOne.mockResolvedValue(null);
+      mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
 
       await expect(
         repository.update('qr-1', VALID_USER_ID, {}, tracking),
@@ -364,7 +412,9 @@ describe('MongoPetTagRepository', () => {
     });
 
     it('debe trazar y lanzar HttpException si la consulta falla', async () => {
-      mockFindOne.mockRejectedValue(new Error('DB down'));
+      mockFindOneAndUpdate.mockReturnValue({
+        lean: jest.fn().mockRejectedValue(new Error('DB down')),
+      });
 
       await expect(
         repository.update('qr-1', VALID_USER_ID, {}, tracking),
@@ -379,8 +429,7 @@ describe('MongoPetTagRepository', () => {
   });
 
   describe('activate', () => {
-    it('debe activar la placa y retornar el documento actualizado', async () => {
-      const tag = { idQr: 'qr-1', activationPin: 'PIN-1', status: 'RESERVADO' };
+    it('debe activar la placa en 1 findOneAndUpdate atómico (filtro condicional) y retornar el documento', async () => {
       const updatedTag = {
         idQr: 'qr-1',
         status: 'ACTIVO',
@@ -388,7 +437,6 @@ describe('MongoPetTagRepository', () => {
         petData,
         commercialStatus: 'VENDIDO',
       };
-      mockFindOne.mockReturnValue({ lean: jest.fn().mockResolvedValue(tag) });
       mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(updatedTag) });
 
       const result = await repository.activate(
@@ -399,48 +447,65 @@ describe('MongoPetTagRepository', () => {
         tracking,
       );
 
-      expect(mockFindOne).toHaveBeenCalledWith({ idQr: 'qr-1', activationPin: 'PIN-1' });
+      // 1 sola llamada atómica con filtro condicional (status RESERVADO elimina TOCTOU)
+      expect(mockFindOneAndUpdate).toHaveBeenCalledTimes(1);
       expect(mockFindOneAndUpdate).toHaveBeenCalledWith(
-        { idQr: 'qr-1' },
-        expect.objectContaining({
-          status: 'ACTIVO',
-          petData,
-          commercialStatus: 'VENDIDO',
-          expiration: expect.any(Date),
-        }),
-        { new: true },
+        { idQr: 'qr-1', activationPin: 'PIN-1', status: 'RESERVADO' },
+        {
+          $set: expect.objectContaining({
+            status: 'ACTIVO',
+            petData,
+            commercialStatus: 'VENDIDO',
+            expiration: expect.any(Date),
+          }),
+        },
+        { new: true, runValidators: true },
       );
+      // Camino feliz: sin lecturas previas
+      expect(mockFindOne).not.toHaveBeenCalled();
       expect(result).toEqual(updatedTag);
     });
 
-    it('debe lanzar error cuando no encuentra la placa', async () => {
+    it('debe lanzar error cuando no encuentra la placa (diagnóstico 404 en rama de error)', async () => {
+      mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
       mockFindOne.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
 
       await expect(
         repository.activate('qr-1', 'PIN-1', petData, VALID_USER_ID, tracking),
       ).rejects.toThrow('No se encontró una placa con ID QR: qr-1');
+      // 1 write + 1 read de diagnóstico (solo en rama de error)
+      expect(mockFindOne).toHaveBeenCalledTimes(1);
+      expect(mockFindOne).toHaveBeenCalledWith({ idQr: 'qr-1', activationPin: 'PIN-1' });
     });
 
-    it('debe lanzar error cuando la placa ya está activa', async () => {
-      const tag = { idQr: 'qr-1', activationPin: 'PIN-1', status: 'ACTIVO' };
-      mockFindOne.mockReturnValue({ lean: jest.fn().mockResolvedValue(tag) });
+    it('debe lanzar 409 cuando la placa ya está activa (existe pero no RESERVADO)', async () => {
+      const existing = { idQr: 'qr-1', activationPin: 'PIN-1', status: 'ACTIVO' };
+      mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
+      mockFindOne.mockReturnValue({ lean: jest.fn().mockResolvedValue(existing) });
 
       await expect(
         repository.activate('qr-1', 'PIN-1', petData, VALID_USER_ID, tracking),
       ).rejects.toThrow('ya está activa');
     });
 
-    it('debe lanzar error cuando el PIN de activación es incorrecto', async () => {
-      const tag = { idQr: 'qr-1', activationPin: 'PIN-DIFERENTE', status: 'RESERVADO' };
-      mockFindOne.mockReturnValue({ lean: jest.fn().mockResolvedValue(tag) });
+    it('debe lanzar 409 cuando otra request concurrente activó la placa (TOCTOU eliminado)', async () => {
+      const activatedByOther = {
+        idQr: 'qr-1',
+        activationPin: 'PIN-1',
+        status: 'ACTIVO',
+      };
+      mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
+      mockFindOne.mockReturnValue({ lean: jest.fn().mockResolvedValue(activatedByOther) });
 
       await expect(
         repository.activate('qr-1', 'PIN-1', petData, VALID_USER_ID, tracking),
-      ).rejects.toThrow('PIN de activación incorrecto');
+      ).rejects.toThrow('ya está activa');
     });
 
     it('debe trazar y lanzar HttpException si la consulta falla', async () => {
-      mockFindOne.mockReturnValue({ lean: jest.fn().mockRejectedValue(new Error('DB down')) });
+      mockFindOneAndUpdate.mockReturnValue({
+        lean: jest.fn().mockRejectedValue(new Error('DB down')),
+      });
 
       await expect(
         repository.activate('qr-1', 'PIN-1', petData, VALID_USER_ID, tracking),

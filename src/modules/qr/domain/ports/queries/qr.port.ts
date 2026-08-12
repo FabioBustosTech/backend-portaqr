@@ -48,6 +48,11 @@ export interface ICanCreateQr {
 
 export interface ICanUpdateQr {
   update(id: string, data: Partial<Qr>, tracking: TrackingContext): Promise<Qr | null>;
+  activateMany(
+    qrCodes: string[],
+    expiration: Date,
+    tracking: TrackingContext,
+  ): Promise<{ matchedCount: number; modifiedCount: number }>;
 }
 
 export interface ICanDeleteQr {

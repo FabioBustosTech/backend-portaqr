@@ -11,7 +11,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { GeneratePetTagsUseCase } from '../../application/use-cases/generate-pet-tags.usecase';
 import { GetReservedPetTagsUseCase } from '../../application/use-cases/get-reserved-pet-tags.usecase';
 import { GetPetTagStatusUseCase } from '../../application/use-cases/get-pet-tag-status.usecase';

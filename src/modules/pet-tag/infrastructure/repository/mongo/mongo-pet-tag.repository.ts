@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { customAlphabet } from 'nanoid';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
 import type { TrackingContext } from 'src/common/decorators/tracking.decorator';
-import type { PetTag, PetData } from '../../../domain/entities/pet-tag.entity';
+import type { PetData } from '../../../domain/entities/pet-tag.entity';
 import type {
   ICanGeneratePetTag,
   ICanGetPetTag,
@@ -41,29 +41,23 @@ export class MongoPetTagRepository
       });
 
       const nanoid = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ', 6);
-      const newTags = [];
 
-      for (let i = 0; i < quantity; i++) {
-        const idQr = uuidv4();
-        const activationPin = nanoid();
+      // Construir los documentos y persistir en 1 sola operación batch (SPEC-007 H1)
+      const docs = Array.from({ length: quantity }, () => ({
+        idQr: uuidv4(),
+        activationPin: nanoid(),
+        status: 'RESERVADO',
+        commercialStatus: assignedStoreName ? 'ASIGNADO_COMERCIO' : 'EN_BODEGA',
+        assignedStoreName: assignedStoreName || null,
+      }));
 
-        const tag = new this.petTagModel({
-          idQr,
-          activationPin,
-          status: 'RESERVADO',
-          commercialStatus: assignedStoreName ? 'ASIGNADO_COMERCIO' : 'EN_BODEGA',
-          assignedStoreName: assignedStoreName || null,
-        });
-
-        await tag.save();
-        newTags.push(tag);
-      }
+      const saved = await this.petTagModel.insertMany(docs);
 
       this.traceService.log(tracking, TraceLayer.REPOSITORY, 'generateBatch:complete', {
-        total: newTags.length,
+        total: saved.length,
       });
 
-      return newTags.map((tag) => ({
+      return saved.map((tag) => ({
         qrId: tag.idQr,
         activationPin: tag.activationPin,
         assignedStoreName: tag.assignedStoreName,
@@ -194,17 +188,27 @@ export class MongoPetTagRepository
       });
       const userObjectId = new Types.ObjectId(userId);
 
-      const tag = await this.petTagModel.findOne({ idQr: petTagIdQr, userId: userObjectId });
+      // 1 round-trip (SPEC-007 H6): findOneAndUpdate en vez de find + mutate + save
+      const tag = await this.petTagModel
+        .findOneAndUpdate(
+          { idQr: petTagIdQr, userId: userObjectId },
+          {
+            $set: {
+              petData: (data.petData as any) ?? undefined,
+              ...(data.name !== undefined && { name: data.name }),
+              ...(data.isFavorite !== undefined && { isFavorite: data.isFavorite }),
+              ...(data.commercialStatus !== undefined && {
+                commercialStatus: data.commercialStatus,
+              }),
+            },
+          },
+          { new: true, runValidators: true }, // runValidators: no-regresión de enum commercialStatus
+        )
+        .lean();
 
       if (!tag) {
         throw new NotFoundException('Placa no encontrada o no pertenece a este usuario.');
       }
-
-      tag.petData = (data.petData as any) ?? tag.petData;
-      if (data.name !== undefined) tag.name = data.name;
-      if (data.isFavorite !== undefined) tag.isFavorite = data.isFavorite;
-      if (data.commercialStatus !== undefined) tag.commercialStatus = data.commercialStatus;
-      await tag.save();
 
       this.traceService.log(tracking, TraceLayer.REPOSITORY, 'update:complete', { petTagIdQr });
       return tag;
@@ -230,35 +234,35 @@ export class MongoPetTagRepository
         userId,
       });
 
-      const tag = await this.petTagModel
-        .findOne({ idQr, activationPin })
-        .lean();
-
-      if (!tag) {
-        throw new NotFoundException(`No se encontró una placa con ID QR: ${idQr}`);
-      }
-
-      if (tag.status !== 'RESERVADO') {
-        throw new ConflictException(`La placa con ID QR: ${idQr} ya está activa`);
-      }
-
-      if (tag.activationPin !== activationPin) {
-        throw new ConflictException(`PIN de activación incorrecto para la placa con ID QR: ${idQr}`);
-      }
-
+      // 1 round-trip atómico (SPEC-007 H5): el filtro condicional elimina el TOCTOU
       const updatedTag = await this.petTagModel
         .findOneAndUpdate(
-          { idQr },
+          { idQr, activationPin, status: 'RESERVADO' },
           {
-            status: 'ACTIVO',
-            userId: new Types.ObjectId(userId),
-            petData,
-            expiration: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 año desde ahora
-            commercialStatus: 'VENDIDO',
+            $set: {
+              status: 'ACTIVO',
+              userId: new Types.ObjectId(userId),
+              petData,
+              expiration: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 año desde ahora
+              commercialStatus: 'VENDIDO',
+            },
           },
-          { new: true },
+          { new: true, runValidators: true }, // runValidators: no-regresión de enums status/commercialStatus
         )
         .lean();
+
+      if (!updatedTag) {
+        // Rama de error: 1 read para distinguir causa (no afecta el camino feliz)
+        const existing = await this.petTagModel
+          .findOne({ idQr, activationPin })
+          .lean();
+
+        if (!existing) {
+          throw new NotFoundException(`No se encontró una placa con ID QR: ${idQr}`);
+        }
+        // Existe pero no está RESERVADO (o lo activó otra request concurrente)
+        throw new ConflictException(`La placa con ID QR: ${idQr} ya está activa`);
+      }
 
       this.traceService.log(tracking, TraceLayer.REPOSITORY, 'activate:complete', { idQr });
       return updatedTag;

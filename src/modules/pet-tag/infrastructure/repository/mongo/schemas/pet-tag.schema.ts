@@ -105,3 +105,8 @@ PetTagSchemaDefinition.index({ userId: 1 });
 PetTagSchemaDefinition.index({ status: 1 });
 PetTagSchemaDefinition.index({ expiration: 1 });
 PetTagSchemaDefinition.index({ 'petData.petName': 1 });
+// SPEC-007 RF-11: soporte de update() y activate() con filtros compuestos (1 round-trip)
+PetTagSchemaDefinition.index({ idQr: 1, userId: 1 });
+PetTagSchemaDefinition.index({ idQr: 1, activationPin: 1 });
+// SPEC-007 RF-6: soporte del sort { isFavorite: -1, updatedAt: -1 } en findUserByFavorites sin escaneo
+PetTagSchemaDefinition.index({ userId: 1, isFavorite: -1, updatedAt: -1 });

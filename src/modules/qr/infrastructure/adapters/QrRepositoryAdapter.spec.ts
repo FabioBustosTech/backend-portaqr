@@ -34,6 +34,7 @@ describe('QrRepositoryAdapter', () => {
             getById: jest.fn(),
             findByUserId: jest.fn(),
             update: jest.fn(),
+            activateMany: jest.fn(),
             delete: jest.fn(),
             findPaginatedByUser: jest.fn(),
             findUserByFavorites: jest.fn(),
@@ -156,6 +157,31 @@ describe('QrRepositoryAdapter', () => {
       const result = await adapter.update('QR-inexistente', { name: 'X' }, tracking);
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('activateMany', () => {
+    it('debe delegar la activación batch al repositorio mongo', async () => {
+      mongoRepository.activateMany.mockResolvedValue({ matchedCount: 3, modifiedCount: 3 });
+
+      const codes = ['QR-1', 'QR-2', 'QR-3'];
+      const expiration = new Date('2026-08-11T00:00:00.000Z');
+      const result = await adapter.activateMany(codes, expiration, tracking);
+
+      expect(mongoRepository.activateMany).toHaveBeenCalledWith(codes, expiration, tracking);
+      expect(result).toEqual({ matchedCount: 3, modifiedCount: 3 });
+    });
+
+    it('debe propagar el resultado con QRs inexistentes (matchedCount menor)', async () => {
+      mongoRepository.activateMany.mockResolvedValue({ matchedCount: 2, modifiedCount: 2 });
+
+      const result = await adapter.activateMany(
+        ['QR-1', 'QR-2', 'QR-inexistente'],
+        new Date(),
+        tracking,
+      );
+
+      expect(result).toEqual({ matchedCount: 2, modifiedCount: 2 });
     });
   });
 

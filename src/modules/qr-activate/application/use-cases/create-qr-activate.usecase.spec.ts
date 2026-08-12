@@ -83,6 +83,7 @@ describe('CreateQrActivateUseCase', () => {
           provide: QR_ACTIVATE_QR_PORT,
           useValue: {
             updateQr: jest.fn(),
+            activateMany: jest.fn(),
           },
         },
         {
@@ -149,8 +150,9 @@ describe('CreateQrActivateUseCase', () => {
   });
 
   describe('executeAdmin', () => {
-    it('debe crear la activación y activar cada QR de la lista', async () => {
+    it('debe crear la activación y activar los QRs en 1 operación batch', async () => {
       creator.create.mockResolvedValue(mockActivation);
+      qrActivator.activateMany.mockResolvedValue({ matchedCount: 1, modifiedCount: 1 });
 
       const result = await useCase.executeAdmin(dto, tracking);
 
@@ -161,15 +163,17 @@ describe('CreateQrActivateUseCase', () => {
         { methodActivation: dto.methodActivation },
       );
       expect(creator.create).toHaveBeenCalledTimes(1);
-      expect(qrActivator.updateQr).toHaveBeenCalledWith(
-        'qr-1',
-        { active: true, expiration: expirationDate },
+      expect(qrActivator.activateMany).toHaveBeenCalledTimes(1);
+      expect(qrActivator.activateMany).toHaveBeenCalledWith(
+        ['qr-1'],
+        expirationDate,
         tracking,
       );
+      expect(qrActivator.updateQr).not.toHaveBeenCalled();
       expect(result).toEqual(mockActivation);
     });
 
-    it('debe activar todos los QR cuando la lista tiene varios elementos', async () => {
+    it('debe activar todos los QR cuando la lista tiene varios elementos (1 sola llamada batch)', async () => {
       const multiQrDto: CreateQrActivateDto = {
         ...dto,
         qrList: [
@@ -178,23 +182,41 @@ describe('CreateQrActivateUseCase', () => {
         ],
       };
       creator.create.mockResolvedValue(mockActivation);
+      qrActivator.activateMany.mockResolvedValue({ matchedCount: 2, modifiedCount: 2 });
 
       await useCase.executeAdmin(multiQrDto, tracking);
 
-      expect(qrActivator.updateQr).toHaveBeenCalledTimes(2);
-      expect(qrActivator.updateQr).toHaveBeenCalledWith(
-        'qr-1',
-        { active: true, expiration: expirationDate },
-        tracking,
-      );
-      expect(qrActivator.updateQr).toHaveBeenCalledWith(
-        'qr-2',
-        { active: true, expiration: expirationDate },
+      expect(qrActivator.activateMany).toHaveBeenCalledTimes(1);
+      expect(qrActivator.activateMany).toHaveBeenCalledWith(
+        ['qr-1', 'qr-2'],
+        expirationDate,
         tracking,
       );
     });
 
-    it('no debe llamar a updateQr si la lista de QR está vacía', async () => {
+    it('debe avisar con warn si hay QRs inexistentes (matchedCount < total, no fatal)', async () => {
+      const multiQrDto: CreateQrActivateDto = {
+        ...dto,
+        qrList: [
+          { qrCode: 'qr-1', price: 50, expirationDate, duration: '6 meses' },
+          { qrCode: 'qr-inexistente', price: 50, expirationDate, duration: '6 meses' },
+        ],
+      };
+      creator.create.mockResolvedValue(mockActivation);
+      qrActivator.activateMany.mockResolvedValue({ matchedCount: 1, modifiedCount: 1 });
+
+      const result = await useCase.executeAdmin(multiQrDto, tracking);
+
+      expect(traceService.warn).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.USE_CASE,
+        'CreateQrActivateUseCase - QRs inexistentes',
+        { total: 2, matchedCount: 1, modifiedCount: 1 },
+      );
+      expect(result).toEqual(mockActivation);
+    });
+
+    it('no debe llamar a activateMany si la lista de QR está vacía', async () => {
       const emptyQrDto: CreateQrActivateDto = {
         ...dto,
         qrList: [],
@@ -203,14 +225,21 @@ describe('CreateQrActivateUseCase', () => {
 
       await useCase.executeAdmin(emptyQrDto, tracking);
 
-      expect(qrActivator.updateQr).not.toHaveBeenCalled();
+      expect(qrActivator.activateMany).not.toHaveBeenCalled();
     });
 
     it('debe propagar el error si la creación falla y no activar QRs', async () => {
       creator.create.mockRejectedValue(new Error('DB down'));
 
       await expect(useCase.executeAdmin(dto, tracking)).rejects.toThrow('DB down');
-      expect(qrActivator.updateQr).not.toHaveBeenCalled();
+      expect(qrActivator.activateMany).not.toHaveBeenCalled();
+    });
+
+    it('debe propagar el error si la activación batch falla (no se guarda estado sin activar)', async () => {
+      creator.create.mockResolvedValue(mockActivation);
+      qrActivator.activateMany.mockRejectedValue(new Error('DB down'));
+
+      await expect(useCase.executeAdmin(dto, tracking)).rejects.toThrow('DB down');
     });
   });
 });

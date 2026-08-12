@@ -37,4 +37,9 @@ export interface ICanActivateQr {
     data: { active: boolean; expiration?: Date },
     tracking: TrackingContext,
   ): Promise<void>;
+  activateMany(
+    qrCodes: string[],
+    expiration: Date,
+    tracking: TrackingContext,
+  ): Promise<{ matchedCount: number; modifiedCount: number }>;
 }

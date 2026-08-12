@@ -2,14 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CreateUserUseCase } from './create-user.usecase';
-import {
-  USER_CREATE_PORT,
-  USER_GET_PORT,
-  USER_CHECK_PORT,
-  USER_UPDATE_PORT,
-} from '../../domain/constants/user.tokens';
-import type { ICanCreateUser, ICanUpdateUser, ICanCheckUser } from '../../domain/ports/queries/create-user.port';
-import type { ICanGetUser } from '../../domain/ports/queries/get-user.port';
+import { USER_CREATE_PORT } from '../../domain/constants/user.tokens';
+import type { ICanCreateUser } from '../../domain/ports/queries/create-user.port';
 import type { User } from '../../domain/entities/user.entity';
 import { UserValidationRules } from '../../domain/validators/user-validation.rules';
 import { PasswordService } from '../../domain/services/password.service';
@@ -18,12 +12,13 @@ import type { TrackingContext } from '../../../../common/decorators/tracking.dec
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import type { CreateUserDto } from '../dto/create-user.dto';
 
+/** Simula el error E11000 de MongoDB */
+const createDuplicateKeyError = (keyPattern: Record<string, unknown> = { email: 1 }) =>
+  Object.assign(new Error('E11000 duplicate key error'), { code: 11000, keyPattern });
+
 describe('CreateUserUseCase', () => {
   let useCase: CreateUserUseCase;
   let creator: jest.Mocked<ICanCreateUser>;
-  let reader: jest.Mocked<ICanGetUser>;
-  let checker: jest.Mocked<ICanCheckUser>;
-  let updater: jest.Mocked<ICanUpdateUser>;
   let passwordService: jest.Mocked<PasswordService>;
   let traceService: jest.Mocked<TraceService>;
   let emailService: jest.Mocked<EmailService>;
@@ -44,7 +39,7 @@ describe('CreateUserUseCase', () => {
   const createdUser: User = {
     id: 'user-1',
     email: 'juan@ejemplo.com',
-    userName: 'juan',
+    userName: 'juanperez',
     password: 'hashed-password',
     firstName: 'Juan',
     paternalLastName: 'Pérez',
@@ -52,6 +47,8 @@ describe('CreateUserUseCase', () => {
     role: 'user',
     isEmailVerified: false,
     phone: '123456789',
+    verificationCode: 'ABC123',
+    verificationCodeExpires: new Date(),
   };
 
   beforeEach(async () => {
@@ -63,30 +60,6 @@ describe('CreateUserUseCase', () => {
           useValue: {
             create: jest.fn(),
             createAdmin: jest.fn(),
-          },
-        },
-        {
-          provide: USER_GET_PORT,
-          useValue: {
-            getById: jest.fn(),
-            getByEmail: jest.fn(),
-            getByUsername: jest.fn(),
-            getByVerificationCode: jest.fn(),
-            getByPasswordResetCode: jest.fn(),
-          },
-        },
-        {
-          provide: USER_CHECK_PORT,
-          useValue: {
-            checkUserNameExists: jest.fn(),
-            checkEmailExists: jest.fn(),
-          },
-        },
-        {
-          provide: USER_UPDATE_PORT,
-          useValue: {
-            update: jest.fn(),
-            updateLastLogin: jest.fn(),
           },
         },
         UserValidationRules,
@@ -125,9 +98,6 @@ describe('CreateUserUseCase', () => {
 
     useCase = module.get(CreateUserUseCase);
     creator = module.get(USER_CREATE_PORT) as jest.Mocked<ICanCreateUser>;
-    reader = module.get(USER_GET_PORT) as jest.Mocked<ICanGetUser>;
-    checker = module.get(USER_CHECK_PORT) as jest.Mocked<ICanCheckUser>;
-    updater = module.get(USER_UPDATE_PORT) as jest.Mocked<ICanUpdateUser>;
     passwordService = module.get(PasswordService);
     traceService = module.get(TraceService);
     emailService = module.get(EmailService);
@@ -139,23 +109,16 @@ describe('CreateUserUseCase', () => {
   });
 
   describe('execute', () => {
-    it('debe crear el usuario normalizado, enviar email de verificación y retornar sin password', async () => {
-      checker.checkEmailExists.mockResolvedValue(false);
-      checker.checkUserNameExists.mockResolvedValue(false);
+    it('debe crear el usuario en 1 round-trip (sin pre-checks ni update/getById) y enviar email', async () => {
       passwordService.hashPassword.mockResolvedValue('hashed-password');
       creator.create.mockResolvedValue(createdUser);
-      updater.update.mockResolvedValue(createdUser);
-      reader.getById.mockResolvedValue(createdUser);
       emailService.sendVerificationEmail.mockResolvedValue(undefined);
       configService.get.mockReturnValue('3600');
 
       const result = await useCase.execute(dto, tracking);
 
-      expect(checker.checkEmailExists).toHaveBeenCalledWith(
-        'juan@ejemplo.com',
-        tracking,
-      );
-      expect(checker.checkUserNameExists).toHaveBeenCalledWith('juanperez', tracking);
+      // Sin pre-checks: 1 sola llamada a BD (create)
+      expect(creator.create).toHaveBeenCalledTimes(1);
       expect(passwordService.hashPassword).toHaveBeenCalledWith('password123');
 
       const usuarioCreado = creator.create.mock.calls[0][0] as User;
@@ -164,15 +127,11 @@ describe('CreateUserUseCase', () => {
       expect(usuarioCreado.firstName).toBe('Juan');
       expect(usuarioCreado.role).toBe('user');
       expect(usuarioCreado.isEmailVerified).toBe(false);
+      // verificationCode incluido en el insert (no en update posterior)
+      expect(usuarioCreado.verificationCode).toEqual(expect.any(String));
+      expect(usuarioCreado.verificationCodeExpires).toBeInstanceOf(Date);
 
-      expect(updater.update).toHaveBeenCalledWith(
-        'user-1',
-        expect.objectContaining({
-          verificationCode: expect.any(String),
-          verificationCodeExpires: expect.any(Date),
-        }),
-        tracking,
-      );
+      // Email con el doc retornado (sin getById)
       expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(
         'juan@ejemplo.com',
         'user-1',
@@ -196,75 +155,60 @@ describe('CreateUserUseCase', () => {
       await expect(useCase.execute(dtoInvalido, tracking)).rejects.toThrow(
         ConflictException,
       );
-      expect(checker.checkEmailExists).not.toHaveBeenCalled();
       expect(creator.create).not.toHaveBeenCalled();
     });
 
-    it('debe lanzar ConflictException si el email ya está registrado', async () => {
-      checker.checkEmailExists.mockResolvedValue(true);
+    it('debe lanzar ConflictException si el email ya está registrado (E11000 → 409)', async () => {
+      passwordService.hashPassword.mockResolvedValue('hashed-password');
+      creator.create.mockRejectedValue(createDuplicateKeyError({ email: 1 }));
 
       await expect(useCase.execute(dto, tracking)).rejects.toThrow(
-        ConflictException,
+        'El correo electrÃ³nico ya estÃ¡ registrado',
       );
-      expect(traceService.warn).toHaveBeenCalled();
-      expect(creator.create).not.toHaveBeenCalled();
+      expect(traceService.warn).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.USE_CASE,
+        'CreateUserUseCase - duplicado (E11000)',
+        { email: 'juan@ejemplo.com' },
+      );
+      expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
     });
 
-    it('debe lanzar ConflictException si el username ya está en uso', async () => {
-      checker.checkEmailExists.mockResolvedValue(false);
-      checker.checkUserNameExists.mockResolvedValue(true);
+    it('debe lanzar ConflictException si el username ya está en uso (E11000 con keyPattern userName)', async () => {
+      passwordService.hashPassword.mockResolvedValue('hashed-password');
+      creator.create.mockRejectedValue(createDuplicateKeyError({ userName: 1 }));
 
       await expect(useCase.execute(dto, tracking)).rejects.toThrow(
-        ConflictException,
+        'El nombre de usuario ya estÃ¡ en uso',
       );
-      expect(creator.create).not.toHaveBeenCalled();
     });
 
     it('debe usar 3600 segundos de expiración por defecto si no hay configuración', async () => {
-      checker.checkEmailExists.mockResolvedValue(false);
-      checker.checkUserNameExists.mockResolvedValue(false);
       passwordService.hashPassword.mockResolvedValue('hashed-password');
       creator.create.mockResolvedValue(createdUser);
-      updater.update.mockResolvedValue(createdUser);
-      reader.getById.mockResolvedValue(createdUser);
       emailService.sendVerificationEmail.mockResolvedValue(undefined);
       configService.get.mockReturnValue(undefined);
 
       const result = await useCase.execute(dto, tracking);
 
-      const updateArg = updater.update.mock.calls[0][1] as {
-        verificationCodeExpires: Date;
-      };
+      const creado = creator.create.mock.calls[0][0] as User;
       const diffSeconds =
-        (updateArg.verificationCodeExpires.getTime() - Date.now()) / 1000;
+        ((creado.verificationCodeExpires as Date).getTime() - Date.now()) / 1000;
       expect(diffSeconds).toBeGreaterThan(3590);
       expect(diffSeconds).toBeLessThanOrEqual(3600);
       expect(result.id).toBe('user-1');
     });
 
-    it('debe omitir el envío del email si el usuario no se encuentra tras actualizar', async () => {
-      checker.checkEmailExists.mockResolvedValue(false);
-      checker.checkUserNameExists.mockResolvedValue(false);
+    it('debe propagar errores que no son de clave duplicada', async () => {
       passwordService.hashPassword.mockResolvedValue('hashed-password');
-      creator.create.mockResolvedValue(createdUser);
-      updater.update.mockResolvedValue(createdUser);
-      reader.getById.mockResolvedValue(null);
-      configService.get.mockReturnValue('3600');
+      creator.create.mockRejectedValue(new Error('DB down'));
 
-      const result = await useCase.execute(dto, tracking);
-
-      expect(updater.update).toHaveBeenCalled();
-      expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
-      expect(result.id).toBe('user-1');
+      await expect(useCase.execute(dto, tracking)).rejects.toThrow('DB down');
     });
 
     it('debe retornar el usuario creado aunque falle el envío del email de verificación', async () => {
-      checker.checkEmailExists.mockResolvedValue(false);
-      checker.checkUserNameExists.mockResolvedValue(false);
       passwordService.hashPassword.mockResolvedValue('hashed-password');
       creator.create.mockResolvedValue(createdUser);
-      updater.update.mockResolvedValue(createdUser);
-      reader.getById.mockResolvedValue(createdUser);
       emailService.sendVerificationEmail.mockRejectedValue(
         new Error('SMTP caído'),
       );

@@ -21,6 +21,7 @@ import { GetFavoritesQrsUseCase } from './application/use-cases/get-favorites-qr
 import { GetRecentActiveQrUseCase } from './application/use-cases/get-recent-active-qr.usecase';
 import { GetPublicQrUseCase } from './application/use-cases/get-public-qr.usecase';
 import { UpdateQrUseCase } from './application/use-cases/update-qr.usecase';
+import { ActivateManyQrsUseCase } from './application/use-cases/activate-many-qrs.usecase';
 import { DeleteQrUseCase } from './application/use-cases/delete-qr.usecase';
 
 import {
@@ -54,6 +55,7 @@ import {
     GetRecentActiveQrUseCase,
     GetPublicQrUseCase,
     UpdateQrUseCase,
+    ActivateManyQrsUseCase,
     DeleteQrUseCase,
 
     // Repositories
@@ -92,6 +94,7 @@ import {
     GetRecentActiveQrUseCase,
     GetPublicQrUseCase,
     UpdateQrUseCase,
+    ActivateManyQrsUseCase,
     DeleteQrUseCase,
   ],
 })
