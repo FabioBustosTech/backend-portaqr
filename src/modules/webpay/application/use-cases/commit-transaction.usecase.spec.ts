@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { InternalServerErrorException } from '@nestjs/common';
 import { CommitTransactionUseCase } from './commit-transaction.usecase';
-import type { ICanUpdateTransaction } from '../../domain/ports/queries/transaction.port';
+import type { ICanGetTransaction, ICanUpdateTransaction } from '../../domain/ports/queries/transaction.port';
 import type { IWebpayGateway, CommitTransactionResult } from '../../infrastructure/adapters/transbank-webpay.gateway';
 import {
   TRANSACTION_GET_PORT,
@@ -14,6 +14,7 @@ import type { WebpayTransaction } from '../../domain/entities/webpay-transaction
 
 describe('CommitTransactionUseCase', () => {
   let useCase: CommitTransactionUseCase;
+  let reader: jest.Mocked<ICanGetTransaction>;
   let updater: jest.Mocked<ICanUpdateTransaction>;
   let gateway: jest.Mocked<IWebpayGateway>;
   let traceService: jest.Mocked<TraceService>;
@@ -81,6 +82,7 @@ describe('CommitTransactionUseCase', () => {
     }).compile();
 
     useCase = module.get(CommitTransactionUseCase);
+    reader = module.get(TRANSACTION_GET_PORT);
     updater = module.get(TRANSACTION_UPDATE_PORT);
     gateway = module.get(WEBPAY_GATEWAY_PORT);
     traceService = module.get(TraceService);
@@ -93,6 +95,7 @@ describe('CommitTransactionUseCase', () => {
   describe('execute', () => {
     it('debe confirmar la transacción, mapearla, actualizarla y retornar el resultado con id', async () => {
       gateway.commitTransaction.mockResolvedValue(commitResult);
+      reader.getByToken.mockResolvedValue({ amount: 5000, sessionId: 'S-1' } as never);
       updater.updateByToken.mockResolvedValue(updatedTransaction);
 
       const result = await useCase.execute('tok-1', tracking);
@@ -140,6 +143,7 @@ describe('CommitTransactionUseCase', () => {
         buy_order: 'BO-2',
         session_id: 'S-2',
       });
+      reader.getByToken.mockResolvedValue({ amount: 1000, sessionId: 'S-2' } as never);
       updater.updateByToken.mockResolvedValue({ ...updatedTransaction, id: 'tx-2' });
 
       const result = await useCase.execute('tok-2', tracking);
@@ -152,7 +156,7 @@ describe('CommitTransactionUseCase', () => {
 
     it('debe lanzar InternalServerErrorException si la transacción no se encuentra en BD', async () => {
       gateway.commitTransaction.mockResolvedValue(commitResult);
-      updater.updateByToken.mockResolvedValue(null);
+      // reader.getByToken devuelve null por defecto → 'Transaction not found' antes del update
 
       await expect(useCase.execute('tok-1', tracking)).rejects.toThrow(
         InternalServerErrorException,
@@ -160,8 +164,24 @@ describe('CommitTransactionUseCase', () => {
       expect(traceService.warn).toHaveBeenCalledWith(
         tracking,
         TraceLayer.USE_CASE,
-        'CommitTransactionUseCase - transacciÃ³n no encontrada',
-        { token: 'tok-1' },
+        'CommitTransactionUseCase - transaccion no encontrada',
+        { tokenPreview: 'tok-1…' },
+      );
+    });
+
+    it('SPEC-009 A2: lanza error si el amount de Transbank no coincide con el persistido', async () => {
+      gateway.commitTransaction.mockResolvedValue(commitResult);
+      reader.getByToken.mockResolvedValue({ amount: 999, sessionId: 'S-1' } as never);
+
+      await expect(useCase.execute('tok-1', tracking)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+      expect(updater.updateByToken).not.toHaveBeenCalled();
+      expect(traceService.warn).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.USE_CASE,
+        'CommitTransactionUseCase - amount mismatch',
+        { persisted: 999, transbank: 5000 },
       );
     });
 
@@ -182,6 +202,7 @@ describe('CommitTransactionUseCase', () => {
 
     it('debe lanzar InternalServerErrorException si la actualización falla', async () => {
       gateway.commitTransaction.mockResolvedValue(commitResult);
+      reader.getByToken.mockResolvedValue({ amount: 5000, sessionId: 'S-1' } as never);
       updater.updateByToken.mockRejectedValue(new Error('DB down'));
 
       await expect(useCase.execute('tok-1', tracking)).rejects.toThrow(

@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { InternalServerErrorException } from '@nestjs/common';
 import { CreateTransactionUseCase } from './create-transaction.usecase';
 import type { ICanCreateTransaction } from '../../domain/ports/queries/transaction.port';
@@ -24,8 +24,10 @@ describe('CreateTransactionUseCase', () => {
     amount: 5000,
     buyOrder: 'BO-1',
     returnUrl: 'https://front.local/return',
-    sessionId: 'S-1',
   };
+
+  // SPEC-009 A2: sessionId ya no viene del body — lo inyecta el controller desde el token
+  const sessionIdFromToken = 'S-1';
 
   const gatewayResult = { token: 'tok-1', url: 'https://webpay.local/pay' };
 
@@ -83,11 +85,11 @@ describe('CreateTransactionUseCase', () => {
       gateway.createTransaction.mockResolvedValue(gatewayResult);
       creator.create.mockResolvedValue(mockTransaction);
 
-      const result = await useCase.execute(dto, tracking);
+      const result = await useCase.execute(dto, sessionIdFromToken, tracking);
 
       expect(gateway.createTransaction).toHaveBeenCalledWith(
         dto.buyOrder,
-        dto.sessionId,
+        sessionIdFromToken,
         dto.amount,
         dto.returnUrl,
         tracking,
@@ -98,7 +100,7 @@ describe('CreateTransactionUseCase', () => {
           token: gatewayResult.token,
           amount: dto.amount,
           buyOrder: dto.buyOrder,
-          sessionId: dto.sessionId,
+          sessionId: sessionIdFromToken,
           status: 'INITIALIZED',
         },
         tracking,
@@ -110,7 +112,7 @@ describe('CreateTransactionUseCase', () => {
       gateway.createTransaction.mockResolvedValue(gatewayResult);
       creator.create.mockResolvedValue(mockTransaction);
 
-      await useCase.execute(dto, tracking);
+      await useCase.execute(dto, sessionIdFromToken, tracking);
 
       expect(traceService.log).toHaveBeenCalledWith(
         tracking,
@@ -129,7 +131,7 @@ describe('CreateTransactionUseCase', () => {
     it('debe lanzar InternalServerErrorException si el gateway falla y trazar el error', async () => {
       gateway.createTransaction.mockRejectedValue(new Error('Transbank caído'));
 
-      await expect(useCase.execute(dto, tracking)).rejects.toThrow(
+      await expect(useCase.execute(dto, sessionIdFromToken, tracking)).rejects.toThrow(
         InternalServerErrorException,
       );
       expect(creator.create).not.toHaveBeenCalled();
@@ -145,7 +147,7 @@ describe('CreateTransactionUseCase', () => {
       gateway.createTransaction.mockResolvedValue(gatewayResult);
       creator.create.mockRejectedValue(new Error('DB down'));
 
-      await expect(useCase.execute(dto, tracking)).rejects.toThrow(
+      await expect(useCase.execute(dto, sessionIdFromToken, tracking)).rejects.toThrow(
         InternalServerErrorException,
       );
       expect(traceService.error).toHaveBeenCalled();

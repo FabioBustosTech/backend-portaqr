@@ -119,19 +119,19 @@ describe('WebpayController', () => {
   });
 
   describe('createTransaction', () => {
-    it('debe ejecutar el use case y retornar el resultado', async () => {
+    it('debe ejecutar el use case con el sessionId del token y retornar el resultado', async () => {
       const dto: CreateTransactionDto = {
         amount: 5000,
         buyOrder: 'BO-1',
         returnUrl: 'https://front.local/return',
-        sessionId: 'S-1',
       };
       const result = { token: 'tok-1', url: 'https://webpay.local/pay' };
       createTransactionUseCase.execute.mockResolvedValue(result);
 
-      const response = await controller.createTransaction(dto, tracking);
+      // SPEC-009 A2: el sessionId NO viene del body — se inyecta desde user.id del token
+      const response = await controller.createTransaction(dto, { id: 'S-1', role: 'user' }, tracking);
 
-      expect(createTransactionUseCase.execute).toHaveBeenCalledWith(dto, tracking);
+      expect(createTransactionUseCase.execute).toHaveBeenCalledWith(dto, 'S-1', tracking);
       expect(response).toEqual(result);
       expect(traceService.log).toHaveBeenCalledWith(
         tracking,
@@ -210,13 +210,13 @@ describe('WebpayController', () => {
         tracking,
         TraceLayer.CONTROLLER,
         'POST /webpay/refund',
-        { token: dto.token },
+        { tokenPreview: 'tok-1…' },
       );
     });
   });
 
   describe('getTransactionStatus', () => {
-    it('debe ejecutar la consulta de estado y retornar el resultado', async () => {
+    it('debe ejecutar la consulta de estado y retornar el resultado (ownership OK)', async () => {
       const result = {
         id: 'tx-1',
         token: 'tok-1',
@@ -227,15 +227,44 @@ describe('WebpayController', () => {
       };
       getTransactionStatusUseCase.execute.mockResolvedValue(result);
 
-      const response = await controller.getTransactionStatus('tok-1', tracking);
+      // SPEC-009 A2: actor dueño de la tx (sessionId === user.id)
+      const response = await controller.getTransactionStatus(
+        'tok-1',
+        { id: 'S-1', role: 'user' },
+        tracking,
+      );
 
       expect(getTransactionStatusUseCase.execute).toHaveBeenCalledWith('tok-1', tracking);
       expect(response).toEqual(result);
     });
+
+    it('SPEC-009 A2: 403 si la tx es de otro usuario (no admin)', async () => {
+      const result = {
+        id: 'tx-1',
+        token: 'tok-1',
+        amount: 5000,
+        buyOrder: 'BO-1',
+        sessionId: 'S-1',
+        status: 'AUTHORIZED',
+      };
+      getTransactionStatusUseCase.execute.mockResolvedValue(result);
+
+      await expect(
+        controller.getTransactionStatus('tok-1', { id: 'OTRO-USER', role: 'user' }, tracking),
+      ).rejects.toThrow('No tiene permiso para consultar esta transacción.');
+    });
+
+    it('SPEC-009 A2: 404 si la tx no existe o no tiene sessionId', async () => {
+      getTransactionStatusUseCase.execute.mockResolvedValue(null);
+
+      await expect(
+        controller.getTransactionStatus('tok-x', { id: 'S-1', role: 'user' }, tracking),
+      ).rejects.toThrow('Transacción no encontrada');
+    });
   });
 
   describe('getTransaction', () => {
-    it('debe retornar la transacción desde la BD', async () => {
+    it('debe retornar la transacción desde la BD (ownership OK)', async () => {
       const result = {
         id: 'tx-1',
         token: 'tok-1',
@@ -246,18 +275,38 @@ describe('WebpayController', () => {
       };
       getTransactionStatusUseCase.getFromDB.mockResolvedValue(result);
 
-      const response = await controller.getTransaction('tok-1', tracking);
+      const response = await controller.getTransaction(
+        'tok-1',
+        { id: 'S-1', role: 'user' },
+        tracking,
+      );
 
       expect(getTransactionStatusUseCase.getFromDB).toHaveBeenCalledWith('tok-1', tracking);
       expect(response).toEqual(result);
     });
 
-    it('debe retornar null si getFromDB no está disponible', async () => {
-      getTransactionStatusUseCase.getFromDB = undefined as never;
+    it('SPEC-009 A2: 403 si la tx es de otro usuario', async () => {
+      const result = {
+        id: 'tx-1',
+        token: 'tok-1',
+        amount: 5000,
+        buyOrder: 'BO-1',
+        sessionId: 'S-1',
+        status: 'AUTHORIZED',
+      };
+      getTransactionStatusUseCase.getFromDB.mockResolvedValue(result);
 
-      const response = await controller.getTransaction('tok-1', tracking);
+      await expect(
+        controller.getTransaction('tok-1', { id: 'OTRO-USER', role: 'user' }, tracking),
+      ).rejects.toThrow('No tiene permiso para consultar esta transacción.');
+    });
 
-      expect(response).toBeNull();
+    it('SPEC-009 A2: 404 si no hay transacción en BD', async () => {
+      getTransactionStatusUseCase.getFromDB.mockResolvedValue(null);
+
+      await expect(
+        controller.getTransaction('tok-x', { id: 'S-1', role: 'user' }, tracking),
+      ).rejects.toThrow('Transacción no encontrada');
     });
   });
 });

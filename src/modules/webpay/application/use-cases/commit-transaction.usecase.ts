@@ -34,17 +34,44 @@ export class CommitTransactionUseCase {
   ) {}
 
   async execute(token: string, tracking: TrackingContext): Promise<CommitTransactionMapped> {
-    this.traceService.log(tracking, TraceLayer.USE_CASE, 'CommitTransactionUseCase', { token });
+    this.traceService.log(tracking, TraceLayer.USE_CASE, 'CommitTransactionUseCase', {
+      tokenPreview: token ? token.slice(0, 8) + '…' : '',
+    });
 
     try {
       const result = await this.gateway.commitTransaction(token, tracking);
+
+      // SPEC-009 A2/B12: la transacción debe existir en BD y el amount devuelto por
+      // Transbank debe coincidir con el persistido — si no, NO se actualiza (evita
+      // discrepancias y commits sobre transacciones no creadas por la plataforma).
+      const existing = await this.reader.getByToken(token, tracking);
+      if (!existing) {
+        this.traceService.warn(
+          tracking,
+          TraceLayer.USE_CASE,
+          'CommitTransactionUseCase - transaccion no encontrada',
+          { tokenPreview: token ? token.slice(0, 8) + '…' : '' },
+        );
+        throw new Error('Transaction not found');
+      }
+      if (existing.amount !== result.amount) {
+        this.traceService.warn(
+          tracking,
+          TraceLayer.USE_CASE,
+          'CommitTransactionUseCase - amount mismatch',
+          { persisted: existing.amount, transbank: result.amount },
+        );
+        throw new Error('Amount mismatch: persisted amount differs from Transbank');
+      }
 
       const mappedTransaction = this.mapToTransaction(result);
 
       const updated = await this.updater.updateByToken(token, mappedTransaction, tracking);
 
       if (!updated) {
-        this.traceService.warn(tracking, TraceLayer.USE_CASE, 'CommitTransactionUseCase - transacciÃ³n no encontrada', { token });
+        this.traceService.warn(tracking, TraceLayer.USE_CASE, 'CommitTransactionUseCase - transaccion no encontrada', {
+          tokenPreview: token ? token.slice(0, 8) + '…' : '',
+        });
         throw new Error('Transaction not found');
       }
 

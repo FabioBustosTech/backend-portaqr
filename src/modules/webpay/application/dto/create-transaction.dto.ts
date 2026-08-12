@@ -12,8 +12,4 @@ export class CreateTransactionDto {
   @IsString()
   @IsNotEmpty()
   returnUrl: string;
-
-  @IsString()
-  @IsNotEmpty()
-  sessionId: string;
 }
