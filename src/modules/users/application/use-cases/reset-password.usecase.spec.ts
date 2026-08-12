@@ -1,6 +1,7 @@
 ﻿import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { ResetPasswordUseCase } from './reset-password.usecase';
+import { IncrementTokenVersionUseCase } from './increment-token-version.usecase';
 import { USER_GET_PORT, USER_UPDATE_PORT } from '../../domain/constants/user.tokens';
 import type { ICanGetUser } from '../../domain/ports/queries/get-user.port';
 import type { ICanUpdateUser } from '../../domain/ports/queries/create-user.port';
@@ -51,6 +52,10 @@ describe('ResetPasswordUseCase', () => {
             update: jest.fn(),
             updateLastLogin: jest.fn(),
           },
+        },
+        {
+          provide: IncrementTokenVersionUseCase,
+          useValue: { execute: jest.fn() },
         },
         {
           provide: PasswordService,

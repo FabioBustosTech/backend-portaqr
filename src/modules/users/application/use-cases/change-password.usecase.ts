@@ -5,6 +5,7 @@ import type { TrackingContext } from '../../../../common/decorators/tracking.dec
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import { USER_GET_PORT, USER_UPDATE_PORT } from '../../domain/constants/user.tokens';
 import { PasswordService } from '../../domain/services/password.service';
+import { IncrementTokenVersionUseCase } from './increment-token-version.usecase';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 
 @Injectable()
@@ -16,6 +17,7 @@ export class ChangePasswordUseCase {
     private readonly updater: ICanUpdateUser,
     private readonly traceService: TraceService,
     private readonly passwordService: PasswordService,
+    private readonly incrementTokenVersionUseCase: IncrementTokenVersionUseCase,
   ) {}
 
   async execute(
@@ -43,6 +45,9 @@ export class ChangePasswordUseCase {
 
     const hashedPassword = await this.passwordService.hashPassword(newPassword);
     await this.updater.update(usuarioId, { password: hashedPassword }, tracking);
+
+    // SPEC-009 A8: cambiar la contraseña invalida las sesiones previas (tokenVersion++)
+    await this.incrementTokenVersionUseCase.execute(usuarioId, tracking);
 
     this.traceService.log(tracking, TraceLayer.USE_CASE, 'ChangePasswordUseCase - cambiada', { usuarioId });
   }

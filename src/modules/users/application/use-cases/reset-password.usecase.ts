@@ -5,6 +5,7 @@ import type { TrackingContext } from '../../../../common/decorators/tracking.dec
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import { USER_GET_PORT, USER_UPDATE_PORT } from '../../domain/constants/user.tokens';
 import { PasswordService } from '../../domain/services/password.service';
+import { IncrementTokenVersionUseCase } from './increment-token-version.usecase';
 import { VERIFICATION_MAX_ATTEMPTS } from '../../../../common/utils/code-generator.util';
 
 @Injectable()
@@ -16,6 +17,7 @@ export class ResetPasswordUseCase {
     private readonly updater: ICanUpdateUser,
     private readonly traceService: TraceService,
     private readonly passwordService: PasswordService,
+    private readonly incrementTokenVersionUseCase: IncrementTokenVersionUseCase,
   ) {}
 
   async execute(
@@ -62,6 +64,9 @@ export class ResetPasswordUseCase {
       passwordResetExpires: undefined,
       passwordResetAttempts: 0,
     }, tracking);
+
+    // SPEC-009 A8: resetear la contraseña invalida las sesiones previas (tokenVersion++)
+    await this.incrementTokenVersionUseCase.execute(user.id, tracking);
 
     this.traceService.log(tracking, TraceLayer.USE_CASE, 'ResetPasswordUseCase - actualizado', { email });
   }
