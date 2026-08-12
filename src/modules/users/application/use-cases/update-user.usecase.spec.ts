@@ -1,5 +1,5 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+﻿import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { UpdateUserUseCase } from './update-user.usecase';
 import { USER_UPDATE_PORT } from '../../domain/constants/user.tokens';
 import type { ICanUpdateUser } from '../../domain/ports/queries/create-user.port';
@@ -58,6 +58,10 @@ describe('UpdateUserUseCase', () => {
   });
 
   describe('execute', () => {
+    const ownerActor = { id: 'user-1', role: 'user' };
+    const adminActor = { id: 'admin-1', role: 'admin' };
+    const otherActor = { id: 'user-2', role: 'user' };
+
     it('debe actualizar el usuario y retornarlo', async () => {
       const updatedUser: User = { ...mockUser, firstName: 'NuevoNombre' };
       updater.update.mockResolvedValue(updatedUser);
@@ -65,6 +69,7 @@ describe('UpdateUserUseCase', () => {
       const result = await useCase.execute(
         'user-1',
         { firstName: 'NuevoNombre' },
+        ownerActor,
         tracking,
       );
 
@@ -86,8 +91,38 @@ describe('UpdateUserUseCase', () => {
       updater.update.mockResolvedValue(null);
 
       await expect(
-        useCase.execute('user-1', { firstName: 'X' }, tracking),
+        useCase.execute('user-1', { firstName: 'X' }, ownerActor, tracking),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('SPEC-009 A1: rechaza con 403 si el actor no es dueño ni admin (no llama al repo)', async () => {
+      await expect(
+        useCase.execute('user-1', { firstName: 'X' }, otherActor, tracking),
+      ).rejects.toThrow(ForbiddenException);
+      expect(updater.update).not.toHaveBeenCalled();
+    });
+
+    it('SPEC-009 A1: admin puede actualizar a cualquier usuario (bypass)', async () => {
+      const updatedUser: User = { ...mockUser, firstName: 'AdminEdit' };
+      updater.update.mockResolvedValue(updatedUser);
+
+      const result = await useCase.execute('user-1', { firstName: 'AdminEdit' }, adminActor, tracking);
+      expect(result).toEqual(updatedUser);
+    });
+
+    it('SPEC-009 A1: isActive solo admin — user recibe 403 aunque sea el dueño', async () => {
+      await expect(
+        useCase.execute('user-1', { isActive: false } as Partial<User>, ownerActor, tracking),
+      ).rejects.toThrow(ForbiddenException);
+      expect(updater.update).not.toHaveBeenCalled();
+    });
+
+    it('SPEC-009 A1: admin puede modificar isActive', async () => {
+      const updatedUser: User = { ...mockUser, isActive: false } as User;
+      updater.update.mockResolvedValue(updatedUser);
+
+      const result = await useCase.execute('user-1', { isActive: false } as Partial<User>, adminActor, tracking);
+      expect(result).toEqual(updatedUser);
     });
   });
 

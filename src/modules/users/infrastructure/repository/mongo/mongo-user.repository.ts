@@ -7,7 +7,7 @@ import type { ICanGetAllUser, ICanGetUser } from '../../../domain/ports/queries/
 import type { ICanCreateUser, ICanUpdateUser, ICanDeleteUser, ICanCheckUser } from '../../../domain/ports/queries/create-user.port';
 import { UserSchema, UserDocument } from './schemas/user.schema';
 import { UserMongoMapper } from './mappers/user-mongo.mapper';
-// SPEC-008 H3 (R2): input de b�squeda como literal, sin metacaracteres de regex (ReDoS)
+// SPEC-008 H3 (R2): input de b�squeda como literal, sin metacaracteres de regex (ReDoS)
 import escapeStringRegexp = require('escape-string-regexp');
 import type { PaginatedResult } from '../../../../../common/dto/pagination.dto';
 import type { TrackingContext } from '../../../../../common/decorators/tracking.decorator';
@@ -160,10 +160,14 @@ export class MongoUserRepository
     tracking: TrackingContext,
   ): Promise<User | null> {
     try {
+      // SPEC-009 A1 (defensa en profundidad): el rol jamás se actualiza por este path —
+      // solo create()/createAdmin() lo fijan. Se destruye explícitamente del $set.
+      const { role: _role, ...safeData } = UserMongoMapper.toSchemaData(data);
+      void _role;
       const actualizado = await this.userModel
         .findByIdAndUpdate(
           id,
-          { $set: UserMongoMapper.toSchemaData(data) },
+          { $set: safeData },
           { new: true },
         )
         .lean()

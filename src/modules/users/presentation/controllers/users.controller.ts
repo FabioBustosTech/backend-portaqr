@@ -11,7 +11,10 @@
   HttpCode,
   UseGuards,
   UnauthorizedException,
+  ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
+import { isValidObjectId } from 'mongoose';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CreateUserUseCase } from '../../application/use-cases/create-user.usecase';
 import { GetAllUserUseCase } from '../../application/use-cases/get-all-user.usecase';
@@ -33,6 +36,7 @@ import { GetUser } from '../../../../common/decorators/user.decorator';
 import { Tracking } from '../../../../common/decorators/tracking.decorator';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
+import { assertOwnerOrAdmin } from '../../../../common/utils/ownership.utils';
 // SPEC-008 H4 (R4): 5 req/min en registro (anti-bruteforce de cuentas)
 import { Throttle } from '@nestjs/throttler';
 import { SENSITIVE_ENDPOINT_THROTTLE } from 'src/common/config/throttle.config';
@@ -240,10 +244,24 @@ export class UsersController {
   async update(
     @Param('id') id: string,
     @Body() updateUserDto: UpdateUserDto,
+    @GetUser() user: AuthenticatedUser,
     @Tracking() tracking: TrackingContext,
   ) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'PATCH /users/:id', { id });
-    return this.updateUserUseCase.execute(id, updateUserDto, tracking);
+
+    if (!user) {
+      throw new UnauthorizedException('User not authenticated.');
+    }
+
+    // SPEC-009 A1: ObjectId inválido → 400 (evita CastError → 500)
+    if (!isValidObjectId(id)) {
+      throw new BadRequestException('ID de usuario inválido.');
+    }
+
+    // SPEC-009 A1 (dos capas): fail-fast HTTP — dueño o admin (el usecase repite la regla)
+    assertOwnerOrAdmin(id, user, 'No tiene permiso para modificar este usuario.');
+
+    return this.updateUserUseCase.execute(id, updateUserDto, user, tracking);
   }
 
   @Delete(':id')
