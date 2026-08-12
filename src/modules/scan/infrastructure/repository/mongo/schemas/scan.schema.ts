@@ -36,12 +36,17 @@ export class ScanSchema {
       platform: { type: String },
       browser: { type: String },
       isMobile: { type: Boolean },
+      // SPEC-008 E2E: os y model se persisten (el frontend los envía)
+      os: { type: String },
+      model: { type: String },
     },
   })
   device?: {
     platform: string;
     browser: string;
     isMobile: boolean;
+    os?: string;
+    model?: string;
   };
 
   @Prop({ default: true })
@@ -59,6 +64,14 @@ export class ScanSchema {
   @Prop({ required: true })
   userId: string;
 
+  // SPEC-008 E2E: ip y referer se persisten (el frontend los envía y ahora se
+  // usan para analytics de origen del escaneo).
+  @Prop()
+  ip?: string;
+
+  @Prop()
+  referer?: string;
+
   @Prop()
   createdAt?: Date;
 
@@ -68,25 +81,25 @@ export class ScanSchema {
 
 export const ScanSchemaDefinition = SchemaFactory.createForClass(ScanSchema);
 
-// Agregando Ã­ndices
+// Agregando índices
 ScanSchemaDefinition.index({ idQr: 1 });
 ScanSchemaDefinition.index({ scanDate: 1 });
 ScanSchemaDefinition.index({ userId: 1 });
 ScanSchemaDefinition.index({ userIdScan: 1 });
 ScanSchemaDefinition.index({ successful: 1 });
 
-// Ãndice compuesto para bÃºsquedas frecuentes
+// Índice compuesto para búsquedas frecuentes
 ScanSchemaDefinition.index({ userId: 1, scanDate: -1 });
 ScanSchemaDefinition.index({ idQr: 1, scanDate: -1 });
 
-// Ãndice geoespacial para bÃºsquedas por ubicaciÃ³n
+// Índice geoespacial para búsquedas por ubicación
 ScanSchemaDefinition.index({ 'location.latitude': 1, 'location.longitude': 1 });
 
-// Ãndice para bÃºsquedas por dispositivo
+// Índice para búsquedas por dispositivo
 ScanSchemaDefinition.index({ 'device.platform': 1 });
 ScanSchemaDefinition.index({ 'device.browser': 1 });
 
-// Ãndices para fechas
+// Índices para fechas
 ScanSchemaDefinition.index({ createdAt: 1 });
 ScanSchemaDefinition.index({ updatedAt: 1 });
 

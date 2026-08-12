@@ -15,6 +15,8 @@ export class ScanMongoMapper {
       userIdScan: doc.userIdScan,
       lastScanId: doc.lastScanId,
       userId: doc.userId,
+      ip: doc.ip,
+      referer: doc.referer,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     };
@@ -32,6 +34,8 @@ export class ScanMongoMapper {
       userIdScan: scan.userIdScan,
       lastScanId: scan.lastScanId,
       userId: scan.userId,
+      ip: scan.ip,
+      referer: scan.referer,
     };
   }
 }

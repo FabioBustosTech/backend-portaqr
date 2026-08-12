@@ -290,7 +290,10 @@ export class QrData {
   @ValidateIf(o => o.typeQr === 'vcard')
   @ValidateNested({ message: 'Los datos de la tarjeta de contacto deben ser válidos' })
   @Type(() => VCard)
-  vcard?: VCard;
+  // SPEC-008 E2E: el contrato real FE↔BD es `vcardData` (schema qr.schema.ts L132,
+  // frontend envía/lee vcardData). El nombre `vcard` nunca se usó en la práctica
+  // y forbidNonWhitelisted lo hacía fallar con 400 → renombrado al contrato real.
+  vcardData?: VCard;
 
   @ValidateIf(o => o.typeQr === 'pet')
   @ValidateNested({ message: 'Los datos de la mascota deben ser válidos' })

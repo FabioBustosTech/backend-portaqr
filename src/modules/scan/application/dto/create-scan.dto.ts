@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, ValidateNested, IsNotEmpty, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsBoolean, ValidateNested, IsNotEmpty, IsUUID, IsDate } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -63,6 +63,25 @@ class DeviceInfoDto {
   })
   @IsBoolean({ message: 'El indicador de móvil debe ser un valor booleano' })
   isMobile: boolean;
+
+  // SPEC-008 E2E: el frontend envía os y model (getDeviceInfo del frontend).
+  // Antes se descartaban silenciosamente; con forbidNonWhitelisted rompían el
+  // registro de escaneos. Ahora se aceptan y persisten.
+  @ApiProperty({
+    description: 'Sistema operativo detectado del dispositivo',
+    example: 'Android 13'
+  })
+  @IsOptional()
+  @IsString({ message: 'El sistema operativo debe ser una cadena de texto' })
+  os?: string;
+
+  @ApiProperty({
+    description: 'Modelo del dispositivo',
+    example: 'Pixel 7'
+  })
+  @IsOptional()
+  @IsString({ message: 'El modelo debe ser una cadena de texto' })
+  model?: string;
 }
 
 export class CreateScanDto {
@@ -74,6 +93,14 @@ export class CreateScanDto {
     example: '123e4567-e89b-12d3-a456-426614174000'
   })
   readonly idQr: string;
+
+  // SPEC-008 E2E: el frontend envía scanDate (el schema scan.schema.ts L12 lo
+  // persiste) pero el DTO no lo declaraba → forbidNonWhitelisted devolvía 400
+  // y los escaneos no se registraban. Se añade al contrato real.
+  @IsOptional()
+  @IsDate({ message: 'La fecha de escaneo debe ser una fecha válida' })
+  @Type(() => Date)
+  scanDate?: Date;
   
   @ApiProperty({
     description: 'Información de ubicación del escaneo'
@@ -141,4 +168,23 @@ export class CreateScanDto {
   })
   @IsString({ message: 'El identificador del usuario debe ser una cadena de texto' })
   userId: string;
+
+  // SPEC-008 E2E: el frontend envía ip y referer (datos de origen del escaneo).
+  // Antes se descartaban silenciosamente (no estaban en el DTO ni en el schema);
+  // con forbidNonWhitelisted rompían el registro. Ahora se aceptan y persisten.
+  @ApiProperty({
+    description: 'Dirección IP del visitante que escaneó',
+    example: '190.45.12.3'
+  })
+  @IsOptional()
+  @IsString({ message: 'La IP debe ser una cadena de texto' })
+  ip?: string;
+
+  @ApiProperty({
+    description: 'Referer (origen de la visita) del escaneo',
+    example: 'https://portaqr.cl/qr/abc'
+  })
+  @IsOptional()
+  @IsString({ message: 'El referer debe ser una cadena de texto' })
+  referer?: string;
 }

@@ -23,6 +23,7 @@ export class CreateScanUseCase {
 
     const scan = new ScanEntity({
       idQr: dto.idQr,
+      scanDate: dto.scanDate,
       location: dto.location,
       device: dto.device,
       origen: dto.origen,
@@ -31,6 +32,8 @@ export class CreateScanUseCase {
       userIdScan: dto.userIdScan,
       lastScanId: dto.lastScanId,
       userId: dto.userId,
+      ip: dto.ip,
+      referer: dto.referer,
     });
 
     const saved = await this.creator.create(scan, tracking);

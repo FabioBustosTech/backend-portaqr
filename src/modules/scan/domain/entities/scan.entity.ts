@@ -12,6 +12,8 @@ export interface ScanDevice {
   platform: string;
   browser: string;
   isMobile: boolean;
+  os?: string;
+  model?: string;
 }
 
 export interface Scan {
@@ -26,6 +28,8 @@ export interface Scan {
   userIdScan?: string;
   lastScanId?: string;
   userId: string;
+  ip?: string;
+  referer?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -42,6 +46,8 @@ export class ScanEntity implements Scan {
   userIdScan?: string;
   lastScanId?: string;
   userId: string;
+  ip?: string;
+  referer?: string;
   createdAt?: Date;
   updatedAt?: Date;
 
@@ -57,6 +63,8 @@ export class ScanEntity implements Scan {
     this.userIdScan = data.userIdScan;
     this.lastScanId = data.lastScanId;
     this.userId = data.userId || '';
+    this.ip = data.ip;
+    this.referer = data.referer;
     this.createdAt = data.createdAt;
     this.updatedAt = data.updatedAt;
   }
