@@ -43,6 +43,10 @@ import { Public } from 'src/common/decorators/public.decorator';
 import { GetUser } from 'src/common/decorators/user.decorator';
 import { Tracking } from 'src/common/decorators/tracking.decorator';
 import type { TrackingContext } from 'src/common/decorators/tracking.decorator';
+// SPEC-011 Capa B: rate limiting por idQr del flujo público de QR
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
+import { QrPublicThrottlerGuard } from 'src/common/guards/qr-public-throttler.guard';
+import { QR_PUBLIC_THROTTLE, QR_SEO_THROTTLE } from 'src/common/config/throttle.config';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
 import type { User } from 'src/modules/users/domain/entities/user.entity';
 import { StorageService } from 'src/modules/storage/storage.service';
@@ -378,6 +382,10 @@ export class QrController {
 
   @Get('seo-idqr')
   @Public()
+  // SPEC-011 Capa B: 10 req/min (sin idQr → clave IP interna) — fuera del guard global 10/min
+  @SkipThrottle({ default: true })
+  @Throttle(QR_SEO_THROTTLE)
+  @UseGuards(QrPublicThrottlerGuard)
   @ApiOperation({ summary: 'Obtener los Ãºltimos 500 QRs activos con formato SEO' })
   @ApiResponse({ status: 200, description: 'Lista de los Ãºltimos 500 QRs activos con formato SEO', type: [QrSeoDto] })
   @ApiResponse({ status: 400, description: 'Error en la solicitud' })
@@ -706,6 +714,10 @@ export class QrController {
 
   @Get('public/:id')
   @Public()
+  // SPEC-011 Capa B: 60 req/min por idQr — fuera del guard global 10/min (lo rompería)
+  @SkipThrottle({ default: true })
+  @Throttle(QR_PUBLIC_THROTTLE)
+  @UseGuards(QrPublicThrottlerGuard)
   @ApiOperation({ summary: 'Obtener URL de redirecciÃ³n de un QR pÃºblico' })
   @ApiResponse({ status: 200, description: 'URL de redirecciÃ³n', type: PublicRedirectUrlResponse })
   @ApiResponse({ status: 404, description: 'QR no encontrado' })

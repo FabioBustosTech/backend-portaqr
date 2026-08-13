@@ -1,5 +1,6 @@
 ﻿import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { ScanController } from './scan.controller';
 import { CreateScanUseCase } from '../../application/use-cases/create-scan.usecase';
 import { GetScanStatsUseCase } from '../../application/use-cases/get-scan-stats.usecase';
@@ -50,6 +51,9 @@ describe('ScanController', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
+      // SPEC-011: el controller usa QrPublicThrottlerGuard → registrar los
+      // providers del throttler (THROTTLER:MODULE_OPTIONS + ThrottlerStorage)
+      imports: [ThrottlerModule.forRoot({ throttlers: [{ limit: 100, ttl: 60_000 }] })],
       controllers: [ScanController],
       providers: [
         {

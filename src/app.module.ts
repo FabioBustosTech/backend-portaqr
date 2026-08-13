@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { qrOverloadThrottler } from './common/config/throttle.config';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -27,6 +28,9 @@ import { RequestLoggerEntryMiddleware } from './middleware/request-logger-entry.
     // SPEC-008 H4 (R4): rate limiting global — 10 req/min por defecto
     // (configurable con THROTTLE_TTL/THROTTLE_LIMIT). Reglas más agresivas
     // (5/min) en @Throttle de login/refresh/registro/contacto.
+    // SPEC-011 Capa B: throttler `idqr` declarado (límite de sobrecarga global
+    // alto); las rutas públicas QR lo sobreescriben por idQr con @Throttle +
+    // QrPublicThrottlerGuard (60/min public, 120/min scan, 10/min seo).
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -36,6 +40,7 @@ import { RequestLoggerEntryMiddleware } from './middleware/request-logger-entry.
             ttl: Number(configService.get<number>('THROTTLE_TTL')) || 60,
             limit: Number(configService.get<number>('THROTTLE_LIMIT')) || 10,
           },
+          qrOverloadThrottler(),
         ],
       }),
     }),
