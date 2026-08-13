@@ -28,6 +28,10 @@ import { Tracking } from 'src/common/decorators/tracking.decorator';
 import type { TrackingContext } from 'src/common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
 import { assertOwnerOrAdmin } from 'src/common/utils/ownership.utils';
+// SPEC-011 Capa B: rate limiting por idQr de POST /scan/stats
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
+import { QrPublicThrottlerGuard } from 'src/common/guards/qr-public-throttler.guard';
+import { QR_SCAN_THROTTLE } from 'src/common/config/throttle.config';
 
 interface AuthenticatedUser {
   id: string;
@@ -52,6 +56,10 @@ export class ScanController {
 
   @Post('stats')
   @Public()
+  // SPEC-011 Capa B: 120 req/min por idQr (anti-inflado) — fuera del guard global 10/min
+  @SkipThrottle({ default: true })
+  @Throttle(QR_SCAN_THROTTLE)
+  @UseGuards(QrPublicThrottlerGuard)
   @ApiOperation({ summary: 'Registra un nuevo escaneo de código QR' })
   @ApiResponse({ status: HttpStatus.CREATED, description: 'Escaneo registrado exitosamente' })
   @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Datos de entrada inválidos' })

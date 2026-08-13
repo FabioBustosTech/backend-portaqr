@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { INestApplication, UnprocessableEntityException } from '@nestjs/common';
 import * as request from 'supertest';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { QrController } from './qr.controller';
 import { JwtAuthGuard } from 'src/modules/auth/infrastructure/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/modules/auth/infrastructure/guards/roles.guard';
@@ -72,6 +73,9 @@ describe('POST /qr/list-pdf — integración multipart (SPEC-005 §8.1)', () => 
     uploadPdfMock = jest.fn();
 
     const moduleRef = await Test.createTestingModule({
+      // SPEC-011: el controller usa QrPublicThrottlerGuard → registrar los
+      // providers del throttler (THROTTLER:MODULE_OPTIONS + ThrottlerStorage)
+      imports: [ThrottlerModule.forRoot({ throttlers: [{ limit: 100, ttl: 60_000 }] })],
       controllers: [QrController],
       providers: [
         { provide: CreateQrUseCase, useValue: { execute: jest.fn() } },
