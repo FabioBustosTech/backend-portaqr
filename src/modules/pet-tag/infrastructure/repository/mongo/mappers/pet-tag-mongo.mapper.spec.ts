@@ -1,4 +1,4 @@
-import { PetTagMongoMapper } from './pet-tag-mongo.mapper';
+﻿import { PetTagMongoMapper } from './pet-tag-mongo.mapper';
 import { Types } from 'mongoose';
 import type { PetTag } from '../../../../domain/entities/pet-tag.entity';
 
@@ -31,6 +31,8 @@ describe('PetTagMongoMapper', () => {
         commercialStatus: 'VENDIDO',
         isFavorite: true,
         assignedStoreName: 'Tienda',
+        activationAttempts: 0,
+        activationLockedUntil: null,
         createdAt: new Date('2024-01-01'),
         updatedAt: new Date('2024-01-02'),
       };
@@ -77,6 +79,8 @@ describe('PetTagMongoMapper', () => {
         expiration: null,
         commercialStatus: 'EN_BODEGA',
         isFavorite: false,
+        activationAttempts: 0,
+        activationLockedUntil: null,
         assignedStoreName: null,
       });
 

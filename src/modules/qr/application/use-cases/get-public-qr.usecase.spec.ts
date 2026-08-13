@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { GetPublicQrUseCase } from './get-public-qr.usecase';
 import type { ICanGetQr } from '../../domain/ports/queries/qr.port';
@@ -75,7 +75,7 @@ describe('GetPublicQrUseCase', () => {
       expect(result).toEqual({
         data: mockQrActivo.data,
         name: mockQrActivo.name,
-        id: mockQrActivo.userId,
+        id: mockQrActivo.idQr, // SPEC-009 A10: nunca el userId del dueño
         description: mockQrActivo.description,
       });
     });

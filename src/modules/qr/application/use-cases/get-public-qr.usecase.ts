@@ -37,7 +37,8 @@ export class GetPublicQrUseCase {
     return {
       data: qr.data,
       name: qr.name || '',
-      id: qr.userId,
+      // SPEC-009 A10: id = qr.idQr (UUID público) — NUNCA el userId del dueño
+      id: qr.idQr,
       description: qr.description || '',
     };
   }

@@ -89,6 +89,13 @@ export class PetTagSchema {
   @Prop({ type: Boolean, default: false })
   isFavorite: boolean;
 
+  // SPEC-009 A12: límite de intentos de activación (PIN) — 5 fallos → bloqueo 30 min
+  @Prop({ type: Number, default: 0 })
+  activationAttempts: number;
+
+  @Prop({ type: Date, default: null })
+  activationLockedUntil: Date | null;
+
   @Prop({ type: String, default: null, index: true })
   assignedStoreName: string | null;
 
