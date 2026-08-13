@@ -18,6 +18,8 @@ import {
 } from '../../domain/entities/qr-activate.entity';
 import type { QrActivate } from '../../domain/entities/qr-activate.entity';
 import { CreateQrActivateDto } from '../dto/create-qr-activate.dto';
+import { GetPlanUseCase } from '../../../plan/application/use-cases/get-plan.usecase';
+import { GetQrUseCase } from '../../../qr/application/use-cases/get-qr.usecase';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 
 describe('CreateQrActivateUseCase', () => {
@@ -25,6 +27,8 @@ describe('CreateQrActivateUseCase', () => {
   let creator: jest.Mocked<ICanCreateQrActivate>;
   let qrActivator: jest.Mocked<ICanActivateQr>;
   let traceService: jest.Mocked<TraceService>;
+  let getPlanUseCase: jest.Mocked<GetPlanUseCase>; // SPEC-009 B12
+  let getQrUseCase: jest.Mocked<GetQrUseCase>; // SPEC-009 B12
 
   const tracking: TrackingContext = { trackingId: 't-1', sessionId: 's-1' };
   // SPEC-009 A3: el actor (del token) decide userId/state por rol
@@ -35,11 +39,10 @@ describe('CreateQrActivateUseCase', () => {
   const dto: CreateQrActivateDto = {
     methodActivation: MethodActivation.WEBPAY,
     webpayToken: 'tx-1',
-    price: { TotalPrice: 100, TotalTax: 19 },
     qrList: [
       {
         qrCode: 'qr-1',
-        price: 100,
+        planId: 'plan-1', // SPEC-009 B12: el precio sale del plan
         expirationDate,
         duration: '12 meses',
       },
@@ -62,6 +65,7 @@ describe('CreateQrActivateUseCase', () => {
       {
         qrCode: 'qr-1',
         price: 100,
+        plan: 'plan-1',
         expirationDate,
         duration: '12 meses',
       },
@@ -87,6 +91,14 @@ describe('CreateQrActivateUseCase', () => {
           },
         },
         {
+          provide: GetPlanUseCase,
+          useValue: { execute: jest.fn() },
+        },
+        {
+          provide: GetQrUseCase,
+          useValue: { execute: jest.fn() },
+        },
+        {
           provide: TraceService,
           useValue: {
             log: jest.fn(),
@@ -102,6 +114,11 @@ describe('CreateQrActivateUseCase', () => {
     creator = module.get(QR_ACTIVATE_CREATE_PORT);
     qrActivator = module.get(QR_ACTIVATE_QR_PORT);
     traceService = module.get(TraceService);
+    getPlanUseCase = module.get(GetPlanUseCase);
+    getQrUseCase = module.get(GetQrUseCase);
+    // SPEC-009 B12: plan con precio y QR del dueño (user-1)
+    getPlanUseCase.execute.mockResolvedValue({ id: 'plan-1', price: 100 } as never);
+    getQrUseCase.execute.mockResolvedValue({ idQr: 'qr-1', userId: 'user-1' } as never);
   });
 
   it('debe estar definido', () => {
@@ -132,13 +149,15 @@ describe('CreateQrActivateUseCase', () => {
         date: expect.any(Date),
         state: WebpayState.INITIAL,
       });
-      expect(createdEntity.price).toEqual(dto.price);
+      // SPEC-009 B12: el precio se calcula del PLAN (snapshot) — no del body
+      expect(createdEntity.price).toEqual({ TotalPrice: 100, TotalTax: 19, TotalDiscount: 0 });
       expect(createdEntity.userId).toBe('user-1');
       expect(createdEntity.documentType).toBe(DocumentType.BOLETA);
       expect(createdEntity.qrList).toEqual([
         {
           qrCode: 'qr-1',
-          price: 100,
+          price: 100, // plan.price (snapshot)
+          plan: 'plan-1',
           expirationDate,
           duration: '12 meses',
         },
@@ -183,8 +202,8 @@ describe('CreateQrActivateUseCase', () => {
       const multiQrDto: CreateQrActivateDto = {
         ...dto,
         qrList: [
-          { qrCode: 'qr-1', price: 50, expirationDate, duration: '6 meses' },
-          { qrCode: 'qr-2', price: 50, expirationDate, duration: '6 meses' },
+          { qrCode: 'qr-1', planId: 'plan-1', expirationDate, duration: '6 meses' },
+          { qrCode: 'qr-2', planId: 'plan-1', expirationDate, duration: '6 meses' },
         ],
       };
       creator.create.mockResolvedValue(mockActivation);
@@ -204,8 +223,8 @@ describe('CreateQrActivateUseCase', () => {
       const multiQrDto: CreateQrActivateDto = {
         ...dto,
         qrList: [
-          { qrCode: 'qr-1', price: 50, expirationDate, duration: '6 meses' },
-          { qrCode: 'qr-inexistente', price: 50, expirationDate, duration: '6 meses' },
+          { qrCode: 'qr-1', planId: 'plan-1', expirationDate, duration: '6 meses' },
+          { qrCode: 'qr-inexistente', planId: 'plan-1', expirationDate, duration: '6 meses' },
         ],
       };
       creator.create.mockResolvedValue(mockActivation);

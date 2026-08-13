@@ -1,4 +1,4 @@
-import { Injectable, Inject, ForbiddenException } from '@nestjs/common';
+import { Injectable, Inject, ForbiddenException, BadRequestException } from '@nestjs/common';
 import type { ICanCreateQrActivate, ICanActivateQr } from '../../domain/ports/queries/qr-activate.port';
 import { QrActivateEntity, ActivationState, WebpayState } from '../../domain/entities/qr-activate.entity';
 import { CreateQrActivateDto } from '../dto/create-qr-activate.dto';
@@ -6,11 +6,16 @@ import type { QrActivate } from '../../domain/entities/qr-activate.entity';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import { QR_ACTIVATE_CREATE_PORT, QR_ACTIVATE_QR_PORT } from '../../domain/constants/qr-activate.tokens';
+import { GetPlanUseCase } from '../../../plan/application/use-cases/get-plan.usecase';
+import { GetQrUseCase } from '../../../qr/application/use-cases/get-qr.usecase';
 
 export interface QrActivateActor {
   id: string;
   role: string;
 }
+
+/** SPEC-009 B12: IVA aplicado al total (el TotalTax del snapshot). */
+const TAX_RATE = 0.19;
 
 @Injectable()
 export class CreateQrActivateUseCase {
@@ -19,6 +24,8 @@ export class CreateQrActivateUseCase {
     private readonly creator: ICanCreateQrActivate,
     @Inject(QR_ACTIVATE_QR_PORT)
     private readonly qrActivator: ICanActivateQr,
+    private readonly getPlanUseCase: GetPlanUseCase,
+    private readonly getQrUseCase: GetQrUseCase,
     private readonly traceService: TraceService,
   ) {}
 
@@ -58,21 +65,56 @@ export class CreateQrActivateUseCase {
         }
       : undefined;
 
+    // SPEC-009 B12: el precio se calcula desde el PLAN (fuente de verdad) y se congela
+    // como SNAPSHOT — el cliente indica QUÉ plan, no CUÁNTO cuesta.
+    const qrList: Array<{
+      qrCode: string;
+      price: number;
+      plan: string;
+      expirationDate: Date;
+      duration: string;
+    }> = [];
+    let totalPrice = 0;
+
+    for (const item of dto.qrList) {
+      // 1. Plan → precio (snapshot)
+      const plan = await this.getPlanUseCase.execute(item.planId, tracking);
+      if (!plan) {
+        throw new BadRequestException(`El plan ${item.planId} no existe`);
+      }
+      // 2. QR debe existir y pertenecer al dueño de la activación
+      const qr = await this.getQrUseCase.execute(item.qrCode, tracking); // 404 si no existe
+      if (qr.userId !== targetUserId) {
+        throw new ForbiddenException(
+          `El QR ${item.qrCode} no pertenece al usuario de la activación`,
+        );
+      }
+      qrList.push({
+        qrCode: item.qrCode,
+        price: plan.price,
+        plan: plan.id,
+        expirationDate: item.expirationDate,
+        duration: item.duration,
+      });
+      totalPrice += plan.price;
+    }
+
+    const price = {
+      TotalPrice: totalPrice,
+      TotalTax: Math.round(totalPrice * TAX_RATE),
+      TotalDiscount: 0,
+    };
+
     const activation = new QrActivateEntity({
       methodActivation: dto.methodActivation,
       state,
       descriptionAdministrator: dto.descriptionAdministrator,
       adminId: dto.adminId,
       WebpayTransaction: webpayTransaction,
-      price: dto.price,
+      price,
       userId: targetUserId,
       description: dto.description,
-      qrList: dto.qrList.map((qr) => ({
-        qrCode: qr.qrCode,
-        price: qr.price,
-        expirationDate: qr.expirationDate,
-        duration: qr.duration,
-      })),
+      qrList,
       documentType: dto.documentType,
       invoiceData: dto.invoiceData,
       sendDocument: dto.sendDocument,

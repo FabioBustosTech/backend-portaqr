@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { CommonModule } from '../../common/common.module';
 import { WebpayModule } from '../webpay/webpay.module';
 import { QrModule } from '../qr/qr.module';
+import { PlanModule } from '../plan/plan.module'; // SPEC-009 B12: precio desde el plan
 import { QrActivateController } from './presentation/controllers/qr-activate.controller';
 
 import {
@@ -33,6 +34,7 @@ import {
     CommonModule,
     WebpayModule,
     QrModule,
+    PlanModule, // SPEC-009 B12: provee GetPlanUseCase para el cálculo del snapshot
     MongooseModule.forFeature([
       { name: QrActivateSchema.name, schema: QrActivateSchemaDefinition },
     ]),

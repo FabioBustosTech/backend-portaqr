@@ -5,46 +5,13 @@ import {
   IsDate, 
   IsEnum, 
   IsNotEmpty, 
-  IsNumber, 
   IsOptional, 
   IsString, 
-  Min,
-  Validate,
   ValidateNested,
-  ValidationArguments,
   IsBoolean,
   ValidateIf
 } from 'class-validator';
 import { MethodActivation, DocumentType } from '../../domain/entities/qr-activate.entity';
-
-export class PriceDataDto {
-  @ApiProperty({
-    description: 'Precio total',
-    example: 99.99
-  })
-  @IsNumber({}, { message: 'El precio total debe ser un número' })
-  @Min(0, { message: 'El precio total debe ser mayor a 0' })
-  @IsNotEmpty({ message: 'El precio total es requerido' })
-  TotalPrice: number;
-
-  @ApiProperty({
-    description: 'Descuento total',
-    example: 10
-  })
-  @IsNumber({}, { message: 'El descuento debe ser un número' })
-  @Min(0, { message: 'El descuento debe ser mayor o igual a 0' })
-  @IsOptional()
-  TotalDiscount?: number;
-
-  @ApiProperty({
-    description: 'Impuesto total',
-    example: 19
-  })
-  @IsNumber({}, { message: 'El impuesto debe ser un número' })
-  @Min(0, { message: 'El impuesto debe ser mayor o igual a 0' })
-  @IsNotEmpty({ message: 'El impuesto total es requerido' })
-  TotalTax: number;
-}
 
 export class QRElementDto {
   @ApiProperty({
@@ -55,14 +22,15 @@ export class QRElementDto {
   @IsNotEmpty({ message: 'El ID del QR es requerido' })
   qrCode: string;
 
+  // SPEC-009 B12: el cliente indica QUÉ plan quiere, no CUÁNTO cuesta.
+  // El precio se toma del plan (fuente de verdad) y se congela como snapshot.
   @ApiProperty({
-    description: 'Precio del QR',
-    example: 99.99
+    description: 'ID del plan seleccionado (el precio lo calcula el backend)',
+    example: '507f1f77bcf86cd799439012'
   })
-  @IsNumber({}, { message: 'El precio debe ser un número' })
-  @Min(0, { message: 'El precio debe ser mayor a 0' })
-  @IsNotEmpty({ message: 'El precio es requerido' })
-  price: number;
+  @IsString({ message: 'El plan debe ser una cadena de texto' })
+  @IsNotEmpty({ message: 'El plan es requerido' })
+  planId: string;
 
   @ApiProperty({
     description: 'Fecha de expiración',
@@ -136,26 +104,7 @@ export class CreateQrActivateDto {
   webpayToken?: string;
 
   @ApiProperty({
-    description: 'Datos de precio',
-    type: PriceDataDto
-  })
-  @ValidateNested({ message: 'Los datos de precio no son válidos' })
-  @Type(() => PriceDataDto)
-  @IsNotEmpty({ message: 'Los datos de precio son requeridos' })
-  @Validate((value: PriceDataDto, args: ValidationArguments) => {
-    const dto = args.object as CreateQrActivateDto;
-    if (!dto.qrList || dto.qrList.length === 0) return false;
-
-    const sumQrPrices = dto.qrList.reduce((sum, qr) => sum + qr.price, 0);
-  
-    return Math.abs(sumQrPrices - value.TotalPrice) < 0.01; 
-  }, {
-    message: 'El precio total debe ser igual a la suma de los precios de los QRs con el 19% incluido'
-  })
-  price: PriceDataDto;
-
-  @ApiProperty({
-    description: 'Lista de QRs',
+    description: 'Lista de QRs a activar (el precio se calcula desde el plan — SPEC-009 B12)',
     type: [QRElementDto]
   })
   @IsArray({ message: 'La lista de QRs debe ser un array' })

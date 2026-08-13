@@ -52,11 +52,10 @@ describe('QrActivateController', () => {
 
   const createDto: CreateQrActivateDto = {
     methodActivation: MethodActivation.WEBPAY,
-    price: { TotalPrice: 100, TotalTax: 19 },
     qrList: [
       {
         qrCode: 'qr-1',
-        price: 100,
+        planId: 'plan-1', // SPEC-009 B12: el precio sale del plan
         expirationDate: new Date('2024-12-31'),
         duration: '12 meses',
       },
