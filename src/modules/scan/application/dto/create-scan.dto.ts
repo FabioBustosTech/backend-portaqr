@@ -163,11 +163,13 @@ export class CreateScanDto {
   lastScanId?: string;
 
   @ApiProperty({
-    description: 'Identificador del usuario que posee el QR',
-    example: '1234567890'
+    description: 'Identificador del usuario que posee el QR — OPCIONAL y IGNORADO: SPEC-009 A9/B7 el dueño real se toma del QR',
+    example: '1234567890',
+    required: false
   })
+  @IsOptional()
   @IsString({ message: 'El identificador del usuario debe ser una cadena de texto' })
-  userId: string;
+  userId?: string;
 
   // SPEC-008 E2E: el frontend envía ip y referer (datos de origen del escaneo).
   // Antes se descartaban silenciosamente (no estaban en el DTO ni en el schema);
