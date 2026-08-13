@@ -1,6 +1,14 @@
 import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { CustomLogger } from '../shared/utils/logger.util';
+import { sanitizeForLog } from '../common/utils/redact.utils';
+
+/** SPEC-009 A13: rutas cuyos bodies solo se loguean con whitelist { status, message } */
+const SENSITIVE_LOG_ROUTES = ['/auth/login', '/auth/refresh', '/webpay/'];
+
+function isSensitiveRoute(url: string): boolean {
+  return SENSITIVE_LOG_ROUTES.some((r) => url.includes(r));
+}
 
 @Injectable()
 export class ResponseLoggerInterceptor implements NestInterceptor {
@@ -44,7 +52,12 @@ export class ResponseLoggerInterceptor implements NestInterceptor {
         path: originalUrl,
         status: res.statusCode,
         headers: res.getHeaders(),
-        body: bodyToLog,
+        // SPEC-009 A13: whitelist default-deny — los campos sensibles
+        // (password|token|token_ws|code|pin) se redactan SIEMPRE; las rutas
+        // sensibles solo loguean { status, message }.
+        body: isSensitiveRoute(originalUrl)
+          ? sanitizeForLog(bodyToLog, ['status', 'message'])
+          : sanitizeForLog(bodyToLog),
       };
 
       this.logger.log(

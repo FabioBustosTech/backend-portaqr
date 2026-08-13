@@ -347,13 +347,41 @@ describe('UsersController', () => {
   });
 
   describe('findOne', () => {
-    it('debe retornar el usuario sin password', async () => {
+    it('debe retornar el usuario sin password (ownership: dueño)', async () => {
       getUserUseCase.execute.mockResolvedValue(mockUser);
 
-      const result = await controller.findOne('user-1', tracking);
+      const result = await controller.findOne(
+        '507f1f77bcf86cd799439011',
+        { id: '507f1f77bcf86cd799439011', role: 'user' },
+        tracking,
+      );
 
-      expect(getUserUseCase.execute).toHaveBeenCalledWith('user-1', tracking);
+      expect(getUserUseCase.execute).toHaveBeenCalledWith('507f1f77bcf86cd799439011', tracking);
       expect(result).not.toHaveProperty('password');
+      expect(result.id).toBe('user-1');
+    });
+
+    it('SPEC-009 A4: 403 si el autenticado no es el dueño (no admin)', async () => {
+      getUserUseCase.execute.mockResolvedValue(mockUser);
+
+      await expect(
+        controller.findOne(
+          '507f1f77bcf86cd799439011',
+          { id: '507f1f77bcf86cd799439012', role: 'user' },
+          tracking,
+        ),
+      ).rejects.toThrow('No tiene permiso para ver este usuario.');
+      expect(getUserUseCase.execute).not.toHaveBeenCalled();
+    });
+
+    it('SPEC-009 A4: admin puede ver cualquier usuario', async () => {
+      getUserUseCase.execute.mockResolvedValue(mockUser);
+
+      const result = await controller.findOne(
+        '507f1f77bcf86cd799439011',
+        { id: '507f1f77bcf86cd799439099', role: 'admin' },
+        tracking,
+      );
       expect(result.id).toBe('user-1');
     });
   });
@@ -414,19 +442,73 @@ describe('UsersController', () => {
   });
 
   describe('update', () => {
+    // Ids ObjectId válidos (24 hex) — la validación de ObjectId del controller
+    // rechaza strings tipo 'user-1' con 400 ANTES del ownership check.
+    const OWNER_ID = '507f1f77bcf86cd799439011';
+    const OTHER_ID = '507f1f77bcf86cd799439012';
+
     it('debe delegar en el use-case y retornar el usuario actualizado', async () => {
       const updatedUser: User = { ...mockUser, firstName: 'NuevoNombre' };
       const updateUserDto = { firstName: 'NuevoNombre' };
       updateUserUseCase.execute.mockResolvedValue(updatedUser);
 
-      const result = await controller.update('user-1', updateUserDto, tracking);
+      const result = await controller.update(
+        OWNER_ID,
+        updateUserDto,
+        { id: OWNER_ID, role: 'user' },
+        tracking,
+      );
 
       expect(updateUserUseCase.execute).toHaveBeenCalledWith(
-        'user-1',
+        OWNER_ID,
         updateUserDto,
+        { id: OWNER_ID, role: 'user' },
         tracking,
       );
       expect(result).toEqual(updatedUser);
+    });
+
+    it('SPEC-009 A1: 403 si el autenticado no es el dueño (rol user)', async () => {
+      await expect(
+        controller.update(
+          OWNER_ID,
+          { firstName: 'X' },
+          { id: OTHER_ID, role: 'user' },
+          tracking,
+        ),
+      ).rejects.toThrow('No tiene permiso para modificar este usuario.');
+      expect(updateUserUseCase.execute).not.toHaveBeenCalled();
+    });
+
+    it('SPEC-009 A1: admin puede actualizar a cualquier usuario (bypass)', async () => {
+      const updatedUser: User = { ...mockUser, firstName: 'AdminEdit' };
+      updateUserUseCase.execute.mockResolvedValue(updatedUser);
+
+      const result = await controller.update(
+        OWNER_ID,
+        { firstName: 'AdminEdit' },
+        { id: '507f1f77bcf86cd799439099', role: 'admin' },
+        tracking,
+      );
+      expect(result).toEqual(updatedUser);
+      expect(updateUserUseCase.execute).toHaveBeenCalledWith(
+        OWNER_ID,
+        { firstName: 'AdminEdit' },
+        { id: '507f1f77bcf86cd799439099', role: 'admin' },
+        tracking,
+      );
+    });
+
+    it('SPEC-009 A1: ObjectId inválido → 400 (no llega al use-case)', async () => {
+      await expect(
+        controller.update(
+          'id-no-valid0',
+          { firstName: 'X' },
+          { id: OWNER_ID, role: 'user' },
+          tracking,
+        ),
+      ).rejects.toThrow('ID de usuario inválido.');
+      expect(updateUserUseCase.execute).not.toHaveBeenCalled();
     });
   });
 

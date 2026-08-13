@@ -1,4 +1,4 @@
-import { UserMongoMapper } from './user-mongo.mapper';
+﻿import { UserMongoMapper } from './user-mongo.mapper';
 import type { User } from '../../../../domain/entities/user.entity';
 
 describe('UserMongoMapper', () => {
@@ -19,6 +19,8 @@ describe('UserMongoMapper', () => {
     verificationCodeExpires: new Date('2024-08-02T12:00:00.000Z'),
     passwordResetCode: 'prc-1',
     passwordResetExpires: new Date('2024-08-03T12:00:00.000Z'),
+    verificationAttempts: 0,
+    passwordResetAttempts: 0,
     createdAt: new Date('2024-08-01T10:00:00.000Z'),
     updatedAt: new Date('2024-08-01T11:00:00.000Z'),
   };
@@ -42,8 +44,10 @@ describe('UserMongoMapper', () => {
         lastLogin: docCompleto.lastLogin,
         verificationCode: 'vc-1',
         verificationCodeExpires: docCompleto.verificationCodeExpires,
+        verificationAttempts: 0,
         passwordResetCode: 'prc-1',
         passwordResetExpires: docCompleto.passwordResetExpires,
+        passwordResetAttempts: 0,
         createdAt: docCompleto.createdAt,
         updatedAt: docCompleto.updatedAt,
       });
@@ -79,7 +83,9 @@ describe('UserMongoMapper', () => {
         role: 'user',
         isEmailVerified: false,
         tokenVersion: 0,
-      });
+        verificationAttempts: 0,
+        passwordResetAttempts: 0,
+      } as never);
 
       expect(entity.phone).toBeUndefined();
       expect(entity.lastLogin).toBeUndefined();

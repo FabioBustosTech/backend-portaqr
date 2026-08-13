@@ -100,11 +100,19 @@ export class UserSchema {
   @Prop()
   verificationCodeExpires?: Date;
 
+  // SPEC-009 A5: intentos fallidos de verify-email (tras 5 → se invalida el código)
+  @Prop({ type: Number, default: 0 })
+  verificationAttempts: number;
+
   @Prop()
   passwordResetCode?: string;
 
   @Prop()
   passwordResetExpires?: Date;
+
+  // SPEC-009 A5: intentos fallidos de reset-password (tras 5 → se invalida el código)
+  @Prop({ type: Number, default: 0 })
+  passwordResetAttempts: number;
 }
 
 export const UserSchemaDefinition = SchemaFactory.createForClass(UserSchema);

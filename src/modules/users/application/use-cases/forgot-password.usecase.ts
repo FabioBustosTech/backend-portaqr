@@ -1,9 +1,10 @@
-﻿import { Injectable, Inject, NotFoundException, Logger } from '@nestjs/common';
+﻿import { Injectable, Inject, Logger } from '@nestjs/common';
 import type { ICanGetUser } from '../../domain/ports/queries/get-user.port';
 import type { ICanUpdateUser } from '../../domain/ports/queries/create-user.port';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import { USER_GET_PORT, USER_UPDATE_PORT } from '../../domain/constants/user.tokens';
+import { generateVerificationCode as generateVerificationCodeUtil } from '../../../../common/utils/code-generator.util';
 import { EmailService } from '../../../../shared/email/email.service';
 import { ConfigService } from '@nestjs/config';
 
@@ -26,10 +27,18 @@ export class ForgotPasswordUseCase {
 
     const user = await this.reader.getByEmail(email, tracking);
     if (!user) {
-      throw new NotFoundException('Usuario no encontrado');
+      // SPEC-009 A4: respuesta genérica — NO revelar si el email existe
+      // (el controller responde 200 "si el correo existe, recibirás un código").
+      this.traceService.log(
+        tracking,
+        TraceLayer.USE_CASE,
+        'ForgotPasswordUseCase - email no registrado (respuesta genérica)',
+        { email },
+      );
+      return;
     }
 
-    const resetCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const resetCode = generateVerificationCodeUtil(); // SPEC-009 A5: CSPRNG (crypto.randomBytes)
     const expiryTime = new Date();
     const expirySeconds = parseInt(this.configService.get('EMAIL_VERIFICATION_EXPIRY')) || 3600;
     expiryTime.setSeconds(expiryTime.getSeconds() + expirySeconds);

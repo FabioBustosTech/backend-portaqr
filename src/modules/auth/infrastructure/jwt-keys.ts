@@ -61,6 +61,19 @@ export function loadJwtKeys(configService: ConfigService): JwtKeyPair {
       publicKey: readKey(publicValue, DEFAULT_PUBLIC_KEY_PATH),
     };
   } catch (error) {
+    // SPEC-009 A6: FAIL-FAST en producción — un arranque sin llaves JWT es un error
+    // de configuración, no un modo degradado. El par efímero genera tokens que no
+    // sobreviven reinicios ni múltiples instancias (Railway) → falsa seguridad.
+    const nodeEnv = configService.get<string>('NODE_ENV') || 'development';
+    if (nodeEnv === 'production') {
+      throw new Error(
+        `No se pudieron cargar las llaves JWT en producción ` +
+          `(JWT_PRIVATE_KEY/JWT_PUBLIC_KEY). Configúralas como PEM inline ` +
+          `(empiezan con '-----BEGIN') en el entorno. Causa: ${(error as Error).message}`,
+      );
+    }
+
+    // development/test: par efímero (comportamiento histórico, solo para dev local)
     if (!ephemeralPair) {
       const { privateKey, publicKey } = generateKeyPairSync('rsa', {
         modulusLength: 2048,

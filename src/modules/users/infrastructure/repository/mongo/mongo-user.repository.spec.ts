@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { MongoUserRepository } from './mongo-user.repository';
@@ -61,6 +61,8 @@ describe('MongoUserRepository', () => {
     verificationCodeExpires: new Date('2024-08-02T12:00:00.000Z'),
     passwordResetCode: 'prc-1',
     passwordResetExpires: new Date('2024-08-03T12:00:00.000Z'),
+        verificationAttempts: 0,
+        passwordResetAttempts: 0,
     createdAt: new Date('2024-08-01T10:00:00.000Z'),
     updatedAt: new Date('2024-08-01T11:00:00.000Z'),
   };
@@ -80,8 +82,10 @@ describe('MongoUserRepository', () => {
     lastLogin: doc.lastLogin,
     verificationCode: 'vc-1',
     verificationCodeExpires: doc.verificationCodeExpires,
+    verificationAttempts: 0,
     passwordResetCode: 'prc-1',
     passwordResetExpires: doc.passwordResetExpires,
+    passwordResetAttempts: 0,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };

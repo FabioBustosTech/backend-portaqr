@@ -4,6 +4,7 @@ import type { ICanUpdateUser } from '../../domain/ports/queries/create-user.port
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import { USER_GET_PORT, USER_UPDATE_PORT } from '../../domain/constants/user.tokens';
+import { VERIFICATION_MAX_ATTEMPTS } from '../../../../common/utils/code-generator.util';
 
 @Injectable()
 export class VerifyEmailUseCase {
@@ -32,6 +33,17 @@ export class VerifyEmailUseCase {
     }
 
     if (user.verificationCode !== code) {
+      // SPEC-009 A5: límite de intentos — tras 5 fallos se invalida el código
+      const attempts = (user.verificationAttempts ?? 0) + 1;
+      if (attempts >= VERIFICATION_MAX_ATTEMPTS) {
+        await this.updater.update(userId, {
+          verificationCode: undefined,
+          verificationCodeExpires: undefined,
+          verificationAttempts: 0,
+        }, tracking);
+        throw new BadRequestException('El cÃ³digo de verificaciÃ³n ha expirado');
+      }
+      await this.updater.update(userId, { verificationAttempts: attempts }, tracking);
       throw new BadRequestException('CÃ³digo de verificaciÃ³n invÃ¡lido');
     }
 
@@ -43,6 +55,7 @@ export class VerifyEmailUseCase {
       isEmailVerified: true,
       verificationCode: undefined,
       verificationCodeExpires: undefined,
+      verificationAttempts: 0,
     }, tracking);
 
     this.traceService.log(tracking, TraceLayer.USE_CASE, 'VerifyEmailUseCase - verificado', { userId });

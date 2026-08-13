@@ -10,7 +10,9 @@
   HttpStatus,
   HttpCode,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
+import { isValidObjectId } from 'mongoose';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CreateQrActivateUseCase } from '../../application/use-cases/create-qr-activate.usecase';
 import { GetAllQrActivateUseCase } from '../../application/use-cases/get-all-qr-activate.usecase';
@@ -23,9 +25,16 @@ import { UpdateQrActivateDto } from '../../application/dto/update-qr-activate.dt
 import { RolesGuard } from '../../../auth/infrastructure/guards/roles.guard';
 import { Roles } from '../../../../common/decorators/roles.decorator';
 import { Public } from '../../../../common/decorators/public.decorator';
+import { GetUser } from '../../../../common/decorators/user.decorator';
 import { Tracking } from '../../../../common/decorators/tracking.decorator';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
+import { assertOwnerOrAdmin } from '../../../../common/utils/ownership.utils';
+
+interface AuthenticatedUser {
+  id: string;
+  role: string;
+}
 
 @ApiTags('QR Activate')
 @Controller('qr-activate')
@@ -45,20 +54,21 @@ export class QrActivateController {
   @Post()
   @Roles('admin', 'user')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Crear nueva activaciÃ³n de QR' })
+  @ApiOperation({ summary: 'Crear nueva activación de QR' })
   async create(
     @Body() createQrActivateDto: CreateQrActivateDto,
+    @GetUser() user: AuthenticatedUser,
     @Tracking() tracking: TrackingContext,
   ) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'POST /qr-activate', {
       methodActivation: createQrActivateDto.methodActivation,
     });
     // SPEC-007 H2: la activación admin activa los QRs en batch (executeAdmin con activateMany).
-    // Sin este cableado, el flujo ADMIN crea el registro pero deja los QRs inactivos.
+    // SPEC-009 A3: el actor (del token) se pasa al usecase — userId y state según rol.
     if (createQrActivateDto.methodActivation === 'ADMIN') {
-      return this.createQrActivateUseCase.executeAdmin(createQrActivateDto, tracking);
+      return this.createQrActivateUseCase.executeAdmin(createQrActivateDto, user, tracking);
     }
-    return this.createQrActivateUseCase.execute(createQrActivateDto, tracking);
+    return this.createQrActivateUseCase.execute(createQrActivateDto, user, tracking);
   }
 
   @Get()
@@ -66,38 +76,60 @@ export class QrActivateController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Obtener todas las activaciones' })
   async findAll(
+    @GetUser() user: AuthenticatedUser,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
     @Query('search') search: string = '',
+    @Query('methodActivation') methodActivation: string | undefined = undefined,
     @Tracking() tracking: TrackingContext,
-    @Query('methodActivation') methodActivation?: string,
   ) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'GET /qr-activate', {
       page,
       limit,
     });
-    return this.getAllQrActivateUseCase.execute(page, limit, search, methodActivation, tracking);
+
+    // SPEC-009 A3: un usuario solo ve SUS activaciones; el admin las ve todas
+    const userIdFilter = user.role === 'admin' ? undefined : user.id;
+    return this.getAllQrActivateUseCase.execute(
+      page,
+      limit,
+      search,
+      methodActivation,
+      userIdFilter,
+      tracking,
+    );
   }
 
   @Get(':id')
   @Roles('admin', 'user')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Obtener una activaciÃ³n por ID' })
-  async findOne(@Param('id') id: string, @Tracking() tracking: TrackingContext) {
+  @ApiOperation({ summary: 'Obtener una activación por ID' })
+  async findOne(
+    @Param('id') id: string,
+    @GetUser() user: AuthenticatedUser,
+    @Tracking() tracking: TrackingContext,
+  ) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'GET /qr-activate/:id', { id });
-    return this.getQrActivateUseCase.execute(id, tracking);
+
+    if (!isValidObjectId(id)) {
+      throw new BadRequestException('ID de activación inválido.');
+    }
+    const activation = await this.getQrActivateUseCase.execute(id, tracking);
+    // SPEC-009 A3: patrón estándar — dueño o admin
+    assertOwnerOrAdmin(activation.userId, user, 'No tiene permiso para ver esta activación.');
+    return activation;
   }
 
   @Patch('webpay/:token_ws')
   @Public()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Actualizar estado de activaciÃ³n por token de Webpay' })
+  @ApiOperation({ summary: 'Actualizar estado de activación por token de Webpay' })
   async updateWebpay(
     @Param('token_ws') token_ws: string,
     @Tracking() tracking: TrackingContext,
   ) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'PATCH /qr-activate/webpay/:token_ws', {
-      token_ws,
+      tokenPreview: token_ws ? token_ws.slice(0, 8) + '…' : '',
     });
     return this.updateWebpayQrActivateUseCase.execute(token_ws, tracking);
   }
@@ -105,23 +137,31 @@ export class QrActivateController {
   @Patch(':id')
   @Roles('admin', 'user')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Actualizar activaciÃ³n' })
+  @ApiOperation({ summary: 'Actualizar activación' })
   async update(
     @Param('id') id: string,
     @Body() updateQrActivateDto: UpdateQrActivateDto,
+    @GetUser() user: AuthenticatedUser,
     @Tracking() tracking: TrackingContext,
   ) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'PATCH /qr-activate/:id', { id });
+
+    if (!isValidObjectId(id)) {
+      throw new BadRequestException('ID de activación inválido.');
+    }
+    const activation = await this.getQrActivateUseCase.execute(id, tracking);
+    // SPEC-009 A3: patrón estándar — dueño o admin (el PATCH solo permite campos no transaccionales)
+    assertOwnerOrAdmin(activation.userId, user, 'No tiene permiso para modificar esta activación.');
     return this.updateQrActivateUseCase.execute(id, updateQrActivateDto, tracking);
   }
 
   @Delete(':id')
   @Roles('admin')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Eliminar activaciÃ³n' })
+  @ApiOperation({ summary: 'Eliminar activación' })
   async remove(@Param('id') id: string, @Tracking() tracking: TrackingContext) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'DELETE /qr-activate/:id', { id });
     await this.deleteQrActivateUseCase.execute(id, tracking);
-    return { message: 'ActivaciÃ³n eliminada exitosamente' };
+    return { message: 'Activación eliminada exitosamente' };
   }
 }

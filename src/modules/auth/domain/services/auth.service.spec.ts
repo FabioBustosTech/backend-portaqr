@@ -1,5 +1,6 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Types } from 'mongoose';
 import { AuthService } from './auth.service';
 import { JwtAuthService } from './jwt.service';
@@ -8,6 +9,8 @@ import { GetUserUseCase } from '../../../users/application/use-cases/get-user.us
 import { UpdateUserUseCase } from '../../../users/application/use-cases/update-user.usecase';
 import { IncrementTokenVersionUseCase } from '../../../users/application/use-cases/increment-token-version.usecase';
 import { TraceService } from '../../../../common/services/trace.service';
+import { REFRESH_TOKEN_STORE_PORT } from '../constants/auth.tokens';
+import type { IRefreshTokenStore } from '../ports/refresh-token.port';
 import type { User } from '../../../users/domain/entities/user.entity';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 
@@ -18,6 +21,7 @@ describe('AuthService', () => {
   let getUserUseCase: jest.Mocked<GetUserUseCase>;
   let updateUserUseCase: jest.Mocked<UpdateUserUseCase>;
   let incrementTokenVersionUseCase: jest.Mocked<IncrementTokenVersionUseCase>;
+  let refreshTokenStore: jest.Mocked<IRefreshTokenStore>;
 
   const tracking: TrackingContext = { trackingId: 't-1', sessionId: 's-1' };
 
@@ -84,6 +88,19 @@ describe('AuthService', () => {
           },
         },
         {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue('7') },
+        },
+        {
+          provide: REFRESH_TOKEN_STORE_PORT,
+          useValue: {
+            create: jest.fn(),
+            findByHash: jest.fn(),
+            revokeByHash: jest.fn(),
+            revokeAllByUser: jest.fn(),
+          },
+        },
+        {
           provide: TraceService,
           useValue: {
             log: jest.fn(),
@@ -96,6 +113,7 @@ describe('AuthService', () => {
     }).compile();
 
     service = module.get<AuthService>(AuthService);
+    refreshTokenStore = module.get(REFRESH_TOKEN_STORE_PORT);
     jwtAuthService = module.get(JwtAuthService);
     passwordService = module.get(PasswordService);
     getUserUseCase = module.get(GetUserUseCase);
@@ -169,21 +187,106 @@ describe('AuthService', () => {
   });
 
   describe('refreshToken', () => {
-    it('debe generar nuevos tokens cuando el refresh token es válido', async () => {
+    it('SPEC-009 A8: rota el refresh token — revoca el actual y emite+persiste uno nuevo', async () => {
       jwtAuthService.verifyRefreshToken.mockReturnValue({
         sub: validObjectId,
         email: mockUser.email,
         userName: mockUser.userName,
         role: mockUser.role,
         isEmailVerified: true,
+        tokenVersion: 0,
       });
       getUserUseCase.execute.mockResolvedValue(mockUser);
       jwtAuthService.generateTokens.mockResolvedValue(mockTokens);
+      // El token está registrado y NO revocado → válido para rotar
+      refreshTokenStore.findByHash.mockResolvedValue({
+        userId: validObjectId,
+        tokenHash: 'hash',
+        expiresAt: new Date(Date.now() + 1000),
+      } as never);
 
       const result = await service.refreshToken('refresh-token', tracking);
 
       expect(getUserUseCase.execute).toHaveBeenCalledWith(validObjectId, tracking);
+      // Rotación: el actual se revoca y el nuevo se persiste
+      expect(refreshTokenStore.revokeByHash).toHaveBeenCalledWith(expect.any(String), tracking);
+      expect(refreshTokenStore.create).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: validObjectId, tokenHash: expect.any(String) }),
+        tracking,
+      );
       expect(result).toEqual(mockTokens);
+    });
+
+    it('SPEC-009 A8: 401 si el refresh token no está registrado (no lo emitimos nosotros)', async () => {
+      jwtAuthService.verifyRefreshToken.mockReturnValue({
+        sub: validObjectId,
+        email: mockUser.email,
+        userName: mockUser.userName,
+        role: mockUser.role,
+        isEmailVerified: true,
+        tokenVersion: 0,
+      });
+      getUserUseCase.execute.mockResolvedValue(mockUser);
+      refreshTokenStore.findByHash.mockResolvedValue(null);
+
+      await expect(service.refreshToken('token-no-registrado', tracking)).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(jwtAuthService.generateTokens).not.toHaveBeenCalled();
+    });
+
+    it('SPEC-009 A8: REUSO fuera de la ventana de gracia (>60s) → revoca TODA la familia y 401', async () => {
+      jwtAuthService.verifyRefreshToken.mockReturnValue({
+        sub: validObjectId,
+        email: mockUser.email,
+        userName: mockUser.userName,
+        role: mockUser.role,
+        isEmailVerified: true,
+        tokenVersion: 0,
+      });
+      getUserUseCase.execute.mockResolvedValue(mockUser);
+      // El token existe pero fue revocado hace >60s (robo real, no race del cliente)
+      refreshTokenStore.findByHash.mockResolvedValue({
+        userId: validObjectId,
+        tokenHash: 'hash',
+        expiresAt: new Date(Date.now() + 1000),
+        revokedAt: new Date(Date.now() - 2 * 60_000),
+      } as never);
+
+      await expect(service.refreshToken('refresh-token', tracking)).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(incrementTokenVersionUseCase.execute).toHaveBeenCalledWith(validObjectId, tracking);
+      expect(refreshTokenStore.revokeAllByUser).toHaveBeenCalledWith(validObjectId, tracking);
+      expect(jwtAuthService.generateTokens).not.toHaveBeenCalled();
+    });
+
+    it('SPEC-009 A8: REUSO dentro de la ventana (race del cliente) → rota de nuevo SIN matar familia', async () => {
+      jwtAuthService.verifyRefreshToken.mockReturnValue({
+        sub: validObjectId,
+        email: mockUser.email,
+        userName: mockUser.userName,
+        role: mockUser.role,
+        isEmailVerified: true,
+        tokenVersion: 0,
+      });
+      getUserUseCase.execute.mockResolvedValue(mockUser);
+      jwtAuthService.generateTokens.mockResolvedValue(mockTokens);
+      // Revocado hace 5s: request concurrente del mismo cliente (frontend dispara
+      // varios refreshes a la vez) → rotar de nuevo sin revocar la familia
+      refreshTokenStore.findByHash.mockResolvedValue({
+        userId: validObjectId,
+        tokenHash: 'hash',
+        expiresAt: new Date(Date.now() + 1000),
+        revokedAt: new Date(Date.now() - 5_000),
+      } as never);
+
+      const result = await service.refreshToken('refresh-token', tracking);
+
+      expect(result).toEqual(mockTokens);
+      expect(incrementTokenVersionUseCase.execute).not.toHaveBeenCalled();
+      expect(refreshTokenStore.revokeAllByUser).not.toHaveBeenCalled();
+      expect(refreshTokenStore.create).toHaveBeenCalled();
     });
 
     it('debe lanzar UnauthorizedException si el sub no es un ObjectId válido', async () => {

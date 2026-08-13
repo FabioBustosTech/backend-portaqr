@@ -24,9 +24,10 @@ export class QrActivateRepositoryAdapter
     limit: number,
     search: string | undefined,
     methodActivation: string | undefined,
+    userId: string | undefined,
     tracking: TrackingContext,
   ): Promise<PaginatedResult<QrActivate>> {
-    return this.mongoRepository.getAll(page, limit, search, methodActivation, tracking);
+    return this.mongoRepository.getAll(page, limit, search, methodActivation, userId, tracking);
   }
 
   async getById(id: string, tracking: TrackingContext): Promise<QrActivate | null> {

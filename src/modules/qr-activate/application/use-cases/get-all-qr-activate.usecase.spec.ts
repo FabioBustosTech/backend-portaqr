@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { GetAllQrActivateUseCase } from './get-all-qr-activate.usecase';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import { QR_ACTIVATE_GET_PORT } from '../../domain/constants/qr-activate.tokens';
@@ -76,7 +76,7 @@ describe('GetAllQrActivateUseCase', () => {
     it('debe retornar las activaciones paginadas con todos los filtros', async () => {
       reader.getAll.mockResolvedValue(mockPaginated);
 
-      const result = await useCase.execute(1, 10, 'user', 'WEBPAY', tracking);
+      const result = await useCase.execute(1, 10, 'user', 'WEBPAY', undefined, tracking);
 
       expect(traceService.log).toHaveBeenCalledWith(
         tracking,
@@ -84,16 +84,16 @@ describe('GetAllQrActivateUseCase', () => {
         'GetAllQrActivateUseCase',
         { page: 1, limit: 10, search: 'user', methodActivation: 'WEBPAY' },
       );
-      expect(reader.getAll).toHaveBeenCalledWith(1, 10, 'user', 'WEBPAY', tracking);
+      expect(reader.getAll).toHaveBeenCalledWith(1, 10, 'user', 'WEBPAY', undefined, tracking);
       expect(result).toEqual(mockPaginated);
     });
 
     it('debe delegar correctamente cuando los filtros son undefined', async () => {
       reader.getAll.mockResolvedValue(mockPaginated);
 
-      const result = await useCase.execute(2, 5, undefined, undefined, tracking);
+      const result = await useCase.execute(2, 5, undefined, undefined, undefined, tracking);
 
-      expect(reader.getAll).toHaveBeenCalledWith(2, 5, undefined, undefined, tracking);
+      expect(reader.getAll).toHaveBeenCalledWith(2, 5, undefined, undefined, undefined, tracking);
       expect(result).toEqual(mockPaginated);
     });
 
@@ -101,7 +101,7 @@ describe('GetAllQrActivateUseCase', () => {
       reader.getAll.mockRejectedValue(new Error('DB down'));
 
       await expect(
-        useCase.execute(1, 10, '', undefined, tracking),
+        useCase.execute(1, 10, '', undefined, undefined, tracking),
       ).rejects.toThrow('DB down');
     });
   });

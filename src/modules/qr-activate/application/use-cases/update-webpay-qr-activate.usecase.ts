@@ -44,25 +44,38 @@ export class UpdateWebpayQrActivateUseCase {
     let updatedState: ActivationState;
 
     if (commitResult.status === 'AUTHORIZED') {
-      updatedState = ActivationState.PAYED;
-      this.traceService.log(tracking, TraceLayer.USE_CASE, 'UpdateWebpayQrActivateUseCase - PAGADO', { token_ws });
-
-      // Activar los QRs de la compra en 1 operación batch atómica (SPEC-007 H2)
-      const codes = activation.qrList.map((qr) => qr.qrCode);
-      if (codes.length > 0) {
-        const { matchedCount, modifiedCount } = await this.qrActivator.activateMany(
-          codes,
-          activation.qrList[0]?.expirationDate ?? new Date(),
+      // SPEC-009 B12: el monto cobrado por Transbank debe coincidir con el SNAPSHOT
+      // del precio calculado desde el plan. Si el cliente intentó pagar menos
+      // (amount falso en el create), NO se activan los QRs.
+      if (activation.price?.TotalPrice !== commitResult.amount) {
+        this.traceService.warn(
           tracking,
+          TraceLayer.USE_CASE,
+          'UpdateWebpayQrActivateUseCase - amount mismatch vs snapshot',
+          { snapshot: activation.price?.TotalPrice, transbank: commitResult.amount },
         );
+        updatedState = ActivationState.FAILED;
+      } else {
+        updatedState = ActivationState.PAYED;
+        this.traceService.log(tracking, TraceLayer.USE_CASE, 'UpdateWebpayQrActivateUseCase - PAGADO', { token_ws });
 
-        if (matchedCount < codes.length) {
-          this.traceService.warn(
+        // Activar los QRs de la compra en 1 operación batch atómica (SPEC-007 H2)
+        const codes = activation.qrList.map((qr) => qr.qrCode);
+        if (codes.length > 0) {
+          const { matchedCount, modifiedCount } = await this.qrActivator.activateMany(
+            codes,
+            activation.qrList[0]?.expirationDate ?? new Date(),
             tracking,
-            TraceLayer.USE_CASE,
-            'UpdateWebpayQrActivateUseCase - QRs inexistentes',
-            { token_ws, total: codes.length, matchedCount, modifiedCount },
           );
+
+          if (matchedCount < codes.length) {
+            this.traceService.warn(
+              tracking,
+              TraceLayer.USE_CASE,
+              'UpdateWebpayQrActivateUseCase - QRs inexistentes',
+              { token_ws, total: codes.length, matchedCount, modifiedCount },
+            );
+          }
         }
       }
     } else {

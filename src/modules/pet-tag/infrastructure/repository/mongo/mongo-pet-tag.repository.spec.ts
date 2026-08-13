@@ -1,6 +1,6 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { HttpException } from '@nestjs/common';
 import { MongoPetTagRepository } from './mongo-pet-tag.repository';
 import { PetTagSchema, PetTagDocument } from './schemas/pet-tag.schema';
@@ -12,6 +12,7 @@ const mockSave = jest.fn();
 const mockFind = jest.fn();
 const mockFindOne = jest.fn();
 const mockFindOneAndUpdate = jest.fn();
+let mockUpdateOne = jest.fn(); // SPEC-009 A12: contador de intentos de activación
 const mockCountDocuments = jest.fn();
 const mockInsertMany = jest.fn();
 
@@ -23,10 +24,11 @@ const modelMock = jest.fn().mockImplementation((data: Record<string, unknown>) =
 (modelMock as unknown as Record<string, unknown>).find = mockFind;
 (modelMock as unknown as Record<string, unknown>).findOne = mockFindOne;
 (modelMock as unknown as Record<string, unknown>).findOneAndUpdate = mockFindOneAndUpdate;
+(modelMock as unknown as Record<string, unknown>).updateOne = mockUpdateOne;
 (modelMock as unknown as Record<string, unknown>).countDocuments = mockCountDocuments;
 (modelMock as unknown as Record<string, unknown>).insertMany = mockInsertMany;
 
-/** Recolecta todos los valores $regex de un query Mongo (SPEC-008 H3 — verificación anti-ReDoS). */
+/** Recolecta todos los valores $regex de un query Mongo (SPEC-008 H3 â€” verificaciÃ³n anti-ReDoS). */
 function collectRegexValues(node: unknown, out: string[] = []): string[] {
   if (Array.isArray(node)) {
     for (const item of node) collectRegexValues(item, out);
@@ -103,7 +105,7 @@ describe('MongoPetTagRepository', () => {
         assignedStoreName: storeName,
       }));
 
-    it('debe generar un lote de placas en 1 sola operación insertMany sin tienda asignada', async () => {
+    it('debe generar un lote de placas en 1 sola operaciÃ³n insertMany sin tienda asignada', async () => {
       const inserted = buildInsertedDocs(2);
       mockInsertMany.mockResolvedValue(inserted);
 
@@ -151,7 +153,7 @@ describe('MongoPetTagRepository', () => {
       expect(result[0].assignedStoreName).toBe('Tienda Central');
     });
 
-    it('debe generar ids únicos (uuid) y pins únicos (nanoid) por cada placa', async () => {
+    it('debe generar ids Ãºnicos (uuid) y pins Ãºnicos (nanoid) por cada placa', async () => {
       const inserted = buildInsertedDocs(3);
       mockInsertMany.mockResolvedValue(inserted);
 
@@ -248,11 +250,11 @@ describe('MongoPetTagRepository', () => {
       );
     });
 
-    it('debe escapar metacaracteres de search y storeName (SPEC-008 H3 — R2 ReDoS, CA-02)', async () => {
+    it('debe escapar metacaracteres de search y storeName (SPEC-008 H3 â€” R2 ReDoS, CA-02)', async () => {
       mockFind.mockReturnValue(buildFindChain(results));
       mockCountDocuments.mockResolvedValue(1);
 
-      // (a+)+$ con backtracking exponencial → debe llegar a $regex como literal
+      // (a+)+$ con backtracking exponencial â†’ debe llegar a $regex como literal
       await repository.findReserved(
         { storeName: '(a+)+$', search: '.*' },
         tracking,
@@ -266,7 +268,7 @@ describe('MongoPetTagRepository', () => {
         $regex: escapedStore,
         $options: 'i',
       });
-      // Todos los $regex del $or usan el término escapado (nunca '.*' crudo)
+      // Todos los $regex del $or usan el tÃ©rmino escapado (nunca '.*' crudo)
       const regexValues = collectRegexValues(findCall.$or);
       expect(regexValues.length).toBeGreaterThan(0);
       expect(regexValues).not.toContain('.*');
@@ -410,7 +412,7 @@ describe('MongoPetTagRepository', () => {
       expect(result).toEqual(updatedTag);
     });
 
-    it('debe conservar los valores existentes cuando no se envían campos (solo campos presentes en $set)', async () => {
+    it('debe conservar los valores existentes cuando no se envÃ­an campos (solo campos presentes en $set)', async () => {
       const updatedTag = {
         idQr: 'qr-1',
         petData,
@@ -449,14 +451,14 @@ describe('MongoPetTagRepository', () => {
       );
     });
 
-    it('debe trazar y lanzar HttpException si la consulta falla', async () => {
-      mockFindOneAndUpdate.mockReturnValue({
-        lean: jest.fn().mockRejectedValue(new Error('DB down')),
-      });
+  it('debe trazar y lanzar HttpException si la consulta falla', async () => {
+    mockFindOneAndUpdate.mockReturnValue({
+      lean: jest.fn().mockRejectedValue(new Error('DB down')),
+    });
 
-      await expect(
-        repository.update('qr-1', VALID_USER_ID, {}, tracking),
-      ).rejects.toThrow(HttpException);
+    await expect(
+      repository.update('qr-1', VALID_USER_ID, {}, tracking),
+    ).rejects.toThrow(HttpException);
       expect(traceService.error).toHaveBeenCalledWith(
         tracking,
         TraceLayer.REPOSITORY,
@@ -466,94 +468,142 @@ describe('MongoPetTagRepository', () => {
     });
   });
 
-  describe('activate', () => {
-    it('debe activar la placa en 1 findOneAndUpdate atómico (filtro condicional) y retornar el documento', async () => {
-      const updatedTag = {
-        idQr: 'qr-1',
-        status: 'ACTIVO',
-        userId: VALID_USER_ID,
-        petData,
-        commercialStatus: 'VENDIDO',
-      };
-      mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(updatedTag) });
+describe('activate', () => {
+  const VALID_USER_ID = new Types.ObjectId().toString();
+  const petData = { ownerName: 'Juan', address: 'Calle 1', phone: '123', petName: 'Rex' } as PetData;
+  const updatedTag = { idQr: 'qr-1', status: 'ACTIVO' };
+  const existing = { idQr: 'qr-1', activationPin: 'PIN-1', status: 'ACTIVO' };
+  const reservada = { idQr: 'qr-1', activationPin: 'PIN-1', status: 'RESERVADO' };
+  const activatedByOther = { idQr: 'qr-1', activationPin: 'PIN-1', status: 'ACTIVO', userId: 'other' };
 
-      const result = await repository.activate(
-        'qr-1',
-        'PIN-1',
-        petData,
-        VALID_USER_ID,
-        tracking,
-      );
+  /** Query chainable con select+lean+exec (el check de bloqueo usa findOne().select().lean().exec()) */
+  function mockQueryChain(execResult: unknown) {
+    return {
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(execResult),
+    };
+  }
 
-      // 1 sola llamada atómica con filtro condicional (status RESERVADO elimina TOCTOU)
-      expect(mockFindOneAndUpdate).toHaveBeenCalledTimes(1);
-      expect(mockFindOneAndUpdate).toHaveBeenCalledWith(
-        { idQr: 'qr-1', activationPin: 'PIN-1', status: 'RESERVADO' },
-        {
-          $set: expect.objectContaining({
-            status: 'ACTIVO',
-            petData,
-            commercialStatus: 'VENDIDO',
-            expiration: expect.any(Date),
-          }),
-        },
-        { new: true, runValidators: true },
-      );
-      // Camino feliz: sin lecturas previas
-      expect(mockFindOne).not.toHaveBeenCalled();
-      expect(result).toEqual(updatedTag);
-    });
+  it('debe activar la placa en 1 findOneAndUpdate atómico (filtro condicional) y retornar el documento', async () => {
+    mockFindOne.mockReturnValue(mockQueryChain(null)); // check de bloqueo: no bloqueada
+    mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(updatedTag) });
 
-    it('debe lanzar error cuando no encuentra la placa (diagnóstico 404 en rama de error)', async () => {
-      mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
-      mockFindOne.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
+    const result = await repository.activate('qr-1', 'PIN-1', petData, VALID_USER_ID, tracking);
 
-      await expect(
-        repository.activate('qr-1', 'PIN-1', petData, VALID_USER_ID, tracking),
-      ).rejects.toThrow('No se encontró una placa con ID QR: qr-1');
-      // 1 write + 1 read de diagnóstico (solo en rama de error)
-      expect(mockFindOne).toHaveBeenCalledTimes(1);
-      expect(mockFindOne).toHaveBeenCalledWith({ idQr: 'qr-1', activationPin: 'PIN-1' });
-    });
-
-    it('debe lanzar 409 cuando la placa ya está activa (existe pero no RESERVADO)', async () => {
-      const existing = { idQr: 'qr-1', activationPin: 'PIN-1', status: 'ACTIVO' };
-      mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
-      mockFindOne.mockReturnValue({ lean: jest.fn().mockResolvedValue(existing) });
-
-      await expect(
-        repository.activate('qr-1', 'PIN-1', petData, VALID_USER_ID, tracking),
-      ).rejects.toThrow('ya está activa');
-    });
-
-    it('debe lanzar 409 cuando otra request concurrente activó la placa (TOCTOU eliminado)', async () => {
-      const activatedByOther = {
-        idQr: 'qr-1',
-        activationPin: 'PIN-1',
-        status: 'ACTIVO',
-      };
-      mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
-      mockFindOne.mockReturnValue({ lean: jest.fn().mockResolvedValue(activatedByOther) });
-
-      await expect(
-        repository.activate('qr-1', 'PIN-1', petData, VALID_USER_ID, tracking),
-      ).rejects.toThrow('ya está activa');
-    });
-
-    it('debe trazar y lanzar HttpException si la consulta falla', async () => {
-      mockFindOneAndUpdate.mockReturnValue({
-        lean: jest.fn().mockRejectedValue(new Error('DB down')),
-      });
-
-      await expect(
-        repository.activate('qr-1', 'PIN-1', petData, VALID_USER_ID, tracking),
-      ).rejects.toThrow(HttpException);
-      expect(traceService.error).toHaveBeenCalledWith(
-        tracking,
-        TraceLayer.REPOSITORY,
-        'activate:error',
-        expect.any(Error),
-      );
-    });
+    expect(mockFindOne).toHaveBeenCalledTimes(1); // solo el check de bloqueo
+    expect(mockFindOneAndUpdate).toHaveBeenCalledTimes(1);
+    expect(mockFindOneAndUpdate).toHaveBeenCalledWith(
+      { idQr: 'qr-1', activationPin: 'PIN-1', status: 'RESERVADO' },
+      {
+        $set: expect.objectContaining({
+          status: 'ACTIVO',
+          userId: expect.anything(),
+          petData,
+          expiration: expect.any(Date),
+          commercialStatus: 'VENDIDO',
+          activationAttempts: 0,
+          activationLockedUntil: null,
+        }),
+      },
+      expect.anything(),
+    );
+    expect(result).toEqual(updatedTag);
   });
-});
+
+  it('SPEC-009 A12: lanza 429 si la placa está bloqueada temporalmente (5 PINs fallidos)', async () => {
+    mockFindOne.mockReturnValue(mockQueryChain({ _id: 'x' })); // lockedUntil en el futuro
+    mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
+
+    await expect(
+      repository.activate('qr-1', 'PIN-1', petData, VALID_USER_ID, tracking),
+    ).rejects.toThrow('Demasiados intentos de activación');
+    expect(mockFindOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it('debe lanzar error cuando no encuentra la placa (diagnóstico 404 en rama de error)', async () => {
+    mockFindOne.mockReset();
+    mockFindOne
+      .mockReturnValueOnce(mockQueryChain(null)) // check de bloqueo
+      .mockReturnValueOnce(mockQueryChain(null)); // diagnóstico: placa no existe
+    mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
+
+    await expect(
+      repository.activate('qr-1', 'PIN-1', petData, VALID_USER_ID, tracking),
+    ).rejects.toThrow('No se encontró una placa con ID QR: qr-1');
+    expect(mockFindOne).toHaveBeenCalledTimes(2);
+    expect(mockFindOne).toHaveBeenLastCalledWith({ idQr: 'qr-1' });
+  });
+
+  it('debe lanzar 409 cuando la placa ya está activa (existe pero no RESERVADO)', async () => {
+    mockFindOne
+      .mockReturnValueOnce(mockQueryChain(null)) // check de bloqueo
+      .mockReturnValueOnce(mockQueryChain(existing)); // diagnóstico: ya activa
+    mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
+
+    await expect(
+      repository.activate('qr-1', 'PIN-1', petData, VALID_USER_ID, tracking),
+    ).rejects.toThrow('ya está activa');
+  });
+
+  it('debe lanzar 409 cuando otra request concurrente activó la placa (TOCTOU eliminado)', async () => {
+    mockFindOne
+      .mockReturnValueOnce(mockQueryChain(null)) // check de bloqueo
+      .mockReturnValueOnce(mockQueryChain(activatedByOther)); // diagnóstico: activa por otro
+    mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
+
+    await expect(
+      repository.activate('qr-1', 'PIN-1', petData, VALID_USER_ID, tracking),
+    ).rejects.toThrow('ya está activa');
+  });
+
+  it('SPEC-009 A12: PIN incorrecto → 400 y se incrementa el contador de intentos', async () => {
+    mockFindOne.mockReset();
+    mockFindOne
+      .mockReturnValueOnce(mockQueryChain(null)) // check de bloqueo
+      .mockReturnValueOnce(mockQueryChain({ ...reservada, activationAttempts: 2 })); // PIN incorrecto
+    mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
+    mockUpdateOne.mockReset();
+    mockUpdateOne.mockReturnValue({ exec: jest.fn().mockResolvedValue({}) });
+
+    await expect(
+      repository.activate('qr-1', 'PIN-ERR', petData, VALID_USER_ID, tracking),
+    ).rejects.toThrow('PIN de activación incorrecto');
+    expect(mockUpdateOne).toHaveBeenCalledWith(
+      { idQr: 'qr-1' },
+      { $set: { activationAttempts: 3 } },
+    );
+  });
+
+  it('SPEC-009 A12: 5º fallo → bloquea la placa 30 min y responde 429', async () => {
+    mockFindOne.mockReset();
+    mockFindOne
+      .mockReturnValueOnce(mockQueryChain(null)) // check de bloqueo
+      .mockReturnValueOnce(mockQueryChain({ ...reservada, activationAttempts: 4 })); // 5º fallo
+    mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
+    mockUpdateOne.mockReset();
+    mockUpdateOne.mockReturnValue({ exec: jest.fn().mockResolvedValue({}) });
+
+    await expect(
+      repository.activate('qr-1', 'PIN-ERR', petData, VALID_USER_ID, tracking),
+    ).rejects.toThrow('Demasiados intentos de activación');
+    expect(mockUpdateOne).toHaveBeenCalledTimes(2);
+  });
+
+  it('debe trazar y lanzar el error si la consulta falla', async () => {
+    mockFindOne.mockReturnValue(mockQueryChain(null)); // check de bloqueo OK
+    mockFindOneAndUpdate.mockReturnValue({
+      lean: jest.fn().mockRejectedValue(new Error('DB down')),
+    });
+
+    await expect(
+      repository.activate('qr-1', 'PIN-1', petData, VALID_USER_ID, tracking),
+    ).rejects.toThrow('DB down');
+    expect(traceService.error).toHaveBeenCalledWith(
+      tracking,
+      TraceLayer.REPOSITORY,
+      'activate:error',
+      expect.any(Error),
+    );
+  });
+});});

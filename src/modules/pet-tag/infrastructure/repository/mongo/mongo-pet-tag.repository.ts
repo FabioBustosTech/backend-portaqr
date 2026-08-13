@@ -241,7 +241,21 @@ export class MongoPetTagRepository
         userId,
       });
 
-      // 1 round-trip atómico (SPEC-007 H5): el filtro condicional elimina el TOCTOU
+      // SPEC-009 A12: la placa está bloqueada temporalmente (5 PINs fallidos)
+      const locked = await this.petTagModel
+        .findOne({ idQr, activationLockedUntil: { $gt: new Date() } })
+        .select('_id')
+        .lean()
+        .exec();
+      if (locked) {
+        throw new HttpException(
+          'Demasiados intentos de activación. Intenta nuevamente en unos minutos.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+
+      // 1 round-trip atómico (SPEC-007 H5): el filtro condicional elimina el TOCTOU.
+      // Al éxito se resetea el contador de intentos (SPEC-009 A12).
       const updatedTag = await this.petTagModel
         .findOneAndUpdate(
           { idQr, activationPin, status: 'RESERVADO' },
@@ -252,33 +266,64 @@ export class MongoPetTagRepository
               petData,
               expiration: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 año desde ahora
               commercialStatus: 'VENDIDO',
+              activationAttempts: 0,
+              activationLockedUntil: null,
             },
           },
           { new: true, runValidators: true }, // runValidators: no-regresión de enums status/commercialStatus
         )
         .lean();
 
-      if (!updatedTag) {
-        // Rama de error: 1 read para distinguir causa (no afecta el camino feliz)
-        const existing = await this.petTagModel
-          .findOne({ idQr, activationPin })
-          .lean();
+      if (updatedTag) {
+        this.traceService.log(tracking, TraceLayer.REPOSITORY, 'activate:complete', { idQr });
+        return updatedTag;
+      }
 
-        if (!existing) {
-          throw new NotFoundException(`No se encontró una placa con ID QR: ${idQr}`);
-        }
+      // Rama de error: distinguir placa inexistente vs PIN incorrecto
+      const existing = await this.petTagModel
+        .findOne({ idQr })
+        .select('activationPin status activationAttempts activationLockedUntil')
+        .lean()
+        .exec();
+
+      if (!existing) {
+        throw new NotFoundException(`No se encontró una placa con ID QR: ${idQr}`);
+      }
+
+      if (existing.status !== 'RESERVADO') {
         // Existe pero no está RESERVADO (o lo activó otra request concurrente)
         throw new ConflictException(`La placa con ID QR: ${idQr} ya está activa`);
       }
 
-      this.traceService.log(tracking, TraceLayer.REPOSITORY, 'activate:complete', { idQr });
-      return updatedTag;
+      // SPEC-009 A12: PIN incorrecto → incrementar contador; al llegar a 5 → bloquear 30 min
+      const maxAttempts = parseInt(process.env.PET_TAG_MAX_ATTEMPTS ?? '5', 10) || 5;
+      const lockMinutes = parseInt(process.env.PET_TAG_LOCK_MINUTES ?? '30', 10) || 30;
+      const attempts = (existing.activationAttempts ?? 0) + 1;
+      await this.petTagModel
+        .updateOne({ idQr }, { $set: { activationAttempts: attempts } })
+        .exec();
+      if (attempts >= maxAttempts) {
+        await this.petTagModel
+          .updateOne(
+            { idQr },
+            {
+              $set: {
+                activationLockedUntil: new Date(Date.now() + lockMinutes * 60 * 1000),
+                activationAttempts: 0,
+              },
+            },
+          )
+          .exec();
+        this.traceService.warn(tracking, TraceLayer.REPOSITORY, 'activate:locked', { idQr });
+        throw new HttpException(
+          'Demasiados intentos de activación. Intenta nuevamente en unos minutos.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+      throw new HttpException('PIN de activación incorrecto', HttpStatus.BAD_REQUEST);
     } catch (error) {
       this.traceService.error(tracking, TraceLayer.REPOSITORY, 'activate:error', error as Error);
-      throw new HttpException(
-        error.message || 'Error al activar placa',
-        error.status || HttpStatus.BAD_REQUEST,
-      );
+      throw error;
     }
   }
 }

@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+﻿import { Injectable, Logger } from '@nestjs/common';
 import type { TrackingContext } from '../decorators/tracking.decorator';
+import { sanitizeForLog } from '../utils/redact.utils';
 
 export enum TraceLayer {
   CONTROLLER = 'CONTROLLER',
@@ -33,7 +34,7 @@ export class TraceService {
 
     if (data) {
       this.logger.log(
-        `${trace} ${layerStr} | ${message}\n${JSON.stringify(data, null, 2)}`,
+        `${trace} ${layerStr} | ${message}\n${JSON.stringify(sanitizeForLog(data), null, 2)}`,
       );
     } else {
       this.logger.log(`${trace} ${layerStr} | ${message}`);
@@ -51,7 +52,7 @@ export class TraceService {
 
     if (data) {
       this.logger.debug(
-        `${trace} ${layerStr} | ${message}\n${JSON.stringify(data, null, 2)}`,
+        `${trace} ${layerStr} | ${message}\n${JSON.stringify(sanitizeForLog(data), null, 2)}`,
       );
     } else {
       this.logger.debug(`${trace} ${layerStr} | ${message}`);
@@ -83,7 +84,7 @@ export class TraceService {
 
     if (data) {
       this.logger.warn(
-        `${trace} ${layerStr} | ${message}\n${JSON.stringify(data, null, 2)}`,
+        `${trace} ${layerStr} | ${message}\n${JSON.stringify(sanitizeForLog(data), null, 2)}`,
       );
     } else {
       this.logger.warn(`${trace} ${layerStr} | ${message}`);

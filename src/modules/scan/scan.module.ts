@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CommonModule } from 'src/common/common.module';
+import { QrModule } from 'src/modules/qr/qr.module'; // SPEC-009 A7: ownership de QRs en scan
 import { ScanController } from './presentation/controllers/scan.controller';
 
 import {
@@ -23,6 +24,7 @@ import { SCAN_CREATE_PORT, SCAN_GET_PORT } from './domain/constants/scan.tokens'
 @Module({
   imports: [
     CommonModule,
+    QrModule, // SPEC-009 A7: provee GetQrUseCase para ownership de QRs
     MongooseModule.forFeature([
       { name: ScanSchema.name, schema: ScanSchemaDefinition },
     ]),

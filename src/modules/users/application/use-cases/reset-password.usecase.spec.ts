@@ -1,6 +1,7 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { ResetPasswordUseCase } from './reset-password.usecase';
+import { IncrementTokenVersionUseCase } from './increment-token-version.usecase';
 import { USER_GET_PORT, USER_UPDATE_PORT } from '../../domain/constants/user.tokens';
 import type { ICanGetUser } from '../../domain/ports/queries/get-user.port';
 import type { ICanUpdateUser } from '../../domain/ports/queries/create-user.port';
@@ -53,6 +54,10 @@ describe('ResetPasswordUseCase', () => {
           },
         },
         {
+          provide: IncrementTokenVersionUseCase,
+          useValue: { execute: jest.fn() },
+        },
+        {
           provide: PasswordService,
           useValue: {
             hashPassword: jest.fn(),
@@ -99,6 +104,7 @@ describe('ResetPasswordUseCase', () => {
           password: 'hashed-new',
           passwordResetCode: undefined,
           passwordResetExpires: undefined,
+          passwordResetAttempts: 0,
         },
         tracking,
       );
@@ -110,7 +116,7 @@ describe('ResetPasswordUseCase', () => {
       );
     });
 
-    it('debe lanzar NotFoundException si el usuario no existe', async () => {
+    it('debe lanzar BadRequestException si el usuario no existe', async () => {
       reader.getByEmail.mockResolvedValue(null);
 
       await expect(
@@ -131,13 +137,38 @@ describe('ResetPasswordUseCase', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('debe lanzar BadRequestException si el código es inválido', async () => {
+    it('SPEC-009 A5: código inválido incrementa passwordResetAttempts (1 fallo)', async () => {
       reader.getByEmail.mockResolvedValue(baseUser);
 
       await expect(
         useCase.execute('test@test.com', 'WRONG99', 'nueva123', tracking),
       ).rejects.toThrow(BadRequestException);
+      expect(updater.update).toHaveBeenCalledWith(
+        'user-1',
+        { passwordResetAttempts: 1 },
+        tracking,
+      );
       expect(passwordService.hashPassword).not.toHaveBeenCalled();
+    });
+
+    it('SPEC-009 A5: 5 fallos → invalida el código (responde expirado y borra)', async () => {
+      reader.getByEmail.mockResolvedValue({
+        ...baseUser,
+        passwordResetAttempts: 4,
+      });
+
+      await expect(
+        useCase.execute('test@test.com', 'WRONG99', 'nueva123', tracking),
+      ).rejects.toThrow('El cÃ³digo de recuperaciÃ³n ha expirado');
+      expect(updater.update).toHaveBeenCalledWith(
+        'user-1',
+        {
+          passwordResetCode: undefined,
+          passwordResetExpires: undefined,
+          passwordResetAttempts: 0,
+        },
+        tracking,
+      );
     });
 
     it('debe lanzar BadRequestException si el código ha expirado', async () => {

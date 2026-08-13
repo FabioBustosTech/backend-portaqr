@@ -22,8 +22,14 @@ export class CreateTransactionUseCase {
     private readonly traceService: TraceService,
   ) {}
 
+  /**
+   * Crea la transacción Webpay.
+   * SPEC-009 A2: el `sessionId` NO viene del body (se eliminó del DTO, Opción A) —
+   * lo inyecta el controller desde `req.user.id` del token JWT.
+   */
   async execute(
     dto: CreateTransactionDto,
+    sessionId: string,
     tracking: TrackingContext,
   ): Promise<CreateTransactionResult> {
     this.traceService.log(tracking, TraceLayer.USE_CASE, 'CreateTransactionUseCase', {
@@ -34,20 +40,20 @@ export class CreateTransactionUseCase {
     try {
       const result = await this.gateway.createTransaction(
         dto.buyOrder,
-        dto.sessionId,
+        sessionId,
         dto.amount,
         dto.returnUrl,
         tracking,
       );
 
-      // Persistir la transacciÃ³n inicializada
+      // Persistir la transacción inicializada (sessionId = user.id del token)
       await this.creator.create(
         {
           id: '',
           token: result.token,
           amount: dto.amount,
           buyOrder: dto.buyOrder,
-          sessionId: dto.sessionId,
+          sessionId,
           status: 'INITIALIZED',
         },
         tracking,

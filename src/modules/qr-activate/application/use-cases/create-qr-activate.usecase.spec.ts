@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { CreateQrActivateUseCase } from './create-qr-activate.usecase';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import {
@@ -18,6 +18,8 @@ import {
 } from '../../domain/entities/qr-activate.entity';
 import type { QrActivate } from '../../domain/entities/qr-activate.entity';
 import { CreateQrActivateDto } from '../dto/create-qr-activate.dto';
+import { GetPlanUseCase } from '../../../plan/application/use-cases/get-plan.usecase';
+import { GetQrUseCase } from '../../../qr/application/use-cases/get-qr.usecase';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 
 describe('CreateQrActivateUseCase', () => {
@@ -25,20 +27,22 @@ describe('CreateQrActivateUseCase', () => {
   let creator: jest.Mocked<ICanCreateQrActivate>;
   let qrActivator: jest.Mocked<ICanActivateQr>;
   let traceService: jest.Mocked<TraceService>;
+  let getPlanUseCase: jest.Mocked<GetPlanUseCase>; // SPEC-009 B12
+  let getQrUseCase: jest.Mocked<GetQrUseCase>; // SPEC-009 B12
 
   const tracking: TrackingContext = { trackingId: 't-1', sessionId: 's-1' };
+  // SPEC-009 A3: el actor (del token) decide userId/state por rol
+  const actor = { id: 'user-1', role: 'user' };
 
   const expirationDate = new Date('2024-12-31T23:59:59.999Z');
 
   const dto: CreateQrActivateDto = {
     methodActivation: MethodActivation.WEBPAY,
-    activationDate: new Date('2024-01-01T10:00:00Z'),
-    state: ActivationState.PENDING,
-    price: { TotalPrice: 100, TotalTax: 19 },
+    webpayToken: 'tx-1',
     qrList: [
       {
         qrCode: 'qr-1',
-        price: 100,
+        planId: 'plan-1', // SPEC-009 B12: el precio sale del plan
         expirationDate,
         duration: '12 meses',
       },
@@ -47,7 +51,6 @@ describe('CreateQrActivateUseCase', () => {
     description: 'Activación de prueba',
     adminId: 'admin-1',
     descriptionAdministrator: 'Creada por admin',
-    WebpayTransaction: { id: 'tx-1', state: WebpayState.PENDING },
     documentType: DocumentType.BOLETA,
     sendDocument: false,
   };
@@ -62,6 +65,7 @@ describe('CreateQrActivateUseCase', () => {
       {
         qrCode: 'qr-1',
         price: 100,
+        plan: 'plan-1',
         expirationDate,
         duration: '12 meses',
       },
@@ -87,6 +91,14 @@ describe('CreateQrActivateUseCase', () => {
           },
         },
         {
+          provide: GetPlanUseCase,
+          useValue: { execute: jest.fn() },
+        },
+        {
+          provide: GetQrUseCase,
+          useValue: { execute: jest.fn() },
+        },
+        {
           provide: TraceService,
           useValue: {
             log: jest.fn(),
@@ -102,6 +114,11 @@ describe('CreateQrActivateUseCase', () => {
     creator = module.get(QR_ACTIVATE_CREATE_PORT);
     qrActivator = module.get(QR_ACTIVATE_QR_PORT);
     traceService = module.get(TraceService);
+    getPlanUseCase = module.get(GetPlanUseCase);
+    getQrUseCase = module.get(GetQrUseCase);
+    // SPEC-009 B12: plan con precio y QR del dueño (user-1)
+    getPlanUseCase.execute.mockResolvedValue({ id: 'plan-1', price: 100 } as never);
+    getQrUseCase.execute.mockResolvedValue({ idQr: 'qr-1', userId: 'user-1' } as never);
   });
 
   it('debe estar definido', () => {
@@ -112,7 +129,7 @@ describe('CreateQrActivateUseCase', () => {
     it('debe crear la entidad de activación y delegar al puerto de creación', async () => {
       creator.create.mockResolvedValue(mockActivation);
 
-      const result = await useCase.execute(dto, tracking);
+      const result = await useCase.execute(dto, actor, tracking);
 
       expect(traceService.log).toHaveBeenCalledWith(
         tracking,
@@ -124,15 +141,23 @@ describe('CreateQrActivateUseCase', () => {
       const createdEntity = creator.create.mock.calls[0][0];
       expect(createdEntity).toBeInstanceOf(QrActivateEntity);
       expect(createdEntity.methodActivation).toBe(MethodActivation.WEBPAY);
-      expect(createdEntity.activationDate).toEqual(dto.activationDate);
+      // SPEC-009 A3: el state lo fija el usecase (no viene del body)
       expect(createdEntity.state).toBe(ActivationState.PENDING);
-      expect(createdEntity.price).toEqual(dto.price);
+      // SPEC-009 A3: WebpayTransaction se arma desde webpayToken (solo el token en la entrada)
+      expect(createdEntity.WebpayTransaction).toEqual({
+        id: 'tx-1',
+        date: expect.any(Date),
+        state: WebpayState.INITIAL,
+      });
+      // SPEC-009 B12: el precio se calcula del PLAN (snapshot) — no del body
+      expect(createdEntity.price).toEqual({ TotalPrice: 100, TotalTax: 19, TotalDiscount: 0 });
       expect(createdEntity.userId).toBe('user-1');
       expect(createdEntity.documentType).toBe(DocumentType.BOLETA);
       expect(createdEntity.qrList).toEqual([
         {
           qrCode: 'qr-1',
-          price: 100,
+          price: 100, // plan.price (snapshot)
+          plan: 'plan-1',
           expirationDate,
           duration: '12 meses',
         },
@@ -145,7 +170,7 @@ describe('CreateQrActivateUseCase', () => {
     it('debe propagar el error si el puerto de creación falla', async () => {
       creator.create.mockRejectedValue(new Error('DB down'));
 
-      await expect(useCase.execute(dto, tracking)).rejects.toThrow('DB down');
+      await expect(useCase.execute(dto, actor, tracking)).rejects.toThrow('DB down');
     });
   });
 
@@ -154,7 +179,7 @@ describe('CreateQrActivateUseCase', () => {
       creator.create.mockResolvedValue(mockActivation);
       qrActivator.activateMany.mockResolvedValue({ matchedCount: 1, modifiedCount: 1 });
 
-      const result = await useCase.executeAdmin(dto, tracking);
+      const result = await useCase.executeAdmin(dto, actor, tracking);
 
       expect(traceService.log).toHaveBeenCalledWith(
         tracking,
@@ -177,14 +202,14 @@ describe('CreateQrActivateUseCase', () => {
       const multiQrDto: CreateQrActivateDto = {
         ...dto,
         qrList: [
-          { qrCode: 'qr-1', price: 50, expirationDate, duration: '6 meses' },
-          { qrCode: 'qr-2', price: 50, expirationDate, duration: '6 meses' },
+          { qrCode: 'qr-1', planId: 'plan-1', expirationDate, duration: '6 meses' },
+          { qrCode: 'qr-2', planId: 'plan-1', expirationDate, duration: '6 meses' },
         ],
       };
       creator.create.mockResolvedValue(mockActivation);
       qrActivator.activateMany.mockResolvedValue({ matchedCount: 2, modifiedCount: 2 });
 
-      await useCase.executeAdmin(multiQrDto, tracking);
+      await useCase.executeAdmin(multiQrDto, actor, tracking);
 
       expect(qrActivator.activateMany).toHaveBeenCalledTimes(1);
       expect(qrActivator.activateMany).toHaveBeenCalledWith(
@@ -198,14 +223,14 @@ describe('CreateQrActivateUseCase', () => {
       const multiQrDto: CreateQrActivateDto = {
         ...dto,
         qrList: [
-          { qrCode: 'qr-1', price: 50, expirationDate, duration: '6 meses' },
-          { qrCode: 'qr-inexistente', price: 50, expirationDate, duration: '6 meses' },
+          { qrCode: 'qr-1', planId: 'plan-1', expirationDate, duration: '6 meses' },
+          { qrCode: 'qr-inexistente', planId: 'plan-1', expirationDate, duration: '6 meses' },
         ],
       };
       creator.create.mockResolvedValue(mockActivation);
       qrActivator.activateMany.mockResolvedValue({ matchedCount: 1, modifiedCount: 1 });
 
-      const result = await useCase.executeAdmin(multiQrDto, tracking);
+      const result = await useCase.executeAdmin(multiQrDto, actor, tracking);
 
       expect(traceService.warn).toHaveBeenCalledWith(
         tracking,
@@ -223,7 +248,7 @@ describe('CreateQrActivateUseCase', () => {
       };
       creator.create.mockResolvedValue(mockActivation);
 
-      await useCase.executeAdmin(emptyQrDto, tracking);
+      await useCase.executeAdmin(emptyQrDto, actor, tracking);
 
       expect(qrActivator.activateMany).not.toHaveBeenCalled();
     });
@@ -231,7 +256,7 @@ describe('CreateQrActivateUseCase', () => {
     it('debe propagar el error si la creación falla y no activar QRs', async () => {
       creator.create.mockRejectedValue(new Error('DB down'));
 
-      await expect(useCase.executeAdmin(dto, tracking)).rejects.toThrow('DB down');
+      await expect(useCase.executeAdmin(dto, actor, tracking)).rejects.toThrow('DB down');
       expect(qrActivator.activateMany).not.toHaveBeenCalled();
     });
 
@@ -239,7 +264,7 @@ describe('CreateQrActivateUseCase', () => {
       creator.create.mockResolvedValue(mockActivation);
       qrActivator.activateMany.mockRejectedValue(new Error('DB down'));
 
-      await expect(useCase.executeAdmin(dto, tracking)).rejects.toThrow('DB down');
+      await expect(useCase.executeAdmin(dto, actor, tracking)).rejects.toThrow('DB down');
     });
   });
 });

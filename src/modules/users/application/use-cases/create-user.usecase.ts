@@ -8,6 +8,7 @@ import { UserValidationRules } from '../../domain/validators/user-validation.rul
 import { PasswordService } from '../../domain/services/password.service';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import { USER_CREATE_PORT } from '../../domain/constants/user.tokens';
+import { generateVerificationCode as generateVerificationCodeUtil } from '../../../../common/utils/code-generator.util';
 import { EmailService } from '../../../../shared/email/email.service';
 import { ConfigService } from '@nestjs/config';
 
@@ -98,7 +99,7 @@ export class CreateUserUseCase {
   }
 
   private generateVerificationCode(): string {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
+    return generateVerificationCodeUtil(); // SPEC-009 A5: CSPRNG (crypto.randomBytes)
   }
 
   private calculateExpiry(): Date {
