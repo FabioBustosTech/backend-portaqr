@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CommonModule } from 'src/common/common.module';
 import { QrModule } from 'src/modules/qr/qr.module'; // SPEC-009 A7: ownership de QRs en scan
+import { PetTagModule } from 'src/modules/pet-tag/pet-tag.module'; // SPEC-016 fix: dueño de scans de pet-tags
 import { ScanController } from './presentation/controllers/scan.controller';
 
 import {
@@ -25,6 +26,7 @@ import { SCAN_CREATE_PORT, SCAN_GET_PORT } from './domain/constants/scan.tokens'
   imports: [
     CommonModule,
     QrModule, // SPEC-009 A7: provee GetQrUseCase para ownership de QRs
+    PetTagModule, // SPEC-016 fix: provee PET_TAG_GET_PORT (getOwner) para scans de pet-tags
     MongooseModule.forFeature([
       { name: ScanSchema.name, schema: ScanSchemaDefinition },
     ]),

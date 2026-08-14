@@ -72,6 +72,10 @@ import {
     ActivatePetTagUseCase,
     UploadPetImageUseCase,
     DeletePetImageUseCase,
+    // SPEC-016 fix: el port de lectura se exporta para que ScanModule resuelva
+    // el dueño de scans de pet-tags (los pet-tags NO tienen QR espejo en `qrs`)
+    PetTagRepositoryAdapter,
+    PET_TAG_GET_PORT,
   ],
 })
 export class PetTagModule {}
