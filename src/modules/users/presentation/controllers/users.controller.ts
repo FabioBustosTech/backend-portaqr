@@ -189,9 +189,10 @@ export class UsersController {
     @Query('limit') limit: number = 10,
     @Query('search') search: string = '',
     @Tracking() tracking: TrackingContext,
+    @Query('role') role?: string,
   ) {
-    this.traceService.log(tracking, TraceLayer.CONTROLLER, 'GET /users/paginated', { page, limit, search });
-    return this.getAllUserUseCase.execute(page, limit, search, tracking);
+    this.traceService.log(tracking, TraceLayer.CONTROLLER, 'GET /users/paginated', { page, limit, search, role });
+    return this.getAllUserUseCase.execute(page, limit, search, role, tracking);
   }
 
   @Get()
@@ -200,7 +201,7 @@ export class UsersController {
   @ApiOperation({ summary: 'Obtener todos los Usuarios' })
   async findAll(@Tracking() tracking: TrackingContext) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'GET /users');
-    const result = await this.getAllUserUseCase.execute(1, 100, undefined, tracking);
+    const result = await this.getAllUserUseCase.execute(1, 100, undefined, undefined, tracking);
     return result.data;
   }
 

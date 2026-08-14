@@ -34,11 +34,18 @@ export class MongoUserRepository
     page: number,
     limit: number,
     search: string | undefined,
+    role: string | undefined,
     tracking: TrackingContext,
   ): Promise<PaginatedResult<User>> {
     try {
       const skip = (page - 1) * limit;
-      const filter: Record<string, unknown> = { role: 'user' };
+      // SPEC-013 Bloque C: filtro de rol parametrizable.
+      // 'user'/'admin' filtran por rol; 'all'/ausente/inválido → sin filtro de
+      // rol (default "Todos" — decisión del usuario 2026-08-13).
+      const filter: Record<string, unknown> = {};
+      if (role === 'user' || role === 'admin') {
+        filter.role = role;
+      }
 
       if (search) {
         // SPEC-008 H3 (R2): input como literal antes de $regex (anti-ReDoS)
@@ -49,7 +56,12 @@ export class MongoUserRepository
         ];
       }
 
-      this.traceService.log(tracking, TraceLayer.REPOSITORY, 'getAll:init', { page, limit, search });
+      this.traceService.log(tracking, TraceLayer.REPOSITORY, 'getAll:init', {
+        page,
+        limit,
+        search,
+        role: role ?? 'all',
+      });
 
       const [data, total] = await Promise.all([
         this.userModel.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean().exec(),

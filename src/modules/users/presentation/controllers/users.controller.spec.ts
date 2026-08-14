@@ -312,26 +312,26 @@ describe('UsersController', () => {
   });
 
   describe('findPaginatedByUser', () => {
-    it('debe delegar en el use-case con los parámetros de query', async () => {
+    it('debe delegar en el use-case con los parámetros de query y rol', async () => {
       getAllUserUseCase.execute.mockResolvedValue(paginatedResult);
 
-      const result = await controller.findPaginatedByUser(2, 25, 'juan', tracking);
+      const result = await controller.findPaginatedByUser(2, 25, 'juan', tracking, 'admin');
 
-      expect(getAllUserUseCase.execute).toHaveBeenCalledWith(2, 25, 'juan', tracking);
+      expect(getAllUserUseCase.execute).toHaveBeenCalledWith(2, 25, 'juan', 'admin', tracking);
       expect(result).toEqual(paginatedResult);
     });
 
-    it('debe usar valores por defecto si no se envían queries', async () => {
+    it('debe usar valores por defecto si no se envían queries (rol undefined → usecase aplica "all")', async () => {
       getAllUserUseCase.execute.mockResolvedValue(paginatedResult);
 
-      await controller.findPaginatedByUser(undefined, undefined, undefined, tracking);
+      await controller.findPaginatedByUser(undefined, undefined, undefined, tracking, undefined);
 
-      expect(getAllUserUseCase.execute).toHaveBeenCalledWith(1, 10, '', tracking);
+      expect(getAllUserUseCase.execute).toHaveBeenCalledWith(1, 10, '', undefined, tracking);
     });
   });
 
   describe('findAll', () => {
-    it('debe retornar solo la lista de datos con paginación 1 y 100', async () => {
+    it('debe retornar solo la lista de datos con paginación 1 y 100 (rol undefined → default "all")', async () => {
       getAllUserUseCase.execute.mockResolvedValue(paginatedResult);
 
       const result = await controller.findAll(tracking);
@@ -339,6 +339,7 @@ describe('UsersController', () => {
       expect(getAllUserUseCase.execute).toHaveBeenCalledWith(
         1,
         100,
+        undefined,
         undefined,
         tracking,
       );

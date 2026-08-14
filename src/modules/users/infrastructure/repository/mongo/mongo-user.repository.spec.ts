@@ -125,7 +125,7 @@ describe('MongoUserRepository', () => {
       mockFind.mockReturnValue(mockQuery([doc]));
       mockCountDocuments.mockResolvedValue(1);
 
-      const result = await repository.getAll(1, 10, 'usuario', tracking);
+      const result = await repository.getAll(1, 10, 'usuario', 'user', tracking);
 
       expect(mockFind).toHaveBeenCalledWith({
         role: 'user',
@@ -145,7 +145,7 @@ describe('MongoUserRepository', () => {
         tracking,
         TraceLayer.REPOSITORY,
         'getAll:init',
-        { page: 1, limit: 10, search: 'usuario' },
+        { page: 1, limit: 10, search: 'usuario', role: 'user' },
       );
       expect(result).toEqual({
         data: [user],
@@ -158,12 +158,74 @@ describe('MongoUserRepository', () => {
       });
     });
 
+    it('debe filtrar por role=admin cuando se solicita (SPEC-013 Bloque C)', async () => {
+      mockFind.mockReturnValue(mockQuery([doc]));
+      mockCountDocuments.mockResolvedValue(1);
+
+      await repository.getAll(1, 10, undefined, 'admin', tracking);
+
+      expect(mockFind).toHaveBeenCalledWith({ role: 'admin' });
+      expect(mockCountDocuments).toHaveBeenCalledWith({ role: 'admin' });
+    });
+
+    it('debe combinar role=admin con la búsqueda (SPEC-013 Bloque C)', async () => {
+      mockFind.mockReturnValue(mockQuery([]));
+      mockCountDocuments.mockResolvedValue(0);
+
+      await repository.getAll(1, 10, 'fabio', 'admin', tracking);
+
+      expect(mockFind).toHaveBeenCalledWith({
+        role: 'admin',
+        $or: [
+          { userName: { $regex: 'fabio', $options: 'i' } },
+          { email: { $regex: 'fabio', $options: 'i' } },
+        ],
+      });
+    });
+
+    it('debe listar TODOS los roles cuando role es "all" (SPEC-013 Bloque C — default)', async () => {
+      mockFind.mockReturnValue(mockQuery([doc]));
+      mockCountDocuments.mockResolvedValue(1);
+
+      const result = await repository.getAll(1, 10, undefined, 'all', tracking);
+
+      expect(mockFind).toHaveBeenCalledWith({});
+      expect(mockCountDocuments).toHaveBeenCalledWith({});
+      expect(result.total).toBe(1);
+    });
+
+    it('debe listar TODOS los roles cuando role no viene (default — SPEC-013 Bloque C)', async () => {
+      mockFind.mockReturnValue(mockQuery([]));
+      mockCountDocuments.mockResolvedValue(0);
+
+      await repository.getAll(1, 10, undefined, undefined, tracking);
+
+      expect(mockFind).toHaveBeenCalledWith({});
+      expect(mockCountDocuments).toHaveBeenCalledWith({});
+      expect(traceService.log).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.REPOSITORY,
+        'getAll:init',
+        { page: 1, limit: 10, search: undefined, role: 'all' },
+      );
+    });
+
+    it('debe listar TODOS los roles cuando role es inválido (whitelist — SPEC-013 Bloque C)', async () => {
+      mockFind.mockReturnValue(mockQuery([]));
+      mockCountDocuments.mockResolvedValue(0);
+
+      await repository.getAll(1, 10, undefined, 'root', tracking);
+
+      expect(mockFind).toHaveBeenCalledWith({});
+      expect(mockCountDocuments).toHaveBeenCalledWith({});
+    });
+
     it('debe escapar metacaracteres del término de búsqueda (SPEC-008 H3 — R2 ReDoS, CA-02)', async () => {
       mockFind.mockReturnValue(mockQuery([]));
       mockCountDocuments.mockResolvedValue(0);
 
       // (a+)+$ con backtracking exponencial → debe llegar a $regex como literal
-      await repository.getAll(1, 10, '(a+)+$', tracking);
+      await repository.getAll(1, 10, '(a+)+$', 'user', tracking);
 
       const escaped = '\\(a\\+\\)\\+\\$';
       expect(mockFind).toHaveBeenCalledWith({
@@ -178,7 +240,7 @@ describe('MongoUserRepository', () => {
     it('debe consultar solo por rol cuando no hay búsqueda', async () => {
       mockFind.mockReturnValue(mockQuery([]));
       mockCountDocuments.mockResolvedValue(0);
-      await repository.getAll(1, 10, undefined, tracking);
+      await repository.getAll(1, 10, undefined, 'user', tracking);
 
       expect(mockFind).toHaveBeenCalledWith({ role: 'user' });
       expect(mockCountDocuments).toHaveBeenCalledWith({ role: 'user' });
@@ -188,7 +250,7 @@ describe('MongoUserRepository', () => {
       mockFind.mockReturnValue(mockQuery([doc]));
       mockCountDocuments.mockResolvedValue(25);
 
-      const result = await repository.getAll(2, 10, undefined, tracking);
+      const result = await repository.getAll(2, 10, undefined, 'user', tracking);
 
       expect(result.totalPages).toBe(3);
       expect(result.hasNextPage).toBe(true);
@@ -204,7 +266,7 @@ describe('MongoUserRepository', () => {
         exec: jest.fn().mockRejectedValue(new Error('DB down')),
       });
 
-      await expect(repository.getAll(1, 10, undefined, tracking)).rejects.toThrow('DB down');
+      await expect(repository.getAll(1, 10, undefined, 'user', tracking)).rejects.toThrow('DB down');
       expect(traceService.error).toHaveBeenCalledWith(
         tracking,
         TraceLayer.REPOSITORY,

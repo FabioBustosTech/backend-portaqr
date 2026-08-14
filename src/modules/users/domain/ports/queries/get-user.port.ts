@@ -7,6 +7,7 @@ export interface ICanGetAllUser {
     page: number,
     limit: number,
     search: string | undefined,
+    role: string | undefined,
     tracking: TrackingContext,
   ): Promise<PaginatedResult<User>>;
 }

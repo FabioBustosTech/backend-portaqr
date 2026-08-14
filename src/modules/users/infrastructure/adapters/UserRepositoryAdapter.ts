@@ -22,9 +22,10 @@ export class UserRepositoryAdapter
     page: number,
     limit: number,
     search: string | undefined,
+    role: string | undefined,
     tracking: TrackingContext,
   ): Promise<PaginatedResult<User>> {
-    return this.mongoRepository.getAll(page, limit, search, tracking);
+    return this.mongoRepository.getAll(page, limit, search, role, tracking);
   }
 
   async getById(id: string, tracking: TrackingContext): Promise<User | null> {

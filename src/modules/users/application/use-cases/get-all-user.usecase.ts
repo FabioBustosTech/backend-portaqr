@@ -18,9 +18,17 @@ export class GetAllUserUseCase {
     page: number,
     limit: number,
     search: string | undefined,
+    role: string | undefined,
     tracking: TrackingContext,
   ): Promise<PaginatedResult<User>> {
-    this.traceService.log(tracking, TraceLayer.USE_CASE, 'GetAllUserUseCase', { page, limit, search });
-    return this.reader.getAll(page, limit, search, tracking);
+    // SPEC-013 Bloque C: default "Todos" — sin rol explícito se listan todos los roles.
+    const roleFilter = role ?? 'all';
+    this.traceService.log(tracking, TraceLayer.USE_CASE, 'GetAllUserUseCase', {
+      page,
+      limit,
+      search,
+      role: roleFilter,
+    });
+    return this.reader.getAll(page, limit, search, roleFilter, tracking);
   }
 }

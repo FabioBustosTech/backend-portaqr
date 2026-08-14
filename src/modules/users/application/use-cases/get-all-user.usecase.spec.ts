@@ -67,34 +67,50 @@ describe('GetAllUserUseCase', () => {
   });
 
   describe('execute', () => {
-    it('debe delegar al puerto con los parámetros de paginación y búsqueda', async () => {
+    it('debe delegar al puerto con los parámetros de paginación, búsqueda y rol', async () => {
       reader.getAll.mockResolvedValue(paginatedResult);
 
-      const result = await useCase.execute(2, 25, 'juan', tracking);
+      const result = await useCase.execute(2, 25, 'juan', 'user', tracking);
 
       expect(traceService.log).toHaveBeenCalledWith(
         tracking,
         TraceLayer.USE_CASE,
         'GetAllUserUseCase',
-        { page: 2, limit: 25, search: 'juan' },
+        { page: 2, limit: 25, search: 'juan', role: 'user' },
       );
-      expect(reader.getAll).toHaveBeenCalledWith(2, 25, 'juan', tracking);
+      expect(reader.getAll).toHaveBeenCalledWith(2, 25, 'juan', 'user', tracking);
       expect(result).toEqual(paginatedResult);
+    });
+
+    it('debe normalizar role undefined a "all" (default Todos — SPEC-013 Bloque C)', async () => {
+      reader.getAll.mockResolvedValue(paginatedResult);
+
+      await useCase.execute(1, 10, undefined, undefined, tracking);
+
+      expect(reader.getAll).toHaveBeenCalledWith(1, 10, undefined, 'all', tracking);
+    });
+
+    it('debe pasar role admin tal cual', async () => {
+      reader.getAll.mockResolvedValue(paginatedResult);
+
+      await useCase.execute(1, 10, undefined, 'admin', tracking);
+
+      expect(reader.getAll).toHaveBeenCalledWith(1, 10, undefined, 'admin', tracking);
     });
 
     it('debe delegar con search undefined cuando no se proporciona', async () => {
       reader.getAll.mockResolvedValue(paginatedResult);
 
-      await useCase.execute(1, 10, undefined, tracking);
+      await useCase.execute(1, 10, undefined, 'all', tracking);
 
-      expect(reader.getAll).toHaveBeenCalledWith(1, 10, undefined, tracking);
+      expect(reader.getAll).toHaveBeenCalledWith(1, 10, undefined, 'all', tracking);
     });
 
     it('debe propagar el error del puerto', async () => {
       reader.getAll.mockRejectedValue(new Error('DB caída'));
 
       await expect(
-        useCase.execute(1, 10, undefined, tracking),
+        useCase.execute(1, 10, undefined, undefined, tracking),
       ).rejects.toThrow('DB caída');
     });
   });

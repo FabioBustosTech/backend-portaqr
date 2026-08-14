@@ -66,13 +66,21 @@ describe('UserRepositoryAdapter', () => {
   });
 
   describe('getAll', () => {
-    it('debe delegar la consulta paginada al repositorio mongo', async () => {
+    it('debe delegar la consulta paginada al repositorio mongo (incluyendo rol — SPEC-013 Bloque C)', async () => {
       mongoRepository.getAll.mockResolvedValue(paginated);
 
-      const result = await adapter.getAll(1, 10, 'usuario', tracking);
+      const result = await adapter.getAll(1, 10, 'usuario', 'user', tracking);
 
-      expect(mongoRepository.getAll).toHaveBeenCalledWith(1, 10, 'usuario', tracking);
+      expect(mongoRepository.getAll).toHaveBeenCalledWith(1, 10, 'usuario', 'user', tracking);
       expect(result).toEqual(paginated);
+    });
+
+    it('debe delegar con rol undefined tal cual', async () => {
+      mongoRepository.getAll.mockResolvedValue(paginated);
+
+      await adapter.getAll(1, 10, undefined, undefined, tracking);
+
+      expect(mongoRepository.getAll).toHaveBeenCalledWith(1, 10, undefined, undefined, tracking);
     });
   });
 
