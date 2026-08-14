@@ -413,6 +413,45 @@ describe('MongoQrRepository', () => {
       }
     });
 
+    it('las condiciones por tipo agrupan typeQr CON sus campos (AND implícito — fix búsqueda)', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
+
+      await repository.findAllWithSearch(1, 10, 'juan', 'all', undefined, undefined, tracking);
+
+      const pipeline = mockAggregate.mock.calls[0][0] as unknown[];
+      const searchStage = pipeline.find(
+        (stage) =>
+          (stage as Record<string, unknown>).$match &&
+          (stage as { $match: { $or?: unknown[] } }).$match.$or !== undefined,
+      ) as { $match: { $or: Array<Record<string, unknown>> } };
+
+      const or = searchStage.$match.$or;
+      const keys = JSON.stringify(or);
+
+      // typeQr NUNCA debe aparecer como condición suelta del $or sin sus campos:
+      // el fix exige que cada condición de tipo sea un objeto { typeQr, campo }
+      // (p.ej. { typeQr: 'email', 'data.email': ... }) — no { typeQr: 'email' } aislado.
+      const emailCondition = or.find(
+        (cond) => cond.typeQr === 'email',
+      ) as Record<string, unknown>;
+      expect(emailCondition).toBeDefined();
+      expect(emailCondition['data.email']).toBeDefined(); // campo junto al typeQr
+
+      const whatsappCondition = or.find(
+        (cond) => cond.typeQr === 'whatsapp',
+      ) as Record<string, unknown>;
+      expect(whatsappCondition).toBeDefined();
+      expect(whatsappCondition.$or).toBeDefined(); // $or interno agrupado con typeQr
+
+      // No debe existir una condición SUELTA { typeQr: 'email' } sin campos
+      const bareEmail = or.some(
+        (cond) =>
+          cond.typeQr === 'email' &&
+          Object.keys(cond).length === 1,
+      );
+      expect(bareEmail).toBe(false);
+    });
+
     it('debe usar los valores por defecto (page=1, limit=10, search="", active="all")', async () => {
       mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
 

@@ -406,14 +406,48 @@ export class MongoQrRepository
       if (search) {
         // SPEC-008 H3 (R2): escapar como literal antes de $regex (anti-ReDoS)
         const safeSearch = escapeStringRegexp(search);
-        // Condiciones de búsqueda específicas para el modelo Qr
-        const typeConditions = {
-          social: [{ typeQr: 'social' }, { $or: [{ 'data.username': { $regex: safeSearch, $options: 'i' } }, { 'data.platform': { $regex: safeSearch, $options: 'i' } }] }],
-          email: [{ typeQr: 'email' }, { 'data.email': { $regex: safeSearch, $options: 'i' } }],
-          whatsapp: [{ typeQr: 'whatsapp' }, { $or: [{ 'data.phone': { $regex: safeSearch, $options: 'i' } }, { 'data.message': { $regex: safeSearch, $options: 'i' } }] }],
-          pet: [{ typeQr: 'pet' }, { $or: [{ 'data.petName': { $regex: safeSearch, $options: 'i' } }, { 'data.petBreed': { $regex: safeSearch, $options: 'i' } }, { 'data.petData.ownerPhone': { $regex: safeSearch, $options: 'i' } }] }],
-          phone: [{ typeQr: 'phone' }, { 'data.phone': { $regex: safeSearch, $options: 'i' } }],
-          map: [{ typeQr: 'map' }, { $or: [{ 'data.latitude': { $regex: safeSearch, $options: 'i' } }, { 'data.longitude': { $regex: safeSearch, $options: 'i' } }, { 'data.address': { $regex: safeSearch, $options: 'i' } }] }],
+        // SPEC-015 FIX: condiciones de tipo como UN SOLO objeto (typeQr + campos,
+        // AND implícito). El formato array + .flat() separaba typeQr del $or
+        // interno → matcheaba TODOS los QRs del tipo sin importar el término.
+        const typeConditions: Record<string, Record<string, unknown>> = {
+          social: {
+            typeQr: 'social',
+            $or: [
+              { 'data.username': { $regex: safeSearch, $options: 'i' } },
+              { 'data.platform': { $regex: safeSearch, $options: 'i' } },
+            ],
+          },
+          email: {
+            typeQr: 'email',
+            'data.email': { $regex: safeSearch, $options: 'i' },
+          },
+          whatsapp: {
+            typeQr: 'whatsapp',
+            $or: [
+              { 'data.phone': { $regex: safeSearch, $options: 'i' } },
+              { 'data.message': { $regex: safeSearch, $options: 'i' } },
+            ],
+          },
+          pet: {
+            typeQr: 'pet',
+            $or: [
+              { 'data.petName': { $regex: safeSearch, $options: 'i' } },
+              { 'data.petBreed': { $regex: safeSearch, $options: 'i' } },
+              { 'data.petData.ownerPhone': { $regex: safeSearch, $options: 'i' } },
+            ],
+          },
+          phone: {
+            typeQr: 'phone',
+            'data.phone': { $regex: safeSearch, $options: 'i' },
+          },
+          map: {
+            typeQr: 'map',
+            $or: [
+              { 'data.latitude': { $regex: safeSearch, $options: 'i' } },
+              { 'data.longitude': { $regex: safeSearch, $options: 'i' } },
+              { 'data.address': { $regex: safeSearch, $options: 'i' } },
+            ],
+          },
         };
 
         qrQuery['$or'] = [
@@ -428,7 +462,7 @@ export class MongoQrRepository
           { 'data.vcard.n.firstName': { $regex: safeSearch, $options: 'i' } },
           { 'data.vcard.n.lastName': { $regex: safeSearch, $options: 'i' } },
           { 'data.vcard.nickname': { $regex: safeSearch, $options: 'i' } },
-          ...Object.values(typeConditions).flat(),
+          ...Object.values(typeConditions),
         ];
 
         // Condiciones de búsqueda específicas para el modelo PetTag
@@ -533,53 +567,49 @@ export class MongoQrRepository
   private buildSearchConditions(search: string): Record<string, unknown> {
     // SPEC-008 H3 (R2): input como literal antes de $regex (anti-ReDoS)
     const safeSearch = escapeStringRegexp(search);
-    const typeConditions = {
-      social: [
-        { typeQr: 'social' },
-        {
-          $or: [
-            { 'data.username': { $regex: safeSearch, $options: 'i' } },
-            { 'data.platform': { $regex: safeSearch, $options: 'i' } },
-          ],
-        },
-      ],
-      email: [
-        { typeQr: 'email' },
-        { 'data.email': { $regex: safeSearch, $options: 'i' } },
-      ],
-      whatsapp: [
-        { typeQr: 'whatsapp' },
-        {
-          $or: [
-            { 'data.phone': { $regex: safeSearch, $options: 'i' } },
-            { 'data.message': { $regex: safeSearch, $options: 'i' } },
-          ],
-        },
-      ],
-      pet: [
-        { typeQr: 'pet' },
-        {
-          $or: [
-            { 'data.petName': { $regex: safeSearch, $options: 'i' } },
-            { 'data.petBreed': { $regex: safeSearch, $options: 'i' } },
-            { 'data.petData.ownerPhone': { $regex: safeSearch, $options: 'i' } },
-          ],
-        },
-      ],
-      phone: [
-        { typeQr: 'phone' },
-        { 'data.phone': { $regex: safeSearch, $options: 'i' } },
-      ],
-      map: [
-        { typeQr: 'map' },
-        {
-          $or: [
-            { 'data.latitude': { $regex: safeSearch, $options: 'i' } },
-            { 'data.longitude': { $regex: safeSearch, $options: 'i' } },
-            { 'data.address': { $regex: safeSearch, $options: 'i' } },
-          ],
-        },
-      ],
+    // SPEC-015 FIX: cada condición de tipo es UN SOLO objeto con typeQr + campos
+    // (AND implícito). El formato anterior (array [typeQr, $or] + .flat()) separaba
+    // typeQr del $or interno → "email" matcheaba TODOS los QRs de tipo email sin
+    // importar el término buscado (bug visible en la vista global admin).
+    const typeConditions: Record<string, Record<string, unknown>> = {
+      social: {
+        typeQr: 'social',
+        $or: [
+          { 'data.username': { $regex: safeSearch, $options: 'i' } },
+          { 'data.platform': { $regex: safeSearch, $options: 'i' } },
+        ],
+      },
+      email: {
+        typeQr: 'email',
+        'data.email': { $regex: safeSearch, $options: 'i' },
+      },
+      whatsapp: {
+        typeQr: 'whatsapp',
+        $or: [
+          { 'data.phone': { $regex: safeSearch, $options: 'i' } },
+          { 'data.message': { $regex: safeSearch, $options: 'i' } },
+        ],
+      },
+      pet: {
+        typeQr: 'pet',
+        $or: [
+          { 'data.petName': { $regex: safeSearch, $options: 'i' } },
+          { 'data.petBreed': { $regex: safeSearch, $options: 'i' } },
+          { 'data.petData.ownerPhone': { $regex: safeSearch, $options: 'i' } },
+        ],
+      },
+      phone: {
+        typeQr: 'phone',
+        'data.phone': { $regex: safeSearch, $options: 'i' },
+      },
+      map: {
+        typeQr: 'map',
+        $or: [
+          { 'data.latitude': { $regex: safeSearch, $options: 'i' } },
+          { 'data.longitude': { $regex: safeSearch, $options: 'i' } },
+          { 'data.address': { $regex: safeSearch, $options: 'i' } },
+        ],
+      },
     };
 
     return {
@@ -605,7 +635,7 @@ export class MongoQrRepository
         { 'data.vcard.n.firstName': { $regex: safeSearch, $options: 'i' } },
         { 'data.vcard.n.lastName': { $regex: safeSearch, $options: 'i' } },
         { 'data.vcard.nickname': { $regex: safeSearch, $options: 'i' } },
-        ...Object.values(typeConditions).flat(),
+        ...Object.values(typeConditions),
       ],
     };
   }
