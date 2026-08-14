@@ -228,6 +228,51 @@ export class MongoPetTagRepository
     }
   }
 
+  /**
+   * SPEC-016 RF-3: persiste SOLO el sub-campo petData.petImageUrl (1 round-trip).
+   * No pisa el resto del petData (a diferencia de update() que reemplaza el objeto completo).
+   */
+  async setPetImageUrl(
+    idQr: string,
+    userId: string,
+    url: string | null,
+    tracking: TrackingContext,
+  ): Promise<unknown> {
+    try {
+      this.traceService.log(tracking, TraceLayer.REPOSITORY, 'setPetImageUrl:init', {
+        idQr,
+        userId,
+        url: url ? `${url.slice(0, 60)}…` : null, // no loguear URLs completas innecesariamente
+      });
+
+      const userObjectId = new Types.ObjectId(userId);
+
+      const tag = await this.petTagModel
+        .findOneAndUpdate(
+          { idQr, userId: userObjectId },
+          { $set: { 'petData.petImageUrl': url } },
+          { new: true, runValidators: true },
+        )
+        .lean();
+
+      if (!tag) {
+        throw new NotFoundException('Placa no encontrada o no pertenece a este usuario.');
+      }
+
+      this.traceService.log(tracking, TraceLayer.REPOSITORY, 'setPetImageUrl:complete', {
+        idQr,
+        hasImage: url !== null,
+      });
+      return tag;
+    } catch (error) {
+      this.traceService.error(tracking, TraceLayer.REPOSITORY, 'setPetImageUrl:error', error as Error);
+      throw new HttpException(
+        error.message || 'Error al actualizar la foto de la placa',
+        error.status || HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
   async activate(
     idQr: string,
     activationPin: string,

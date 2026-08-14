@@ -44,6 +44,10 @@ export class PetDataSchema {
 
   @Prop({ type: String, required: false })
   observations?: string;
+
+  // SPEC-016 RF-1: URL pública de la foto de la mascota (Cloudflare R2, prefijo pet-tag/)
+  @Prop({ type: String, default: null })
+  petImageUrl?: string | null;
 }
 
 export const PetDataSchemaDefinition = SchemaFactory.createForClass(PetDataSchema);

@@ -34,6 +34,8 @@ export class PetTagMongoMapper {
       diseases: doc.diseases,
       vaccines: doc.vaccines,
       observations: doc.observations,
+      // SPEC-016: foto de la mascota (URL pública R2)
+      petImageUrl: doc.petImageUrl ?? null,
     };
   }
 

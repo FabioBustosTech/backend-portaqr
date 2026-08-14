@@ -61,4 +61,15 @@ export interface ICanUpdatePetTag {
     userId: string,
     tracking: TrackingContext,
   ): Promise<unknown>;
+  /**
+   * SPEC-016 RF-3: persiste SOLO el sub-campo petData.petImageUrl (URL pública de la foto)
+   * sin pisar el resto del petData. 1 round-trip (findOneAndUpdate + $set del sub-campo).
+   * url = null → limpia el campo (borrado de foto).
+   */
+  setPetImageUrl(
+    idQr: string,
+    userId: string,
+    url: string | null,
+    tracking: TrackingContext,
+  ): Promise<unknown>;
 }

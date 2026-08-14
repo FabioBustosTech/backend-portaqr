@@ -57,4 +57,13 @@ export class PetTagRepositoryAdapter
   ): Promise<unknown> {
     return this.mongoRepository.activate(idQr, activationPin, petData, userId, tracking);
   }
+
+  async setPetImageUrl(
+    idQr: string,
+    userId: string,
+    url: string | null,
+    tracking: TrackingContext,
+  ): Promise<unknown> {
+    return this.mongoRepository.setPetImageUrl(idQr, userId, url, tracking);
+  }
 }

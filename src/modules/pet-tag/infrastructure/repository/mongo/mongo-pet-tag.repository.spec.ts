@@ -468,6 +468,75 @@ describe('MongoPetTagRepository', () => {
     });
   });
 
+  describe('setPetImageUrl (SPEC-016)', () => {
+    it('debe persistir la URL en el sub-campo petData.petImageUrl sin pisar el resto del petData', async () => {
+      const updatedTag = {
+        idQr: 'qr-1',
+        petData: { ...petData, petImageUrl: 'https://cdn/pet-tag/qr-1.webp' },
+      };
+      mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(updatedTag) });
+
+      const result = await repository.setPetImageUrl(
+        'qr-1',
+        VALID_USER_ID,
+        'https://cdn/pet-tag/qr-1.webp',
+        tracking,
+      );
+
+      expect(mockFindOneAndUpdate).toHaveBeenCalledTimes(1);
+      expect(mockFindOneAndUpdate).toHaveBeenCalledWith(
+        { idQr: 'qr-1', userId: expect.anything() },
+        { $set: { 'petData.petImageUrl': 'https://cdn/pet-tag/qr-1.webp' } },
+        { new: true, runValidators: true },
+      );
+      expect(result).toEqual(updatedTag);
+    });
+
+    it('debe aceptar url null para limpiar la foto (borrado)', async () => {
+      const updatedTag = { idQr: 'qr-1', petData: { petName: 'Rex', petImageUrl: null } };
+      mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(updatedTag) });
+
+      const result = await repository.setPetImageUrl('qr-1', VALID_USER_ID, null, tracking);
+
+      expect(mockFindOneAndUpdate).toHaveBeenCalledWith(
+        { idQr: 'qr-1', userId: expect.anything() },
+        { $set: { 'petData.petImageUrl': null } },
+        { new: true, runValidators: true },
+      );
+      expect(result).toEqual(updatedTag);
+    });
+
+    it('debe lanzar error cuando la placa no existe o no pertenece al usuario', async () => {
+      mockFindOneAndUpdate.mockReturnValue({ lean: jest.fn().mockResolvedValue(null) });
+
+      await expect(
+        repository.setPetImageUrl('qr-1', VALID_USER_ID, 'https://cdn/x.webp', tracking),
+      ).rejects.toThrow('Placa no encontrada o no pertenece a este usuario.');
+      expect(traceService.error).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.REPOSITORY,
+        'setPetImageUrl:error',
+        expect.any(Error),
+      );
+    });
+
+    it('debe trazar y lanzar HttpException si la consulta falla', async () => {
+      mockFindOneAndUpdate.mockReturnValue({
+        lean: jest.fn().mockRejectedValue(new Error('DB down')),
+      });
+
+      await expect(
+        repository.setPetImageUrl('qr-1', VALID_USER_ID, 'https://cdn/x.webp', tracking),
+      ).rejects.toThrow(HttpException);
+      expect(traceService.error).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.REPOSITORY,
+        'setPetImageUrl:error',
+        expect.any(Error),
+      );
+    });
+  });
+
 describe('activate', () => {
   const VALID_USER_ID = new Types.ObjectId().toString();
   const petData = { ownerName: 'Juan', address: 'Calle 1', phone: '123', petName: 'Rex' } as PetData;

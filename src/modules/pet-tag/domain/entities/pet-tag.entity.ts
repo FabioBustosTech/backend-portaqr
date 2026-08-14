@@ -16,6 +16,8 @@ export interface PetData {
     date?: string;
   }>;
   observations?: string;
+  /** SPEC-016: URL pública de la foto de la mascota (Cloudflare R2) */
+  petImageUrl?: string | null;
 }
 
 export interface PetTag {
