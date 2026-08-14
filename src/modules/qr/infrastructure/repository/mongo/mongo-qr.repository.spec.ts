@@ -317,24 +317,26 @@ describe('MongoQrRepository', () => {
       expect(pipeline[0]).toEqual({ $match: { active: true } });
     });
 
-    it('debe construir el pipeline con filtro inactive (active=false sin deactivatedAt)', async () => {
+    it('debe construir el pipeline con filtro inactive (active=false, incluye desactivados — SPEC-015 ajuste)', async () => {
       mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
 
       await repository.findAllWithSearch(1, 10, '', 'inactive', undefined, undefined, tracking);
 
       const pipeline = mockAggregate.mock.calls[0][0];
       expect(pipeline[0]).toEqual({
-        $match: { active: false, deactivatedAt: { $exists: false } },
+        $match: { active: false },
       });
     });
 
-    it('debe construir el pipeline con filtro deactivated (deactivatedAt existe)', async () => {
+    it('debe construir el pipeline con filtro deactivated (active=false + deactivatedAt existe)', async () => {
       mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
 
       await repository.findAllWithSearch(1, 10, '', 'deactivated', undefined, undefined, tracking);
 
       const pipeline = mockAggregate.mock.calls[0][0];
-      expect(pipeline[0]).toEqual({ $match: { deactivatedAt: { $exists: true } } });
+      expect(pipeline[0]).toEqual({
+        $match: { active: false, deactivatedAt: { $exists: true } },
+      });
     });
 
     it('debe construir el pipeline con filtros type y userId combinados', async () => {

@@ -97,13 +97,17 @@ export class MongoQrRepository
       const offset = (pageNum - 1) * limitNum;
 
       // ── 1. Filtros exactos (estado + tipo + usuario) combinados con $and ──
+      // SPEC-015 ajuste: 'inactive' incluye TODOS los no activos (vencidos y
+      // desactivados por admin) — el estado desactivado es trazabilidad, no un
+      // estado distinto de negocio (deactivatedAt con $exists se mantiene como
+      // filtro fino 'deactivated' para uso avanzado).
       const filters: FilterQuery<QrDocument> = {};
       if (active === 'active') {
         filters.active = true;
       } else if (active === 'inactive') {
         filters.active = false;
-        filters.deactivatedAt = { $exists: false };
       } else if (active === 'deactivated') {
+        filters.active = false;
         filters.deactivatedAt = { $exists: true };
       }
       if (type) filters.typeQr = type;
