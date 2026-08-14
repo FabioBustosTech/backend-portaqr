@@ -150,6 +150,73 @@ describe('StorageService', () => {
     });
   });
 
+  describe('uploadPetImage (SPEC-016)', () => {
+    it('genera key pet-tag/{idQr}.webp y publicUrl compuesta', async () => {
+      const service = createService();
+      const result = await service.uploadPetImage({
+        idQr: '89302960-7799-43fe-b5a0-45d2295d539f',
+        buffer: Buffer.from('webp-data'),
+        width: 512,
+        height: 512,
+      });
+
+      expect(result.key).toBe('pet-tag/89302960-7799-43fe-b5a0-45d2295d539f.webp');
+      expect(result.publicUrl).toBe(
+        'https://images.portaqr.cl/pet-tag/89302960-7799-43fe-b5a0-45d2295d539f.webp',
+      );
+      expect(result.size).toBe(9);
+
+      const send = mockedSend();
+      expect(send).toHaveBeenCalledTimes(1);
+      const cmd = (send as jest.Mock).mock.calls[0][0];
+      expect(cmd.name).toBe('PutObjectCommand');
+      expect(cmd.input).toMatchObject({
+        Bucket: 'portaqr-assets',
+        Key: 'pet-tag/89302960-7799-43fe-b5a0-45d2295d539f.webp',
+        ContentType: 'image/webp',
+        CacheControl: 'public, max-age=31536000, immutable',
+      });
+      expect(cmd.input.Body).toEqual(Buffer.from('webp-data'));
+    });
+
+    it('usa la key como publicUrl cuando no hay base URL configurada', async () => {
+      const service = createService({ CLOUDFLARE_R2_PUBLIC_URL: '' });
+      const result = await service.uploadPetImage({
+        idQr: 'uuid-1',
+        buffer: Buffer.from('x'),
+        width: 1,
+        height: 1,
+      });
+
+      expect(result.key).toBe('pet-tag/uuid-1.webp');
+      expect(result.publicUrl).toBe('pet-tag/uuid-1.webp');
+    });
+
+    it('funciona con ConfigService sin variables R2 (fallbacks del constructor)', async () => {
+      const service = new StorageService(new ConfigService({}));
+      const result = await service.uploadPetImage({
+        idQr: 'uuid-1',
+        buffer: Buffer.from('x'),
+        width: 1,
+        height: 1,
+      });
+
+      expect(result.publicUrl).toBe('pet-tag/uuid-1.webp');
+      const cmd = (mockedSend() as jest.Mock).mock.calls[0][0];
+      expect(cmd.input.Bucket).toBe('portaqr-assets');
+    });
+
+    it('propaga el error si PutObject falla (no es mejor esfuerzo en la subida)', async () => {
+      const send = jest.fn().mockRejectedValue(new Error('R2 endpoint down'));
+      (S3Client as unknown as jest.Mock).mockImplementationOnce(() => ({ send }));
+
+      const service = createService();
+      await expect(
+        service.uploadPetImage({ idQr: 'uuid-1', buffer: Buffer.from('x'), width: 1, height: 1 }),
+      ).rejects.toThrow('R2 endpoint down');
+    });
+  });
+
   describe('deleteObject', () => {
     it('extrae el key de la publicUrl y llama DeleteObjectCommand', async () => {
       const service = createService();
@@ -192,6 +259,27 @@ describe('StorageService', () => {
         Bucket: 'portaqr-assets',
         Key: 'qr-multilink-pdf/uuid-item-9.pdf',
       });
+    });
+
+    it('extrae el key de una URL pet-tag/ con el publicBaseUrl configurado (SPEC-016)', async () => {
+      const service = createService();
+      await service.deleteObject('https://images.portaqr.cl/pet-tag/uuid-1.webp');
+
+      const send = mockedSend();
+      expect(send).toHaveBeenCalledTimes(1);
+      const cmd = (send as jest.Mock).mock.calls[0][0];
+      expect(cmd.name).toBe('DeleteObjectCommand');
+      expect(cmd.input).toEqual({ Bucket: 'portaqr-assets', Key: 'pet-tag/uuid-1.webp' });
+    });
+
+    it('extrae el key por regex de una URL pet-tag/ con dominio ajeno (SPEC-016)', async () => {
+      const service = createService(); // publicBaseUrl = https://images.portaqr.cl
+      await service.deleteObject('https://cdn.otro.cl/pet-tag/uuid-1.webp');
+
+      const send = mockedSend();
+      expect(send).toHaveBeenCalledTimes(1);
+      const cmd = (send as jest.Mock).mock.calls[0][0];
+      expect(cmd.input).toEqual({ Bucket: 'portaqr-assets', Key: 'pet-tag/uuid-1.webp' });
     });
 
     it('NO lanza cuando la subida/borrado falla (mejor esfuerzo — RF-14)', async () => {
