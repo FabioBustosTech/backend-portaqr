@@ -110,16 +110,47 @@ describe('GetAllQrUseCase', () => {
         pagination: mockPagination,
       });
 
-      const result = await useCase.execute(2, 5, 'busqueda', tracking);
+      const result = await useCase.execute(2, 5, 'busqueda', 'all', undefined, undefined, tracking);
 
       expect(reader.findAllWithSearch).toHaveBeenCalledWith(
         2,
         5,
         'busqueda',
+        'all',
+        undefined,
+        undefined,
         tracking,
       );
       expect(result.data).toEqual([mockQr]);
       expect(result.pagination).toEqual(mockPagination);
+    });
+
+    it('debe propagar los filtros admin (active/type/userId) al port (SPEC-015)', async () => {
+      reader.findAllWithSearch.mockResolvedValue({
+        data: [mockQr],
+        pagination: mockPagination,
+      });
+
+      const result = await useCase.execute(
+        1,
+        10,
+        '',
+        'deactivated',
+        'whatsapp',
+        '507f1f77bcf86cd799439011',
+        tracking,
+      );
+
+      expect(reader.findAllWithSearch).toHaveBeenCalledWith(
+        1,
+        10,
+        '',
+        'deactivated',
+        'whatsapp',
+        '507f1f77bcf86cd799439011',
+        tracking,
+      );
+      expect(result.data).toEqual([mockQr]);
     });
 
     it('debe registrar el input en el TraceService', async () => {
@@ -128,20 +159,20 @@ describe('GetAllQrUseCase', () => {
         pagination: mockPagination,
       });
 
-      await useCase.execute(1, 10, '', tracking);
+      await useCase.execute(1, 10, '', 'all', undefined, undefined, tracking);
 
       expect(traceService.log).toHaveBeenCalledWith(
         tracking,
         TraceLayer.USE_CASE,
         'GetAllQrUseCase - input',
-        { page: 1, limit: 10, search: '' },
+        { page: 1, limit: 10, search: '', active: 'all', type: undefined, userId: undefined },
       );
     });
 
     it('debe propagar errores del port', async () => {
       reader.findAllWithSearch.mockRejectedValue(new Error('DB down'));
 
-      await expect(useCase.execute(1, 10, '', tracking)).rejects.toThrow(
+      await expect(useCase.execute(1, 10, '', 'all', undefined, undefined, tracking)).rejects.toThrow(
         'DB down',
       );
     });

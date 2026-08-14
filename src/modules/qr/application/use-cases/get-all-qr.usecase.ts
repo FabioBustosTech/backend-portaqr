@@ -19,18 +19,24 @@ export class GetAllQrUseCase {
     return this.reader.getAll(tracking);
   }
 
-  /** GET /qr con búsqueda y paginación */
+  /** GET /qr con búsqueda, paginación y filtros admin (SPEC-015) */
   async execute(
     page: number,
     limit: number,
     search: string,
+    active: string = 'all',
+    type: string | undefined,
+    userId: string | undefined,
     tracking: TrackingContext,
   ): Promise<{ data: Qr[]; pagination: QrPagination }> {
     this.traceService.log(tracking, TraceLayer.USE_CASE, 'GetAllQrUseCase - input', {
       page,
       limit,
       search,
+      active,
+      type,
+      userId,
     });
-    return this.reader.findAllWithSearch(page, limit, search, tracking);
+    return this.reader.findAllWithSearch(page, limit, search, active, type, userId, tracking);
   }
 }

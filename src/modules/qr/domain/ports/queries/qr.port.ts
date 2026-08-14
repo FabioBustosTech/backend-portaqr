@@ -12,10 +12,15 @@ export interface QrPagination {
 
 export interface ICanGetAllQr {
   getAll(tracking: TrackingContext): Promise<Qr[]>;
+  // SPEC-015: filtros admin — active ('all'|'active'|'inactive'|'deactivated'),
+  // type (QrType) y userId (ObjectId) opcionales; resuelve user dueño por $lookup.
   findAllWithSearch(
     page: number,
     limit: number,
     search: string,
+    active: string,
+    type: string | undefined,
+    userId: string | undefined,
     tracking: TrackingContext,
   ): Promise<{ data: Qr[]; pagination: QrPagination }>;
 }

@@ -90,6 +90,15 @@ export interface QrData {
   typeQr: string;
 }
 
+// SPEC-015: datos del usuario dueño resueltos por $lookup (solo vista admin — nunca público)
+export interface QrOwnerInfo {
+  firstName?: string;
+  paternalLastName?: string;
+  maternalLastName?: string;
+  userName?: string;
+  email?: string;
+}
+
 export interface Qr {
   id: string;
   idQr: string;
@@ -109,6 +118,8 @@ export interface Qr {
   deactivatedAt?: Date;
   deactivatedBy?: string;
   deactivationReason?: string;
+  // SPEC-015: usuario dueño resuelto (admin-only, null si el usuario no existe)
+  user?: QrOwnerInfo | null;
 }
 
 export class QrEntity implements Qr {
@@ -129,6 +140,7 @@ export class QrEntity implements Qr {
   deactivatedAt?: Date;
   deactivatedBy?: string;
   deactivationReason?: string;
+  user?: QrOwnerInfo | null;
 
   constructor(data: Partial<Qr>) {
     this.id = data.id || '';
@@ -148,5 +160,6 @@ export class QrEntity implements Qr {
     this.deactivatedAt = data.deactivatedAt;
     this.deactivatedBy = data.deactivatedBy;
     this.deactivationReason = data.deactivationReason;
+    this.user = data.user ?? null;
   }
 }

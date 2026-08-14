@@ -33,9 +33,12 @@ export class QrRepositoryAdapter
     page: number,
     limit: number,
     search: string,
+    active: string,
+    type: string | undefined,
+    userId: string | undefined,
     tracking: TrackingContext,
   ): Promise<{ data: Qr[]; pagination: QrPagination }> {
-    return this.mongoRepository.findAllWithSearch(page, limit, search, tracking);
+    return this.mongoRepository.findAllWithSearch(page, limit, search, active, type, userId, tracking);
   }
 
   async getById(id: string, tracking: TrackingContext): Promise<Qr | null> {

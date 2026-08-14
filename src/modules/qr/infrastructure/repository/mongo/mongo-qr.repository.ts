@@ -1,6 +1,6 @@
 import { Injectable, Logger, HttpStatus, HttpException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model, Types } from 'mongoose';
+import { FilterQuery, Model, PipelineStage, Types } from 'mongoose';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
 import type { TrackingContext } from 'src/common/decorators/tracking.decorator';
 import type { Qr } from '../../../domain/entities/qr.entity';
@@ -68,38 +68,123 @@ export class MongoQrRepository
     }
   }
 
+  /**
+   * SPEC-015: listado global admin con $lookup del usuario dueño, filtros
+   * (active/type/userId) y búsqueda ampliada (id QR, datos internos, tipo,
+   * usuario dueño). Aggregate único con $facet → N+1=0 (patrón SPEC-007 H3).
+   */
   async findAllWithSearch(
     page: number = 1,
     limit: number = 10,
     search: string = '',
-    tracking: TrackingContext,
+    active: string = 'all',
+    type?: string,
+    userId?: string,
+    tracking?: TrackingContext,
   ): Promise<{ data: Qr[]; pagination: QrPagination }> {
     try {
       this.traceService.log(tracking, TraceLayer.REPOSITORY, 'findAllWithSearch:init', {
         page,
         limit,
         search,
+        active,
+        type,
+        userId,
       });
 
-      const query = this.buildSearchQuery(search);
+      const pageNum = Number(page) || 1;
+      const limitNum = Number(limit) || 10;
+      const offset = (pageNum - 1) * limitNum;
 
-      const offset = (page - 1) * limit;
-      const [data, total] = await Promise.all([
-        this.qrModel.find(query).skip(offset).limit(limit).lean().exec(),
-        this.qrModel.countDocuments(query).exec(),
-      ]);
+      // ── 1. Filtros exactos (estado + tipo + usuario) combinados con $and ──
+      const filters: FilterQuery<QrDocument> = {};
+      if (active === 'active') {
+        filters.active = true;
+      } else if (active === 'inactive') {
+        filters.active = false;
+        filters.deactivatedAt = { $exists: false };
+      } else if (active === 'deactivated') {
+        filters.deactivatedAt = { $exists: true };
+      }
+      if (type) filters.typeQr = type;
+      if (userId) filters.userId = userId;
 
-      const totalPages = Math.ceil(total / limit);
+      const pipeline: PipelineStage[] = [];
+      if (Object.keys(filters).length > 0) {
+        pipeline.push({ $match: filters } as PipelineStage);
+      }
+
+      // ── 2. Lookup del usuario dueño (sin N+1) ──
+      // qr.userId es STRING (qr.schema.ts L89) y users._id es ObjectId:
+      // $convert con onError:null → QRs con userId no-ObjectId dan user: null
+      // (no revientan el pipeline).
+      pipeline.push({
+        $addFields: {
+          userIdObj: {
+            $convert: { input: '$userId', to: 'objectId', onError: null },
+          },
+        },
+      } as PipelineStage);
+      pipeline.push({
+        $lookup: {
+          from: 'users',
+          localField: 'userIdObj',
+          foreignField: '_id',
+          as: 'userInfo',
+        },
+      } as PipelineStage);
+      pipeline.push({
+        $unwind: { path: '$userInfo', preserveNullAndEmptyArrays: true },
+      } as PipelineStage);
+
+      // ── 3. Búsqueda libre (id QR, datos internos, tipo, usuario dueño) ──
+      if (search && search.trim()) {
+        pipeline.push({ $match: this.buildAdminSearchConditions(search) } as PipelineStage);
+      }
+
+      // ── 4. Paginar en origen con $facet (SPEC-007 H3) ──
+      pipeline.push({
+        $facet: {
+          data: [
+            { $sort: { updatedAt: -1 } },
+            { $skip: offset },
+            { $limit: limitNum },
+          ],
+          total: [{ $count: 'count' }],
+        },
+      } as PipelineStage);
+
+      const result = await this.qrModel.aggregate<AdminQrAggregateDoc>(pipeline).exec();
+      const facet = result?.[0] ?? { data: [], total: [] };
+      const docs = facet.data ?? [];
+      const total = facet.total?.[0]?.count ?? 0;
+      const totalPages = Math.ceil(total / limitNum);
 
       return {
-        data: data.map((doc) => QrMongoMapper.toEntity(doc)),
+        data: docs.map((doc) => {
+          const entity = QrMongoMapper.toEntity(doc as never);
+          // SPEC-015: exponer solo campos seguros del dueño (admin-only)
+          const owner = doc.userInfo?.[0];
+          if (owner) {
+            entity.user = {
+              firstName: owner.firstName as string | undefined,
+              paternalLastName: owner.paternalLastName as string | undefined,
+              maternalLastName: owner.maternalLastName as string | undefined,
+              userName: owner.userName as string | undefined,
+              email: owner.email as string | undefined,
+            };
+          } else {
+            entity.user = null;
+          }
+          return entity;
+        }),
         pagination: {
           total,
           totalPages,
-          currentPage: page,
-          limit,
-          hasNextPage: page < totalPages,
-          hasPrevPage: page > 1,
+          currentPage: pageNum,
+          limit: limitNum,
+          hasNextPage: pageNum < totalPages,
+          hasPrevPage: pageNum > 1,
         },
       };
     } catch (error) {
@@ -496,6 +581,17 @@ export class MongoQrRepository
         { idQr: { $regex: safeSearch, $options: 'i' } },
         { userId: { $regex: safeSearch, $options: 'i' } },
         { typeQr: { $regex: safeSearch, $options: 'i' } },
+        // SPEC-015: datos internos del QR (búsqueda ampliada)
+        { name: { $regex: safeSearch, $options: 'i' } },
+        { description: { $regex: safeSearch, $options: 'i' } },
+        { 'data.url': { $regex: safeSearch, $options: 'i' } },
+        { 'data.text': { $regex: safeSearch, $options: 'i' } },
+        { 'data.whatsappUrl': { $regex: safeSearch, $options: 'i' } },
+        { 'data.emailUrl': { $regex: safeSearch, $options: 'i' } },
+        { 'data.phoneUrl': { $regex: safeSearch, $options: 'i' } },
+        { 'data.wifiData.ssid': { $regex: safeSearch, $options: 'i' } },
+        { 'data.petData.petName': { $regex: safeSearch, $options: 'i' } },
+        { 'data.petData.ownerName': { $regex: safeSearch, $options: 'i' } },
         { 'data.urlList.url': { $regex: safeSearch, $options: 'i' } },
         { 'data.urlList.typeUrl': { $regex: safeSearch, $options: 'i' } },
         { 'data.vcard.fn': { $regex: safeSearch, $options: 'i' } },
@@ -504,6 +600,26 @@ export class MongoQrRepository
         { 'data.vcard.n.lastName': { $regex: safeSearch, $options: 'i' } },
         { 'data.vcard.nickname': { $regex: safeSearch, $options: 'i' } },
         ...Object.values(typeConditions).flat(),
+      ],
+    };
+  }
+
+  /**
+   * SPEC-015: condiciones de búsqueda para la vista admin global.
+   * = buildSearchConditions (campos QR + tipo) + campos del usuario dueño
+   * (userInfo.* solo existe tras el $unwind del $lookup en el aggregate).
+   */
+  private buildAdminSearchConditions(search: string): Record<string, unknown> {
+    const safeSearch = escapeStringRegexp(search);
+    const base = this.buildSearchConditions(search);
+    const baseOr = (base.$or ?? []) as unknown[];
+    return {
+      $or: [
+        ...baseOr,
+        { 'userInfo.firstName': { $regex: safeSearch, $options: 'i' } },
+        { 'userInfo.paternalLastName': { $regex: safeSearch, $options: 'i' } },
+        { 'userInfo.userName': { $regex: safeSearch, $options: 'i' } },
+        { 'userInfo.email': { $regex: safeSearch, $options: 'i' } },
       ],
     };
   }
@@ -517,4 +633,20 @@ export class MongoQrRepository
 
     return query;
   }
+}
+
+// SPEC-015: documento resultante del $facet del aggregate admin (QR + dueño).
+// userInfo es el array del $lookup (0 o 1 elemento tras $unwind).
+interface AdminQrAggregateDoc {
+  data: Array<{
+    [key: string]: unknown;
+    userInfo?: Array<{
+      firstName?: unknown;
+      paternalLastName?: unknown;
+      maternalLastName?: unknown;
+      userName?: unknown;
+      email?: unknown;
+    }>;
+  }>;
+  total: Array<{ count: number }>;
 }

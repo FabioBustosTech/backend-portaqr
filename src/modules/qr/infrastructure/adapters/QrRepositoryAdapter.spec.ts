@@ -99,10 +99,53 @@ describe('QrRepositoryAdapter', () => {
       };
       mongoRepository.findAllWithSearch.mockResolvedValue(response);
 
-      const result = await adapter.findAllWithSearch(1, 10, 'hola', tracking);
+      const result = await adapter.findAllWithSearch(1, 10, 'hola', 'all', undefined, undefined, tracking);
 
-      expect(mongoRepository.findAllWithSearch).toHaveBeenCalledWith(1, 10, 'hola', tracking);
+      expect(mongoRepository.findAllWithSearch).toHaveBeenCalledWith(
+        1,
+        10,
+        'hola',
+        'all',
+        undefined,
+        undefined,
+        tracking,
+      );
       expect(result).toEqual(response);
+    });
+
+    it('debe delegar los filtros admin (active/type/userId) al repositorio mongo (SPEC-015)', async () => {
+      const response = {
+        data: [],
+        pagination: {
+          total: 0,
+          totalPages: 0,
+          currentPage: 1,
+          limit: 10,
+          hasNextPage: false,
+          hasPrevPage: false,
+        },
+      };
+      mongoRepository.findAllWithSearch.mockResolvedValue(response);
+
+      await adapter.findAllWithSearch(
+        1,
+        10,
+        'juan',
+        'active',
+        'whatsapp',
+        '507f1f77bcf86cd799439011',
+        tracking,
+      );
+
+      expect(mongoRepository.findAllWithSearch).toHaveBeenCalledWith(
+        1,
+        10,
+        'juan',
+        'active',
+        'whatsapp',
+        '507f1f77bcf86cd799439011',
+        tracking,
+      );
     });
   });
 

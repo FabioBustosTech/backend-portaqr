@@ -553,7 +553,7 @@ describe('QrController — @Query() tipado con DTOs (SPEC-008 H5 — R6)', () =>
 
       await controller.findAll({} as any, tracking);
 
-      expect(mocks.getAllQrUseCase.execute).toHaveBeenCalledWith(1, 10, '', tracking);
+      expect(mocks.getAllQrUseCase.execute).toHaveBeenCalledWith(1, 10, '', 'all', undefined, undefined, tracking);
     });
 
     it('pasa page/limit/search tipados desde el DTO', async () => {
@@ -561,7 +561,33 @@ describe('QrController — @Query() tipado con DTOs (SPEC-008 H5 — R6)', () =>
 
       await controller.findAll({ page: 2, limit: 50, search: 'hola' } as any, tracking);
 
-      expect(mocks.getAllQrUseCase.execute).toHaveBeenCalledWith(2, 50, 'hola', tracking);
+      expect(mocks.getAllQrUseCase.execute).toHaveBeenCalledWith(2, 50, 'hola', 'all', undefined, undefined, tracking);
+    });
+
+    it('pasa los filtros admin active/type/userId al use-case (SPEC-015)', async () => {
+      const { controller, mocks } = createControllerWithUseCases();
+
+      await controller.findAll(
+        {
+          page: 1,
+          limit: 10,
+          search: 'juan',
+          active: 'deactivated',
+          type: 'whatsapp',
+          userId: '507f1f77bcf86cd799439011',
+        } as any,
+        tracking,
+      );
+
+      expect(mocks.getAllQrUseCase.execute).toHaveBeenCalledWith(
+        1,
+        10,
+        'juan',
+        'deactivated',
+        'whatsapp',
+        '507f1f77bcf86cd799439011',
+        tracking,
+      );
     });
   });
 

@@ -84,11 +84,13 @@ const createCountResult = (value: number) => {
 };
 
 /** Crea un resultado de aggregate $facet: [{ data, total }] con .exec() */
+// total incluye 'v' (findUserByFavorites usa $count: 'v') y 'count'
+// (findAllWithSearch SPEC-015 usa $count: 'count') — compatible con ambos.
 const createAggregateFacetResult = (
   data: unknown[],
   total: number,
 ): { exec: jest.Mock } => {
-  const result = [{ data, total: [{ v: total }] }];
+  const result = [{ data, total: [{ v: total, count: total }] }];
   return { exec: jest.fn().mockResolvedValue(result) };
 };
 
@@ -251,23 +253,35 @@ describe('MongoQrRepository', () => {
     });
   });
 
-  describe('findAllWithSearch', () => {
-    it('debe retornar datos y paginación sin búsqueda (query vacía)', async () => {
-      mockFind.mockReturnValue(createQueryMock([qrDoc]));
-      mockCountDocuments.mockReturnValue(createCountResult(1));
+  describe('findAllWithSearch (SPEC-015: aggregate con $lookup del dueño + filtros)', () => {
+    const ownerDoc = {
+      firstName: 'Juan',
+      paternalLastName: 'Pérez',
+      maternalLastName: 'González',
+      userName: 'juanperez',
+      email: 'juan@test.cl',
+    };
 
-      const result = await repository.findAllWithSearch(1, 10, '', tracking);
+    /** Doc de QR en el formato del $facet del aggregate (con userInfo tras $unwind). */
+    const qrWithUser = (overrides: Record<string, unknown> = {}) => ({
+      ...qrDoc,
+      userInfo: [ownerDoc],
+      ...overrides,
+    });
+
+    it('debe retornar datos y paginación sin búsqueda ni filtros (userInfo vacío → user null)', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([{ ...qrDoc, userInfo: [] }], 1));
+
+      const result = await repository.findAllWithSearch(1, 10, '', 'all', undefined, undefined, tracking);
 
       expect(traceService.log).toHaveBeenCalledWith(
         tracking,
         TraceLayer.REPOSITORY,
         'findAllWithSearch:init',
-        { page: 1, limit: 10, search: '' },
+        { page: 1, limit: 10, search: '', active: 'all', type: undefined, userId: undefined },
       );
-      expect(mockFind).toHaveBeenCalledWith({});
-      expect(mockCountDocuments).toHaveBeenCalledWith({});
       expect(result).toEqual({
-        data: [qr],
+        data: [{ ...qr, user: null }],
         pagination: {
           total: 1,
           totalPages: 1,
@@ -279,18 +293,162 @@ describe('MongoQrRepository', () => {
       });
     });
 
-    it('debe construir la query de búsqueda y calcular la paginación correctamente', async () => {
-      mockFind.mockReturnValue(createQueryMock([qrDoc]));
-      mockCountDocuments.mockReturnValue(createCountResult(25));
+    it('debe resolver el usuario dueño (user: { firstName, ... }) tras el $lookup', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([qrWithUser()], 1));
 
-      const result = await repository.findAllWithSearch(2, 10, 'hola', tracking);
+      const result = await repository.findAllWithSearch(1, 10, '', 'all', undefined, undefined, tracking);
 
-      expect(mockFind).toHaveBeenCalledWith(
-        expect.objectContaining({ $or: expect.any(Array) }),
+      expect(result.data[0].user).toEqual({
+        firstName: 'Juan',
+        paternalLastName: 'Pérez',
+        maternalLastName: 'González',
+        userName: 'juanperez',
+        email: 'juan@test.cl',
+      });
+    });
+
+    it('debe construir el pipeline con filtro por estado active=true', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
+
+      await repository.findAllWithSearch(1, 10, '', 'active', undefined, undefined, tracking);
+
+      const pipeline = mockAggregate.mock.calls[0][0];
+      // Primer stage: $match con active: true
+      expect(pipeline[0]).toEqual({ $match: { active: true } });
+    });
+
+    it('debe construir el pipeline con filtro inactive (active=false sin deactivatedAt)', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
+
+      await repository.findAllWithSearch(1, 10, '', 'inactive', undefined, undefined, tracking);
+
+      const pipeline = mockAggregate.mock.calls[0][0];
+      expect(pipeline[0]).toEqual({
+        $match: { active: false, deactivatedAt: { $exists: false } },
+      });
+    });
+
+    it('debe construir el pipeline con filtro deactivated (deactivatedAt existe)', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
+
+      await repository.findAllWithSearch(1, 10, '', 'deactivated', undefined, undefined, tracking);
+
+      const pipeline = mockAggregate.mock.calls[0][0];
+      expect(pipeline[0]).toEqual({ $match: { deactivatedAt: { $exists: true } } });
+    });
+
+    it('debe construir el pipeline con filtros type y userId combinados', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
+
+      await repository.findAllWithSearch(
+        1,
+        10,
+        '',
+        'all',
+        'whatsapp',
+        '507f1f77bcf86cd799439011',
+        tracking,
       );
-      expect(mockCountDocuments).toHaveBeenCalledWith(
-        expect.objectContaining({ $or: expect.any(Array) }),
+
+      const pipeline = mockAggregate.mock.calls[0][0];
+      expect(pipeline[0]).toEqual({
+        $match: { typeQr: 'whatsapp', userId: '507f1f77bcf86cd799439011' },
+      });
+    });
+
+    it('debe construir el pipeline con lookup del usuario dueño ($convert + $lookup + $unwind)', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
+
+      await repository.findAllWithSearch(1, 10, '', 'all', undefined, undefined, tracking);
+
+      const pipeline = mockAggregate.mock.calls[0][0] as unknown[];
+      const hasConvert = pipeline.some(
+        (stage) =>
+          (stage as Record<string, unknown>).$addFields &&
+          JSON.stringify(stage).includes('"$convert"'),
       );
+      const hasLookup = pipeline.some(
+        (stage) =>
+          (stage as Record<string, unknown>).$lookup &&
+          (stage as Record<string, unknown>).$lookup &&
+          (stage as { $lookup: { from: string } }).$lookup.from === 'users',
+      );
+      const hasUnwind = pipeline.some((stage) => (stage as Record<string, unknown>).$unwind);
+      const hasFacet = pipeline.some((stage) => (stage as Record<string, unknown>).$facet);
+
+      expect(hasConvert).toBe(true);
+      expect(hasLookup).toBe(true);
+      expect(hasUnwind).toBe(true);
+      expect(hasFacet).toBe(true);
+    });
+
+    it('debe construir el pipeline con $match de búsqueda ampliada (datos internos + dueño)', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
+
+      await repository.findAllWithSearch(1, 10, 'juan', 'all', undefined, undefined, tracking);
+
+      const pipeline = mockAggregate.mock.calls[0][0] as unknown[];
+      // El $match de búsqueda debe incluir campos de datos internos y userInfo.*
+      const searchStage = pipeline.find(
+        (stage) =>
+          (stage as Record<string, unknown>).$match &&
+          (stage as { $match: { $or?: unknown[] } }).$match.$or !== undefined,
+      ) as { $match: { $or: Array<Record<string, unknown>> } };
+
+      expect(searchStage).toBeDefined();
+      const keys = JSON.stringify(searchStage.$match.$or);
+      expect(keys).toContain('data.url');
+      expect(keys).toContain('data.text');
+      expect(keys).toContain('data.wifiData.ssid');
+      expect(keys).toContain('userInfo.firstName');
+      expect(keys).toContain('userInfo.email');
+      // Anti-ReDoS: el término va escapado (literal) en $regex
+      const regexes = collectRegexValues(searchStage.$match);
+      for (const r of regexes) {
+        expect(r).not.toContain('*');
+        expect(r).not.toContain('+');
+      }
+    });
+
+    it('debe usar los valores por defecto (page=1, limit=10, search="", active="all")', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([], 0));
+
+      const result = await repository.findAllWithSearch(
+        undefined as unknown as number,
+        undefined as unknown as number,
+        undefined as unknown as string,
+        undefined as unknown as string,
+        undefined,
+        undefined,
+        tracking,
+      );
+
+      expect(traceService.log).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.REPOSITORY,
+        'findAllWithSearch:init',
+        { page: 1, limit: 10, search: '', active: 'all', type: undefined, userId: undefined },
+      );
+      // Con defaults: page=1, limit=10 → facet con $skip 0 y $limit 10
+      const pipeline = mockAggregate.mock.calls[0][0] as unknown[];
+      const facetStage = pipeline.find(
+        (stage) => (stage as Record<string, unknown>).$facet,
+      ) as { $facet: { data: Array<Record<string, unknown>> } };
+      const facetData = facetStage.$facet.data;
+      expect(facetData).toEqual([
+        { $sort: { updatedAt: -1 } },
+        { $skip: 0 },
+        { $limit: 10 },
+      ]);
+      expect(result.pagination.currentPage).toBe(1);
+      expect(result.pagination.limit).toBe(10);
+    });
+
+    it('debe calcular la paginación correctamente con $facet', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([qrWithUser()], 25));
+
+      const result = await repository.findAllWithSearch(2, 10, '', 'all', undefined, undefined, tracking);
+
       expect(result.pagination).toEqual({
         total: 25,
         totalPages: 3,
@@ -301,33 +459,13 @@ describe('MongoQrRepository', () => {
       });
     });
 
-    it('debe usar los valores por defecto (page=1, limit=10, search="")', async () => {
-      mockFind.mockReturnValue(createQueryMock([qrDoc]));
-      mockCountDocuments.mockReturnValue(createCountResult(1));
-
-      const result = await repository.findAllWithSearch(undefined, undefined, undefined, tracking);
-
-      expect(traceService.log).toHaveBeenCalledWith(
-        tracking,
-        TraceLayer.REPOSITORY,
-        'findAllWithSearch:init',
-        { page: 1, limit: 10, search: '' },
-      );
-      expect(result.pagination).toEqual({
-        total: 1,
-        totalPages: 1,
-        currentPage: 1,
-        limit: 10,
-        hasNextPage: false,
-        hasPrevPage: false,
-      });
-    });
-
     it('debe trazar y re-lanzar el error si la consulta falla', async () => {
-      mockFind.mockReturnValue(createQueryMock(new Error('DB down'), true));
+      mockAggregate.mockReturnValue({
+        exec: jest.fn().mockRejectedValue(new Error('DB down')),
+      });
 
       await expect(
-        repository.findAllWithSearch(1, 10, '', tracking),
+        repository.findAllWithSearch(1, 10, '', 'all', undefined, undefined, tracking),
       ).rejects.toThrow('DB down');
       expect(traceService.error).toHaveBeenCalledWith(
         tracking,

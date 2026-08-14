@@ -31,6 +31,8 @@ import { GetPublicQrUseCase } from '../../application/use-cases/get-public-qr.us
 // SPEC-008 H5 (R6): DTOs de paginación tipados para @Query()
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { FavoriteQueryDto } from '../../application/dto/favorite-query.dto';
+// SPEC-015: DTO con filtros admin (active/type/userId)
+import { AdminQrsQueryDto } from '../../application/dto/admin-qrs-query.dto';
 import { UpdateQrUseCase } from '../../application/use-cases/update-qr.usecase';
 import { DeleteQrUseCase } from '../../application/use-cases/delete-qr.usecase';
 // SPEC-014: desactivación admin
@@ -413,7 +415,7 @@ export class QrController {
 
   @Get()
   @Roles('admin')
-  @ApiOperation({ summary: 'Obtener todos los QRs con bÃºsqueda y paginaciÃ³n' })
+  @ApiOperation({ summary: 'Obtener todos los QRs con bÃºsqueda, paginaciÃ³n y filtros (SPEC-015)' })
   @ApiResponse({ status: 200, description: 'Lista de QRs', type: [QrEntity] })
   @ApiResponse({ status: 401, description: 'No autorizado' })
   @ApiResponse({ status: 403, description: 'Prohibido - No tiene los permisos necesarios' })
@@ -421,14 +423,18 @@ export class QrController {
   async findAll(
     // SPEC-008 H5 (R6): @Query() tipado con PaginationDto — page/limit validados
     // (IsInt/Min/Max, @Type(() => Number)) en vez de @Query('page') page: number
-    @Query() query: PaginationDto,
+    // SPEC-015: AdminQrsQueryDto añade active/type/userId (filtros admin)
+    @Query() query: AdminQrsQueryDto,
     @Tracking() tracking: TrackingContext,
   ) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
     const search = query.search ?? '';
-    this.traceService.log(tracking, TraceLayer.CONTROLLER, 'GET /qr', { page, limit, search });
-    return this.getAllQrUseCase.execute(page, limit, search, tracking);
+    const active = query.active ?? 'all';
+    const type = query.type;
+    const userId = query.userId;
+    this.traceService.log(tracking, TraceLayer.CONTROLLER, 'GET /qr', { page, limit, search, active, type, userId });
+    return this.getAllQrUseCase.execute(page, limit, search, active, type, userId, tracking);
   }
 
   @Get(':id')
