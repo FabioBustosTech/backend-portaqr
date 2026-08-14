@@ -19,6 +19,7 @@ import { GetRecentActiveQrUseCase } from 'src/modules/qr/application/use-cases/g
 import { GetPublicQrUseCase } from 'src/modules/qr/application/use-cases/get-public-qr.usecase';
 import { UpdateQrUseCase } from 'src/modules/qr/application/use-cases/update-qr.usecase';
 import { DeleteQrUseCase } from 'src/modules/qr/application/use-cases/delete-qr.usecase';
+import { DeactivateQrUseCase } from 'src/modules/qr/application/use-cases/deactivate-qr.usecase'; // SPEC-014
 
 /**
  * Integración HTTP de POST /qr/list-pdf (SPEC-005 §8.1) con supertest + multipart.
@@ -88,6 +89,7 @@ describe('POST /qr/list-pdf — integración multipart (SPEC-005 §8.1)', () => 
         { provide: GetPublicQrUseCase, useValue: { execute: jest.fn() } },
         { provide: UpdateQrUseCase, useValue: updateQrUseCase },
         { provide: DeleteQrUseCase, useValue: { execute: jest.fn() } },
+        { provide: DeactivateQrUseCase, useValue: { execute: jest.fn() } }, // SPEC-014
         { provide: TraceService, useValue: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } },
         { provide: StorageService, useValue: { uploadPdf: uploadPdfMock, deleteObject: jest.fn() } },
         { provide: ImageProcessorService, useValue: { process: jest.fn() } },

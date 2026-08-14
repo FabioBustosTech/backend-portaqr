@@ -62,6 +62,15 @@ export class QrRepositoryAdapter
     return this.mongoRepository.activateMany(qrCodes, expiration, tracking);
   }
 
+  async deactivate(
+    id: string,
+    reason: string,
+    actorId: string,
+    tracking: TrackingContext,
+  ): Promise<Qr | null> {
+    return this.mongoRepository.deactivate(id, reason, actorId, tracking);
+  }
+
   async delete(id: string, tracking: TrackingContext): Promise<boolean> {
     return this.mongoRepository.delete(id, tracking);
   }

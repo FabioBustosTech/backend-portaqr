@@ -176,6 +176,44 @@ export class MongoQrRepository
     }
   }
 
+  /** SPEC-014: desactivación admin con trazabilidad (motivo obligatorio). */
+  async deactivate(
+    id: string,
+    reason: string,
+    actorId: string,
+    tracking: TrackingContext,
+  ): Promise<Qr | null> {
+    try {
+      this.traceService.log(tracking, TraceLayer.REPOSITORY, 'deactivate:init', { id });
+
+      const updatedDoc = await this.qrModel
+        .findOneAndUpdate(
+          { idQr: id },
+          {
+            $set: {
+              active: false,
+              expiration: null,
+              deactivatedAt: new Date(),
+              deactivatedBy: actorId,
+              deactivationReason: reason,
+            },
+          },
+          { new: true },
+        )
+        .exec();
+
+      this.traceService.log(tracking, TraceLayer.REPOSITORY, 'deactivate:complete', {
+        id,
+        updated: updatedDoc !== null,
+      });
+
+      return updatedDoc ? QrMongoMapper.toEntity(updatedDoc) : null;
+    } catch (error) {
+      this.traceService.error(tracking, TraceLayer.REPOSITORY, 'deactivate:error', error as Error);
+      throw error;
+    }
+  }
+
   async delete(id: string, tracking: TrackingContext): Promise<boolean> {
     try {
       const result = await this.qrModel.findOneAndDelete({ idQr: id }).exec();

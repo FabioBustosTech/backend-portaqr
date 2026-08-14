@@ -61,10 +61,10 @@ describe('StatisticsController', () => {
   });
 
   describe('getUserStatistics', () => {
-    it('debe retornar las estadísticas del usuario delegando en el use case', async () => {
+    it('debe retornar las estadísticas del usuario delegando en el use case (admin)', async () => {
       getUserStatisticsUseCase.execute.mockResolvedValue(mockUserStatistics);
 
-      const result = await controller.getUserStatistics('user-1', tracking);
+      const result = await controller.getUserStatistics('user-1', { id: 'admin-1', role: 'admin' } as any, tracking);
 
       expect(getUserStatisticsUseCase.execute).toHaveBeenCalledWith('user-1', tracking);
       expect(result).toEqual(mockUserStatistics);
@@ -73,7 +73,7 @@ describe('StatisticsController', () => {
     it('debe registrar la traza del GET /statistics/user/:userId con el userId', async () => {
       getUserStatisticsUseCase.execute.mockResolvedValue(mockUserStatistics);
 
-      await controller.getUserStatistics('user-1', tracking);
+      await controller.getUserStatistics('user-1', { id: 'admin-1', role: 'admin' } as any, tracking);
 
       expect(traceService.log).toHaveBeenCalledWith(
         tracking,
@@ -81,6 +81,32 @@ describe('StatisticsController', () => {
         'GET /statistics/user/:userId',
         expect.objectContaining({ userId: 'user-1' }),
       );
+    });
+
+    it('CA-05 (SPEC-014): es owner-or-admin — metadata @Roles contiene admin Y user', () => {
+      const roles = Reflect.getMetadata('roles', StatisticsController.prototype.getUserStatistics);
+      expect(roles).toEqual(['admin', 'user']);
+    });
+
+    it('CA-05 (SPEC-014): un usuario NO-admin con userId ajeno → 403 (IDOR cerrado)', async () => {
+      await expect(
+        controller.getUserStatistics('otro-usuario', { id: 'user-1', role: 'user' } as any, tracking),
+      ).rejects.toThrow(expect.objectContaining({ name: 'ForbiddenException' }));
+      expect(getUserStatisticsUseCase.execute).not.toHaveBeenCalled();
+    });
+
+    it('CA-05 (SPEC-014): un usuario con SU PROPIO userId → 200 (dashboard propio)', async () => {
+      getUserStatisticsUseCase.execute.mockResolvedValue(mockUserStatistics);
+      const result = await controller.getUserStatistics('user-1', { id: 'user-1', role: 'user' } as any, tracking);
+      expect(getUserStatisticsUseCase.execute).toHaveBeenCalledWith('user-1', tracking);
+      expect(result).toEqual(mockUserStatistics);
+    });
+
+    it('CA-05 (SPEC-014): admin con userId ajeno → 200 (bypass)', async () => {
+      getUserStatisticsUseCase.execute.mockResolvedValue(mockUserStatistics);
+      const result = await controller.getUserStatistics('otro-usuario', { id: 'admin-1', role: 'admin' } as any, tracking);
+      expect(getUserStatisticsUseCase.execute).toHaveBeenCalledWith('otro-usuario', tracking);
+      expect(result).toEqual(mockUserStatistics);
     });
   });
 

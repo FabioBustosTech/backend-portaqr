@@ -527,6 +527,94 @@ describe('MongoQrRepository', () => {
     });
   });
 
+  describe('deactivate (SPEC-014)', () => {
+    const QR_ID = '11111111-1111-1111-1111-111111111111';
+    const REASON = 'Cliente no renovó el plan';
+    const ADMIN_ID = '507f1f77bcf86cd799439011';
+    const NOW = new Date('2026-08-14T00:00:00.000Z');
+
+    it('CA-01: desactiva con findOneAndUpdate $set active:false + trazabilidad completa', async () => {
+      const updatedDoc = {
+        _id: new Types.ObjectId(),
+        idQr: QR_ID,
+        userId: 'user-1',
+        active: false,
+        expiration: null,
+        deactivatedAt: NOW,
+        deactivatedBy: ADMIN_ID,
+        deactivationReason: REASON,
+        data: { typeQr: 'dynamic', url: 'https://example.com' },
+      };
+      mockFindOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(updatedDoc),
+      });
+
+      const result = await repository.deactivate(QR_ID, REASON, ADMIN_ID, tracking);
+
+      expect(mockFindOneAndUpdate).toHaveBeenCalledWith(
+        { idQr: QR_ID },
+        {
+          $set: {
+            active: false,
+            expiration: null,
+            deactivatedAt: expect.any(Date),
+            deactivatedBy: ADMIN_ID,
+            deactivationReason: REASON,
+          },
+        },
+        { new: true },
+      );
+      expect(result).not.toBeNull();
+      expect(result!.active).toBe(false);
+      expect(result!.deactivationReason).toBe(REASON);
+      expect(result!.deactivatedBy).toBe(ADMIN_ID);
+      expect(traceService.log).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.REPOSITORY,
+        'deactivate:init',
+        { id: QR_ID },
+      );
+      expect(traceService.log).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.REPOSITORY,
+        'deactivate:complete',
+        { id: QR_ID, updated: true },
+      );
+    });
+
+    it('retorna null si el QR no existe (findOneAndUpdate sin match)', async () => {
+      mockFindOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      const result = await repository.deactivate(QR_ID, REASON, ADMIN_ID, tracking);
+
+      expect(result).toBeNull();
+      expect(traceService.log).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.REPOSITORY,
+        'deactivate:complete',
+        { id: QR_ID, updated: false },
+      );
+    });
+
+    it('traza y re-lanza el error si la desactivación falla', async () => {
+      mockFindOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockRejectedValue(new Error('DB down')),
+      });
+
+      await expect(repository.deactivate(QR_ID, REASON, ADMIN_ID, tracking)).rejects.toThrow(
+        'DB down',
+      );
+      expect(traceService.error).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.REPOSITORY,
+        'deactivate:error',
+        expect.any(Error),
+      );
+    });
+  });
+
   describe('delete', () => {
     it('debe retornar true cuando elimina el QR', async () => {
       mockFindOneAndDelete.mockReturnValue(createQueryMock(qrDoc));

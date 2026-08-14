@@ -23,6 +23,8 @@ import { GetPublicQrUseCase } from './application/use-cases/get-public-qr.usecas
 import { UpdateQrUseCase } from './application/use-cases/update-qr.usecase';
 import { ActivateManyQrsUseCase } from './application/use-cases/activate-many-qrs.usecase';
 import { DeleteQrUseCase } from './application/use-cases/delete-qr.usecase';
+// SPEC-014: desactivación admin
+import { DeactivateQrUseCase } from './application/use-cases/deactivate-qr.usecase';
 
 import {
   QR_GET_ALL_PORT,
@@ -57,6 +59,7 @@ import {
     UpdateQrUseCase,
     ActivateManyQrsUseCase,
     DeleteQrUseCase,
+    DeactivateQrUseCase,
 
     // Repositories
     MongoQrRepository,
@@ -96,6 +99,7 @@ import {
     UpdateQrUseCase,
     ActivateManyQrsUseCase,
     DeleteQrUseCase,
+    DeactivateQrUseCase,
   ],
 })
 export class QrModule {}

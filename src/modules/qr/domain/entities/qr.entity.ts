@@ -105,6 +105,10 @@ export interface Qr {
   isOldMode?: boolean;
   typeQr: string;
   createdAt?: Date;
+  // SPEC-014: trazabilidad de desactivación admin (solo panel — nunca público)
+  deactivatedAt?: Date;
+  deactivatedBy?: string;
+  deactivationReason?: string;
 }
 
 export class QrEntity implements Qr {
@@ -122,6 +126,9 @@ export class QrEntity implements Qr {
   isOldMode?: boolean;
   typeQr: string;
   createdAt?: Date;
+  deactivatedAt?: Date;
+  deactivatedBy?: string;
+  deactivationReason?: string;
 
   constructor(data: Partial<Qr>) {
     this.id = data.id || '';
@@ -138,5 +145,8 @@ export class QrEntity implements Qr {
     this.isOldMode = data.isOldMode ?? false;
     this.typeQr = data.typeQr || '';
     this.createdAt = data.createdAt;
+    this.deactivatedAt = data.deactivatedAt;
+    this.deactivatedBy = data.deactivatedBy;
+    this.deactivationReason = data.deactivationReason;
   }
 }

@@ -37,6 +37,7 @@ function createController(overrides: Record<string, unknown> = {}) {
   const mocks: Record<string, any> = {
     getQrUseCase: { execute: jest.fn() },
     updateQrUseCase: { execute: jest.fn() },
+    deactivateQrUseCase: { execute: jest.fn() }, // SPEC-014
     storageService: { uploadImage: jest.fn(), uploadPdf: jest.fn(), deleteObject: jest.fn() },
     imageProcessor: { process: jest.fn() },
     pdfSanitizer: { sanitize: jest.fn() },
@@ -55,6 +56,7 @@ function createController(overrides: Record<string, unknown> = {}) {
     mocks.getPublicQrUseCase ?? { execute: jest.fn() },
     mocks.updateQrUseCase,
     mocks.deleteQrUseCase ?? { execute: jest.fn() },
+    mocks.deactivateQrUseCase,
     mocks.traceService,
     mocks.storageService,
     mocks.imageProcessor,
@@ -651,6 +653,49 @@ describe('QrController — @Query() tipado con DTOs (SPEC-008 H5 — R6)', () =>
         controller.findPaginatedByUser('otro-user', {} as any, makeUser('user'), tracking),
       ).rejects.toThrow(ForbiddenException);
       expect(mocks.getPaginatedQrsByUserUseCase.execute).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deactivate (POST /qr/admin/:id/deactivate — SPEC-014)', () => {
+    it('CA-01: desactiva con motivo y pasa adminId al usecase', async () => {
+      const { controller, mocks } = createController({
+        deactivateQrUseCase: { execute: jest.fn().mockResolvedValue({ success: true }) },
+      });
+
+      await controller.deactivate(
+        '507f1f77bcf86cd799439011',
+        { reason: 'Cliente no renovó el plan' } as any,
+        makeUser('admin'),
+        tracking,
+      );
+
+      expect(mocks.deactivateQrUseCase.execute).toHaveBeenCalledWith(
+        '507f1f77bcf86cd799439011',
+        'Cliente no renovó el plan',
+        'user-1',
+        tracking,
+      );
+    });
+
+    it('acepta idQr UUID (no ObjectId) — el QR se busca por idQr, no por _id', async () => {
+      const { controller, mocks } = createController({
+        deactivateQrUseCase: { execute: jest.fn().mockResolvedValue({ success: true }) },
+      });
+
+      // El fix de SPEC-014: NO validar ObjectId (el idQr es UUID v4).
+      await controller.deactivate(
+        'b25332b3-3e1e-4b51-a84c-37ae825ad604',
+        { reason: 'Motivo de prueba' } as any,
+        makeUser('admin'),
+        tracking,
+      );
+
+      expect(mocks.deactivateQrUseCase.execute).toHaveBeenCalledWith(
+        'b25332b3-3e1e-4b51-a84c-37ae825ad604',
+        'Motivo de prueba',
+        'user-1',
+        tracking,
+      );
     });
   });
 });

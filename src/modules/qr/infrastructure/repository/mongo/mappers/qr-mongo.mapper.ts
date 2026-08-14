@@ -29,6 +29,10 @@ export class QrMongoMapper {
       isOldMode: doc.isOldMode,
       typeQr: doc.typeQr,
       createdAt: doc.createdAt,
+      // SPEC-014: trazabilidad de desactivación admin
+      deactivatedAt: doc.deactivatedAt,
+      deactivatedBy: doc.deactivatedBy,
+      deactivationReason: doc.deactivationReason,
     };
   }
 
@@ -45,6 +49,9 @@ export class QrMongoMapper {
       isFavorite: qr.isFavorite,
       isOldMode: qr.isOldMode,
       typeQr: qr.typeQr,
+      deactivatedAt: qr.deactivatedAt,
+      deactivatedBy: qr.deactivatedBy,
+      deactivationReason: qr.deactivationReason,
     };
   }
 }

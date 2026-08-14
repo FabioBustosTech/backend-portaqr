@@ -307,6 +307,19 @@ export class QrSchema {
   @IsOptional()
   isOldMode?: boolean;
 
+  // SPEC-014: trazabilidad de desactivación admin (solo panel — nunca público)
+  @Prop({ required: false })
+  @IsOptional()
+  deactivatedAt?: Date;
+
+  @Prop({ required: false, trim: true })
+  @IsOptional()
+  deactivatedBy?: string;
+
+  @Prop({ required: false, trim: true })
+  @IsOptional()
+  deactivationReason?: string;
+
   @Prop({ required: true, type: String, enum: QrType})
   @IsOptional()
   typeQr: string;

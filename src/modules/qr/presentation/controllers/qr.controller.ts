@@ -33,6 +33,9 @@ import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { FavoriteQueryDto } from '../../application/dto/favorite-query.dto';
 import { UpdateQrUseCase } from '../../application/use-cases/update-qr.usecase';
 import { DeleteQrUseCase } from '../../application/use-cases/delete-qr.usecase';
+// SPEC-014: desactivación admin
+import { DeactivateQrUseCase } from '../../application/use-cases/deactivate-qr.usecase';
+import { DeactivateQrDto } from '../../application/dto/deactivate-qr.dto';
 import { CreateQrDto, QrType } from '../../application/dto/create-qr.dto';
 import { QrEntity } from '../../domain/entities/qr.entity';
 import { QrSeoDto } from '../../application/dto/qr-seo.dto';
@@ -109,6 +112,7 @@ export class QrController {
     private readonly getPublicQrUseCase: GetPublicQrUseCase,
     private readonly updateQrUseCase: UpdateQrUseCase,
     private readonly deleteQrUseCase: DeleteQrUseCase,
+    private readonly deactivateQrUseCase: DeactivateQrUseCase,
     private readonly traceService: TraceService,
     private readonly storageService: StorageService,
     private readonly imageProcessor: ImageProcessorService,
@@ -724,5 +728,32 @@ export class QrController {
   async getPublicRedirectUrl(@Param('id') id: string, @Tracking() tracking: TrackingContext) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'GET /qr/public/:id', { id });
     return this.getPublicQrUseCase.execute(id, tracking);
+  }
+
+  // SPEC-014: desactivación admin de un QR con motivo obligatorio (solo admin).
+  @Post('admin/:id/deactivate')
+  @Roles('admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Desactivar un QR como admin (motivo obligatorio)' })
+  @ApiResponse({ status: 200, description: 'QR desactivado', type: QrEntity })
+  @ApiResponse({ status: 400, description: 'ID inválido o motivo faltante/inválido' })
+  @ApiResponse({ status: 404, description: 'QR no encontrado o ya inactivo' })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'Prohibido - No tiene los permisos necesarios' })
+  async deactivate(
+    @Param('id') qrid: string,
+    @Body() deactivateQrDto: DeactivateQrDto,
+    @GetUser() user: User,
+    @Tracking() tracking: TrackingContext,
+  ) {
+    this.traceService.log(tracking, TraceLayer.CONTROLLER, 'POST /qr/admin/:id/deactivate', {
+      qrid,
+      reasonLength: deactivateQrDto.reason.length,
+    });
+
+    // NOTA: NO se valida ObjectId — el QR se busca por `idQr` (UUID v4),
+    // como en findOne/update/delete. El usecase lanza 404 si no existe.
+
+    return this.deactivateQrUseCase.execute(qrid, deactivateQrDto.reason, user.id, tracking);
   }
 }

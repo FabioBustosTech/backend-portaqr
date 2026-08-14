@@ -53,6 +53,13 @@ export interface ICanUpdateQr {
     expiration: Date,
     tracking: TrackingContext,
   ): Promise<{ matchedCount: number; modifiedCount: number }>;
+  // SPEC-014: desactivación admin con trazabilidad (motivo obligatorio)
+  deactivate(
+    id: string,
+    reason: string,
+    actorId: string,
+    tracking: TrackingContext,
+  ): Promise<Qr | null>;
 }
 
 export interface ICanDeleteQr {
