@@ -5,16 +5,19 @@ import { CreateScanDto } from '../dto/create-scan.dto';
 import { ScanEntity } from '../../domain/entities/scan.entity';
 import { SCAN_CREATE_PORT } from '../../domain/constants/scan.tokens';
 import { GetQrUseCase } from '../../../qr/application/use-cases/get-qr.usecase';
+import { PET_TAG_GET_PORT } from '../../../pet-tag/domain/constants/pet-tag.tokens';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import type { Scan } from '../../domain/entities/scan.entity';
 import type { ICanCreateScan } from '../../domain/ports/queries/scan.port';
+import type { ICanGetPetTag } from '../../../pet-tag/domain/ports/queries/pet-tag.port';
 
 describe('CreateScanUseCase', () => {
   let useCase: CreateScanUseCase;
   let creator: jest.Mocked<ICanCreateScan>;
   let traceService: jest.Mocked<TraceService>;
   let getQrUseCase: jest.Mocked<GetQrUseCase>;
+  let petTagGetter: jest.Mocked<ICanGetPetTag>;
 
   const tracking: TrackingContext = { trackingId: 't-1', sessionId: 's-1' };
 
@@ -57,6 +60,10 @@ describe('CreateScanUseCase', () => {
           useValue: { execute: jest.fn() },
         },
         {
+          provide: PET_TAG_GET_PORT,
+          useValue: { getOwner: jest.fn() },
+        },
+        {
           provide: TraceService,
           useValue: {
             log: jest.fn(),
@@ -72,8 +79,11 @@ describe('CreateScanUseCase', () => {
     creator = module.get(SCAN_CREATE_PORT);
     traceService = module.get(TraceService);
     getQrUseCase = module.get(GetQrUseCase);
+    petTagGetter = module.get(PET_TAG_GET_PORT);
     // SPEC-009 A9: el QR existe y pertenece a user-1 (dueño real del escaneo)
     getQrUseCase.execute.mockResolvedValue({ idQr: validDto.idQr, userId: 'user-1' } as never);
+    // SPEC-016 fix: por defecto el pet-tag NO existe (el flujo QR normal no lo consulta)
+    petTagGetter.getOwner.mockResolvedValue(null);
   });
 
   it('debe estar definido', () => {
@@ -123,6 +133,28 @@ describe('CreateScanUseCase', () => {
       creator.create.mockResolvedValue(mockSavedScan);
 
       await expect(useCase.execute(validDto, tracking)).rejects.toThrow(NotFoundException);
+      expect(creator.create).not.toHaveBeenCalled();
+    });
+
+    it('SPEC-016 fix: si el idQr es un PetTag (sin QR en qrs), toma el dueño de la placa y crea el scan', async () => {
+      getQrUseCase.execute.mockRejectedValue(new NotFoundException('QR no encontrado'));
+      petTagGetter.getOwner.mockResolvedValue({ userId: 'pet-tag-owner-1' });
+      creator.create.mockResolvedValue({ ...mockSavedScan, userId: 'pet-tag-owner-1' });
+
+      const result = await useCase.execute(validDto, tracking);
+
+      expect(petTagGetter.getOwner).toHaveBeenCalledWith(validDto.idQr, tracking);
+      expect(creator.create).toHaveBeenCalledTimes(1);
+      const [scanArg] = creator.create.mock.calls[0];
+      expect(scanArg.userId).toBe('pet-tag-owner-1'); // dueño real de la placa, NO el del body
+      expect(result.userId).toBe('pet-tag-owner-1');
+    });
+
+    it('SPEC-016 fix: propaga errores NO-404 del getQr sin consultar pet-tags (DB down, etc.)', async () => {
+      getQrUseCase.execute.mockRejectedValue(new Error('DB down'));
+
+      await expect(useCase.execute(validDto, tracking)).rejects.toThrow('DB down');
+      expect(petTagGetter.getOwner).not.toHaveBeenCalled();
       expect(creator.create).not.toHaveBeenCalled();
     });
 

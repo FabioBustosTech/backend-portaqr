@@ -39,6 +39,13 @@ export class PetTagRepositoryAdapter
     return this.mongoRepository.getStatus(idQr, tracking);
   }
 
+  async getOwner(
+    idQr: string,
+    tracking: TrackingContext,
+  ): Promise<{ userId: string | null } | null> {
+    return this.mongoRepository.getOwner(idQr, tracking);
+  }
+
   async update(
     petTagIdQr: string,
     userId: string,
@@ -56,5 +63,14 @@ export class PetTagRepositoryAdapter
     tracking: TrackingContext,
   ): Promise<unknown> {
     return this.mongoRepository.activate(idQr, activationPin, petData, userId, tracking);
+  }
+
+  async setPetImageUrl(
+    idQr: string,
+    userId: string | null,
+    url: string | null,
+    tracking: TrackingContext,
+  ): Promise<unknown> {
+    return this.mongoRepository.setPetImageUrl(idQr, userId, url, tracking);
   }
 }

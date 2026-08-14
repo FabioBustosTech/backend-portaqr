@@ -27,8 +27,10 @@ describe('PetTagRepositoryAdapter', () => {
             generateBatch: jest.fn(),
             findReserved: jest.fn(),
             getStatus: jest.fn(),
+            getOwner: jest.fn(),
             update: jest.fn(),
             activate: jest.fn(),
+            setPetImageUrl: jest.fn(),
           },
         },
       ],
@@ -106,7 +108,7 @@ describe('PetTagRepositoryAdapter', () => {
   });
 
   describe('activate', () => {
-    it('debe delegar la activación al repositorio mongo', async () => {
+    it('debe delegar la activaciÃ³n al repositorio mongo', async () => {
       const activated = { idQr: 'qr-1', status: 'ACTIVO' };
       mongoRepository.activate.mockResolvedValue(activated);
 
@@ -120,6 +122,41 @@ describe('PetTagRepositoryAdapter', () => {
         tracking,
       );
       expect(res).toEqual(activated);
+    });
+  });
+
+  describe('getOwner (SPEC-016)', () => {
+    it('debe delegar la consulta de dueño al repositorio mongo', async () => {
+      mongoRepository.getOwner.mockResolvedValue({ userId: 'user-1' });
+
+      const res = await adapter.getOwner('qr-1', tracking);
+
+      expect(mongoRepository.getOwner).toHaveBeenCalledWith('qr-1', tracking);
+      expect(res).toEqual({ userId: 'user-1' });
+    });
+  });
+
+  describe('setPetImageUrl (SPEC-016)', () => {
+    it('debe delegar la persistencia de la foto al repositorio mongo', async () => {
+      mongoRepository.setPetImageUrl.mockResolvedValue({ idQr: 'qr-1' });
+
+      const res = await adapter.setPetImageUrl('qr-1', 'user-1', 'https://cdn/x.webp', tracking);
+
+      expect(mongoRepository.setPetImageUrl).toHaveBeenCalledWith(
+        'qr-1',
+        'user-1',
+        'https://cdn/x.webp',
+        tracking,
+      );
+      expect(res).toEqual({ idQr: 'qr-1' });
+    });
+
+    it('debe aceptar userId null (admin) y url null (borrado)', async () => {
+      mongoRepository.setPetImageUrl.mockResolvedValue({ idQr: 'qr-1' });
+
+      await adapter.setPetImageUrl('qr-1', null, null, tracking);
+
+      expect(mongoRepository.setPetImageUrl).toHaveBeenCalledWith('qr-1', null, null, tracking);
     });
   });
 });

@@ -26,6 +26,7 @@ describe('PetTagMongoMapper', () => {
           diseases: 'Ninguna',
           vaccines: [{ name: 'Rabia', date: '2024-01-01' }],
           observations: 'Ninguna',
+          petImageUrl: 'https://cdn/pet-tag/qr-1.webp',
         },
         expiration: new Date('2025-01-01'),
         commercialStatus: 'VENDIDO',
@@ -59,6 +60,7 @@ describe('PetTagMongoMapper', () => {
           diseases: 'Ninguna',
           vaccines: [{ name: 'Rabia', date: '2024-01-01' }],
           observations: 'Ninguna',
+          petImageUrl: 'https://cdn/pet-tag/qr-1.webp',
         },
         expiration: doc.expiration,
         commercialStatus: 'VENDIDO',
@@ -106,11 +108,23 @@ describe('PetTagMongoMapper', () => {
         diseases: 'Ninguna',
         vaccines: [{ name: 'Rabia', date: '2024-01-01' }],
         observations: 'Ninguna',
+        petImageUrl: 'https://cdn/pet-tag/qr-1.webp',
       };
 
       const entity = PetTagMongoMapper.toPetDataEntity(doc);
 
       expect(entity).toEqual(doc);
+    });
+
+    it('debe mapear petImageUrl como null cuando el documento no lo trae', () => {
+      const entity = PetTagMongoMapper.toPetDataEntity({
+        ownerName: 'Juan',
+        address: 'Calle 1',
+        phone: '123',
+        petName: 'Rex',
+      });
+
+      expect(entity.petImageUrl).toBeNull();
     });
 
     it('debe mapear datos parciales sin campos opcionales', () => {
@@ -126,6 +140,7 @@ describe('PetTagMongoMapper', () => {
         address: 'Calle 1',
         phone: '123',
         petName: 'Rex',
+        petImageUrl: null,
       });
     });
   });

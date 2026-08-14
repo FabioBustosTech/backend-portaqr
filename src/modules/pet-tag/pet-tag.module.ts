@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CommonModule } from 'src/common/common.module';
+import { StorageModule } from 'src/modules/storage/storage.module';
 import { PetTagController } from './presentation/controllers/pet-tag.controller';
 
 import {
@@ -15,6 +16,10 @@ import { GetReservedPetTagsUseCase } from './application/use-cases/get-reserved-
 import { GetPetTagStatusUseCase } from './application/use-cases/get-pet-tag-status.usecase';
 import { UpdatePetTagUseCase } from './application/use-cases/update-pet-tag.usecase';
 import { ActivatePetTagUseCase } from './application/use-cases/activate-pet-tag.usecase';
+import {
+  UploadPetImageUseCase,
+  DeletePetImageUseCase,
+} from './application/use-cases/pet-tag-image.usecase';
 
 import {
   PET_TAG_CREATE_PORT,
@@ -25,6 +30,7 @@ import {
 @Module({
   imports: [
     CommonModule,
+    StorageModule, // SPEC-016: StorageService + ImageProcessorService para la foto de la mascota
     MongooseModule.forFeature([
       { name: PetTagSchema.name, schema: PetTagSchemaDefinition },
     ]),
@@ -37,6 +43,8 @@ import {
     GetPetTagStatusUseCase,
     UpdatePetTagUseCase,
     ActivatePetTagUseCase,
+    UploadPetImageUseCase,
+    DeletePetImageUseCase,
 
     // Repositories
     MongoPetTagRepository,
@@ -62,6 +70,12 @@ import {
     GetPetTagStatusUseCase,
     UpdatePetTagUseCase,
     ActivatePetTagUseCase,
+    UploadPetImageUseCase,
+    DeletePetImageUseCase,
+    // SPEC-016 fix: el port de lectura se exporta para que ScanModule resuelva
+    // el dueño de scans de pet-tags (los pet-tags NO tienen QR espejo en `qrs`)
+    PetTagRepositoryAdapter,
+    PET_TAG_GET_PORT,
   ],
 })
 export class PetTagModule {}
