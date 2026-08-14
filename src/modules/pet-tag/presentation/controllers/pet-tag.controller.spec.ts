@@ -1,10 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException } from '@nestjs/common';
 import { PetTagController } from './pet-tag.controller';
 import { GeneratePetTagsUseCase } from '../../application/use-cases/generate-pet-tags.usecase';
 import { GetReservedPetTagsUseCase } from '../../application/use-cases/get-reserved-pet-tags.usecase';
 import { GetPetTagStatusUseCase } from '../../application/use-cases/get-pet-tag-status.usecase';
 import { UpdatePetTagUseCase } from '../../application/use-cases/update-pet-tag.usecase';
 import { ActivatePetTagUseCase } from '../../application/use-cases/activate-pet-tag.usecase';
+import {
+  UploadPetImageUseCase,
+  DeletePetImageUseCase,
+} from '../../application/use-cases/pet-tag-image.usecase';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
 import type { TrackingContext } from 'src/common/decorators/tracking.decorator';
 import type { GeneratePetTagsDto } from '../../application/dto/generate-pet-tags.dto';
@@ -21,6 +26,8 @@ describe('PetTagController', () => {
   let getPetTagStatusUseCase: jest.Mocked<GetPetTagStatusUseCase>;
   let updatePetTagUseCase: jest.Mocked<UpdatePetTagUseCase>;
   let activatePetTagUseCase: jest.Mocked<ActivatePetTagUseCase>;
+  let uploadPetImageUseCase: jest.Mocked<UploadPetImageUseCase>;
+  let deletePetImageUseCase: jest.Mocked<DeletePetImageUseCase>;
   let traceService: jest.Mocked<TraceService>;
 
   const tracking: TrackingContext = { trackingId: 't-1', sessionId: 's-1' };
@@ -58,6 +65,14 @@ describe('PetTagController', () => {
           useValue: { execute: jest.fn() },
         },
         {
+          provide: UploadPetImageUseCase,
+          useValue: { execute: jest.fn() },
+        },
+        {
+          provide: DeletePetImageUseCase,
+          useValue: { execute: jest.fn() },
+        },
+        {
           provide: TraceService,
           useValue: {
             log: jest.fn(),
@@ -75,6 +90,8 @@ describe('PetTagController', () => {
     getPetTagStatusUseCase = module.get(GetPetTagStatusUseCase);
     updatePetTagUseCase = module.get(UpdatePetTagUseCase);
     activatePetTagUseCase = module.get(ActivatePetTagUseCase);
+    uploadPetImageUseCase = module.get(UploadPetImageUseCase);
+    deletePetImageUseCase = module.get(DeletePetImageUseCase);
     traceService = module.get(TraceService);
   });
 
@@ -224,6 +241,60 @@ describe('PetTagController', () => {
         tracking,
       );
       expect(result).toEqual(expected);
+    });
+  });
+
+  describe('uploadPetTagImage (SPEC-016)', () => {
+    it('debe subir la foto delegando al use case con el buffer, rol y dueño', async () => {
+      const expected = {
+        petImageUrl: 'https://cdn/pet-tag/qr-123.webp',
+        size: 4,
+        width: 512,
+        height: 512,
+      };
+      uploadPetImageUseCase.execute.mockResolvedValue(expected);
+      const file = { buffer: Buffer.from('jpeg-data') } as Express.Multer.File;
+
+      const result = await controller.uploadPetTagImage('qr-123', file, user, tracking);
+
+      expect(traceService.log).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.CONTROLLER,
+        'POST /pet-tag/:idQr/image',
+        { idQr: 'qr-123', userId: 'user-1' },
+      );
+      expect(uploadPetImageUseCase.execute).toHaveBeenCalledWith(
+        'qr-123',
+        'user-1',
+        'user',
+        Buffer.from('jpeg-data'),
+        tracking,
+      );
+      expect(result).toEqual(expected);
+    });
+
+    it('debe lanzar 400 si no llega el archivo (campo file ausente)', async () => {
+      await expect(
+        controller.uploadPetTagImage('qr-123', undefined, user, tracking),
+      ).rejects.toThrow(BadRequestException);
+      expect(uploadPetImageUseCase.execute).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deletePetTagImage (SPEC-016)', () => {
+    it('debe borrar la foto delegando al use case', async () => {
+      deletePetImageUseCase.execute.mockResolvedValue({ petImageUrl: null });
+
+      const result = await controller.deletePetTagImage('qr-123', user, tracking);
+
+      expect(traceService.log).toHaveBeenCalledWith(
+        tracking,
+        TraceLayer.CONTROLLER,
+        'DELETE /pet-tag/:idQr/image',
+        { idQr: 'qr-123', userId: 'user-1' },
+      );
+      expect(deletePetImageUseCase.execute).toHaveBeenCalledWith('qr-123', 'user-1', 'user', tracking);
+      expect(result).toEqual({ petImageUrl: null });
     });
   });
 });

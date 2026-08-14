@@ -39,6 +39,13 @@ export class PetTagRepositoryAdapter
     return this.mongoRepository.getStatus(idQr, tracking);
   }
 
+  async getOwner(
+    idQr: string,
+    tracking: TrackingContext,
+  ): Promise<{ userId: string | null } | null> {
+    return this.mongoRepository.getOwner(idQr, tracking);
+  }
+
   async update(
     petTagIdQr: string,
     userId: string,
@@ -60,7 +67,7 @@ export class PetTagRepositoryAdapter
 
   async setPetImageUrl(
     idQr: string,
-    userId: string,
+    userId: string | null,
     url: string | null,
     tracking: TrackingContext,
   ): Promise<unknown> {

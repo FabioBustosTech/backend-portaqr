@@ -45,6 +45,14 @@ export interface ICanGetPetTag {
     idQr: string,
     tracking: TrackingContext,
   ): Promise<{ status?: string; petData?: PetData } | null>;
+  /**
+   * SPEC-016 RF-4: retorna el dueño de una placa (para validación de ownership en
+   * upload/delete de imagen). null si la placa no existe.
+   */
+  getOwner(
+    idQr: string,
+    tracking: TrackingContext,
+  ): Promise<{ userId: string | null } | null>;
 }
 
 export interface ICanUpdatePetTag {
@@ -65,10 +73,11 @@ export interface ICanUpdatePetTag {
    * SPEC-016 RF-3: persiste SOLO el sub-campo petData.petImageUrl (URL pública de la foto)
    * sin pisar el resto del petData. 1 round-trip (findOneAndUpdate + $set del sub-campo).
    * url = null → limpia el campo (borrado de foto).
+   * userId = null → sin filtro de dueño (admin operando sobre placa ajena).
    */
   setPetImageUrl(
     idQr: string,
-    userId: string,
+    userId: string | null,
     url: string | null,
     tracking: TrackingContext,
   ): Promise<unknown>;

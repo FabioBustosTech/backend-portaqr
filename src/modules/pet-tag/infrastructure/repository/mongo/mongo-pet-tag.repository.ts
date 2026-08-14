@@ -182,6 +182,29 @@ export class MongoPetTagRepository
     }
   }
 
+  /** SPEC-016 RF-4: dueño de la placa para validación de ownership (upload/delete imagen). */
+  async getOwner(
+    idQr: string,
+    tracking: TrackingContext,
+  ): Promise<{ userId: string | null } | null> {
+    try {
+      this.traceService.log(tracking, TraceLayer.REPOSITORY, 'getOwner:init', { idQr });
+
+      const tag = await this.petTagModel.findOne({ idQr }).select('userId').lean();
+      if (!tag) {
+        return null;
+      }
+
+      return { userId: tag.userId ? tag.userId.toString() : null };
+    } catch (error) {
+      this.traceService.error(tracking, TraceLayer.REPOSITORY, 'getOwner:error', error as Error);
+      throw new HttpException(
+        error.message || 'Error al consultar la placa',
+        error.status || HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
   async update(
     petTagIdQr: string,
     userId: string,
@@ -231,10 +254,11 @@ export class MongoPetTagRepository
   /**
    * SPEC-016 RF-3: persiste SOLO el sub-campo petData.petImageUrl (1 round-trip).
    * No pisa el resto del petData (a diferencia de update() que reemplaza el objeto completo).
+   * userId = null → filtro solo por idQr (admin sobre placa ajena).
    */
   async setPetImageUrl(
     idQr: string,
-    userId: string,
+    userId: string | null,
     url: string | null,
     tracking: TrackingContext,
   ): Promise<unknown> {
@@ -245,11 +269,14 @@ export class MongoPetTagRepository
         url: url ? `${url.slice(0, 60)}…` : null, // no loguear URLs completas innecesariamente
       });
 
-      const userObjectId = new Types.ObjectId(userId);
+      const filter: FilterQuery<PetTagDocument> = { idQr };
+      if (userId) {
+        filter.userId = new Types.ObjectId(userId);
+      }
 
       const tag = await this.petTagModel
         .findOneAndUpdate(
-          { idQr, userId: userObjectId },
+          filter,
           { $set: { 'petData.petImageUrl': url } },
           { new: true, runValidators: true },
         )
@@ -265,6 +292,21 @@ export class MongoPetTagRepository
       });
       return tag;
     } catch (error) {
+      // Caso borde (datos preexistentes): petData null → Mongo no puede crear el sub-campo
+      // ('Path collision'). La placa debe activarse con datos antes de poder subir foto.
+      const msg = (error as Error)?.message ?? '';
+      if (msg.includes('Path collision') || msg.includes('Cannot create field')) {
+        this.traceService.error(
+          tracking,
+          TraceLayer.REPOSITORY,
+          'setPetImageUrl:petData-null',
+          error as Error,
+        );
+        throw new HttpException(
+          'La placa no tiene datos de mascota activados: activa la placa antes de subir la foto.',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
       this.traceService.error(tracking, TraceLayer.REPOSITORY, 'setPetImageUrl:error', error as Error);
       throw new HttpException(
         error.message || 'Error al actualizar la foto de la placa',
