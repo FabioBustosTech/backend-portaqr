@@ -167,8 +167,10 @@ export class MongoQrRepository
       return {
         data: docs.map((doc) => {
           const entity = QrMongoMapper.toEntity(doc as never);
-          // SPEC-015: exponer solo campos seguros del dueño (admin-only)
-          const owner = doc.userInfo?.[0];
+          // SPEC-015: exponer solo campos seguros del dueño (admin-only).
+          // Tras el $unwind, userInfo es el OBJETO del usuario (no un array) —
+          // acceder con [0] devolvía undefined → user: null para todos (bug).
+          const owner = doc.userInfo ?? null;
           if (owner) {
             entity.user = {
               firstName: owner.firstName as string | undefined,
@@ -640,17 +642,18 @@ export class MongoQrRepository
 }
 
 // SPEC-015: documento resultante del $facet del aggregate admin (QR + dueño).
-// userInfo es el array del $lookup (0 o 1 elemento tras $unwind).
+// Tras el $unwind con preserveNullAndEmptyArrays, userInfo es el OBJETO del
+// usuario (o undefined si no hubo match) — NO un array.
 interface AdminQrAggregateDoc {
   data: Array<{
     [key: string]: unknown;
-    userInfo?: Array<{
+    userInfo?: {
       firstName?: unknown;
       paternalLastName?: unknown;
       maternalLastName?: unknown;
       userName?: unknown;
       email?: unknown;
-    }>;
+    };
   }>;
   total: Array<{ count: number }>;
 }

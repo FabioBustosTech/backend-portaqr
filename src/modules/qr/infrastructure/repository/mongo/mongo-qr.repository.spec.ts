@@ -262,15 +262,16 @@ describe('MongoQrRepository', () => {
       email: 'juan@test.cl',
     };
 
-    /** Doc de QR en el formato del $facet del aggregate (con userInfo tras $unwind). */
+    /** Doc de QR en el formato del $facet del aggregate (userInfo es el OBJETO
+     *  del usuario tras $unwind con preserveNullAndEmptyArrays — no un array). */
     const qrWithUser = (overrides: Record<string, unknown> = {}) => ({
       ...qrDoc,
-      userInfo: [ownerDoc],
+      userInfo: ownerDoc,
       ...overrides,
     });
 
-    it('debe retornar datos y paginación sin búsqueda ni filtros (userInfo vacío → user null)', async () => {
-      mockAggregate.mockReturnValue(createAggregateFacetResult([{ ...qrDoc, userInfo: [] }], 1));
+    it('debe retornar datos y paginación sin búsqueda ni filtros (userInfo ausente → user null)', async () => {
+      mockAggregate.mockReturnValue(createAggregateFacetResult([{ ...qrDoc, userInfo: undefined }], 1));
 
       const result = await repository.findAllWithSearch(1, 10, '', 'all', undefined, undefined, tracking);
 
@@ -293,7 +294,7 @@ describe('MongoQrRepository', () => {
       });
     });
 
-    it('debe resolver el usuario dueño (user: { firstName, ... }) tras el $lookup', async () => {
+    it('debe resolver el usuario dueño (user: { firstName, ... }) tras el $unwind (userInfo es objeto, no array)', async () => {
       mockAggregate.mockReturnValue(createAggregateFacetResult([qrWithUser()], 1));
 
       const result = await repository.findAllWithSearch(1, 10, '', 'all', undefined, undefined, tracking);
