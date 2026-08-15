@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { TraceService, TraceLayer } from 'src/common/services/trace.service';
@@ -19,7 +19,7 @@ export class MongoStatisticsRepository implements ICanGetStatistics {
     @InjectModel(UserSchema.name) private readonly userModel: Model<_UserDoc>,
     private readonly traceService: TraceService,
   ) {
-    // Crear Ã­ndices para optimizar las consultas
+    // Crear índices para optimizar las consultas
     this.scanModel.collection.createIndex({ userId: 1, scanDate: -1 });
     this.scanModel.collection.createIndex({ scanDate: -1 });
     this.scanModel.collection.createIndex({ origen: 1 });

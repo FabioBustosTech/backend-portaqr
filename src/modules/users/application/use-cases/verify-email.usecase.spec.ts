@@ -152,7 +152,7 @@ describe('VerifyEmailUseCase', () => {
 
       await expect(
         useCase.execute('user-1', 'WRONG99', tracking),
-      ).rejects.toThrow('El cÃ³digo de verificaciÃ³n ha expirado');
+      ).rejects.toThrow('El código de verificación ha expirado');
       expect(updater.update).toHaveBeenCalledWith(
         'user-1',
         {

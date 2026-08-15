@@ -15,7 +15,7 @@ import type {
 import { QrSchema, QrDocument } from './schemas/qr.schema';
 import { QrMongoMapper } from './mappers/qr-mongo.mapper';
 import { PetTagSchema, PetTagDocument } from 'src/modules/pet-tag/infrastructure/repository/mongo/schemas/pet-tag.schema';
-// SPEC-008 H3 (R2): input de b�squeda como literal, sin metacaracteres de regex (ReDoS)
+// SPEC-008 H3 (R2): input de búsqueda como literal, sin metacaracteres de regex (ReDoS)
 import escapeStringRegexp = require('escape-string-regexp');
 
 @Injectable()
@@ -371,9 +371,9 @@ export class MongoQrRepository
     tracking: TrackingContext,
   ): Promise<{ data: unknown[]; pagination: QrPagination }> {
     try {
-      // Normalizar page/limit a n�mero: el controller los pasa como strings
-      // desde query params y $skip/$limit de aggregate exigen n�meros
-      // (el find().limit() anterior toleraba strings � no-regresi�n SPEC-007 H3)
+      // Normalizar page/limit a número: el controller los pasa como strings
+      // desde query params y $skip/$limit de aggregate exigen números
+      // (el find().limit() anterior toleraba strings — no-regresión SPEC-007 H3)
       const pageNum = Number(page) || 1;
       const limitNum = Number(limit) || 10;
       const skip = (pageNum - 1) * limitNum;
@@ -393,8 +393,8 @@ export class MongoQrRepository
       // IMPORTANTE (tipos de schema): qr guarda userId como STRING
       // (qr.schema.ts L89) y pet-tag como Types.ObjectId. El find() de Mongoose
       // casteaba el filtro al tipo del schema; el aggregate $match NO castea,
-      // por lo que hay que usar el tipo correcto en cada colecci�n
-      // (no-regresi�n: $match con ObjectId contra userId string devuelve 0).
+      // por lo que hay que usar el tipo correcto en cada colección
+      // (no-regresión: $match con ObjectId contra userId string devuelve 0).
       const targetUserId = new Types.ObjectId(targetUserIdString);
       const qrUserId = targetUserIdString;
       const petTagUserId = targetUserId;
@@ -476,8 +476,8 @@ export class MongoQrRepository
       }
 
       // --- 2. Paginar en origen con $facet (SPEC-007 H3) ---
-      // Cada colecci�n trae a lo sumo `limit` docs (2�limit en total a unir),
-      // no la colecci�n completa; el total se calcula en la misma consulta.
+      // Cada colección trae a lo sumo `limit` docs (2×limit en total a unir),
+      // no la colección completa; el total se calcula en la misma consulta.
       const sort = { isFavorite: -1, updatedAt: -1 } as const;
       const [qrFacet, petTagFacet] = await Promise.all([
         this.qrModel

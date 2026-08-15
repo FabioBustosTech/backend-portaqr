@@ -1,4 +1,4 @@
-﻿import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 
 export type TransactionDocument = HydratedDocument<TransactionSchema>;
@@ -47,7 +47,7 @@ export class TransactionSchema {
 
 export const TransactionSchemaDefinition = SchemaFactory.createForClass(TransactionSchema);
 
-// Ãndices
+// Índices
 TransactionSchemaDefinition.index({ token: 1 });
 TransactionSchemaDefinition.index({ sessionId: 1 });
 TransactionSchemaDefinition.index({ buyOrder: 1 });

@@ -1,4 +1,4 @@
-﻿import {
+import {
   Controller,
   Post,
   Body,
@@ -21,7 +21,7 @@ import { TraceService, TraceLayer } from '../../../../common/services/trace.serv
 import { Throttle } from '@nestjs/throttler';
 import { SENSITIVE_ENDPOINT_THROTTLE } from 'src/common/config/throttle.config';
 
-@ApiTags('AutenticaciÃ³n')
+@ApiTags('Autenticación')
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -33,9 +33,9 @@ export class AuthController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @Throttle(SENSITIVE_ENDPOINT_THROTTLE)
-  @ApiOperation({ summary: 'Iniciar sesiÃ³n' })
+  @ApiOperation({ summary: 'Iniciar sesión' })
   @ApiResponse({ status: 200, description: 'Login exitoso' })
-  @ApiResponse({ status: 401, description: 'Credenciales invÃ¡lidas' })
+  @ApiResponse({ status: 401, description: 'Credenciales inválidas' })
   async login(@Body() loginDto: LoginDto, @Tracking() tracking: TrackingContext) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'POST /auth/login', {
       username: loginDto.username,
@@ -49,7 +49,7 @@ export class AuthController {
   @Throttle(SENSITIVE_ENDPOINT_THROTTLE)
   @ApiOperation({ summary: 'Refrescar el token de acceso' })
   @ApiResponse({ status: 200, description: 'Token de acceso generado exitosamente.' })
-  @ApiResponse({ status: 401, description: 'Token de actualizaciÃ³n invÃ¡lido o expirado.' })
+  @ApiResponse({ status: 401, description: 'Token de actualización inválido o expirado.' })
   async refreshToken(
     @Body() refreshTokenDto: RefreshTokenDto,
     @Tracking() tracking: TrackingContext,

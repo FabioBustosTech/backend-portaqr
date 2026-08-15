@@ -1,4 +1,4 @@
-﻿import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -7,7 +7,7 @@ export type UserDocument = HydratedDocument<UserSchema>;
 @Schema({ timestamps: true, collection: 'users' })
 export class UserSchema {
   @ApiProperty({
-    description: 'Correo electrÃ³nico del usuario',
+    description: 'Correo electrónico del usuario',
     example: 'usuario@ejemplo.com',
   })
   @Prop({ required: true, unique: true, trim: true })
@@ -21,8 +21,8 @@ export class UserSchema {
   userName: string;
 
   @ApiProperty({
-    description: 'ContraseÃ±a del usuario',
-    example: 'ContraseÃ±a123!',
+    description: 'Contraseña del usuario',
+    example: 'Contraseña123!',
   })
   @Prop({ required: true })
   password: string;
@@ -36,14 +36,14 @@ export class UserSchema {
 
   @ApiProperty({
     description: 'Apellido paterno del usuario',
-    example: 'PÃ©rez',
+    example: 'Pérez',
   })
   @Prop({ required: true, trim: true })
   paternalLastName: string;
 
   @ApiProperty({
     description: 'Apellido materno del usuario',
-    example: 'GarcÃ­a',
+    example: 'García',
   })
   @Prop({ required: true, trim: true })
   maternalLastName: string;
@@ -57,7 +57,7 @@ export class UserSchema {
   role: string;
 
   @ApiProperty({
-    description: 'Estado de verificaciÃ³n del email',
+    description: 'Estado de verificación del email',
     example: false,
     default: false,
   })
@@ -74,7 +74,7 @@ export class UserSchema {
   tokenVersion: number;
 
   @ApiProperty({
-    description: 'TelÃ©fono del usuario',
+    description: 'Teléfono del usuario',
     example: '+1234567890',
     required: false,
   })
@@ -82,7 +82,7 @@ export class UserSchema {
   phone?: string;
 
   @ApiProperty({
-    description: 'Fecha de Ãºltimo inicio de sesiÃ³n',
+    description: 'Fecha de último inicio de sesión',
     required: false,
   })
   @Prop()

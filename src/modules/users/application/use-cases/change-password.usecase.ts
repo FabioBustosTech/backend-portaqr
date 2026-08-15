@@ -1,4 +1,4 @@
-﻿import { Injectable, Inject, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Inject, UnauthorizedException } from '@nestjs/common';
 import type { ICanGetUser } from '../../domain/ports/queries/get-user.port';
 import type { ICanUpdateUser } from '../../domain/ports/queries/create-user.port';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
@@ -35,12 +35,12 @@ export class ChangePasswordUseCase {
     }
 
     if (!usuario.password) {
-      throw new UnauthorizedException('La contraseÃ±a actual es incorrecta.');
+      throw new UnauthorizedException('La contraseña actual es incorrecta.');
     }
 
     const isMatch = await this.passwordService.comparePassword(currentPassword, usuario.password);
     if (!isMatch) {
-      throw new UnauthorizedException('La contraseÃ±a actual es incorrecta.');
+      throw new UnauthorizedException('La contraseña actual es incorrecta.');
     }
 
     const hashedPassword = await this.passwordService.hashPassword(newPassword);

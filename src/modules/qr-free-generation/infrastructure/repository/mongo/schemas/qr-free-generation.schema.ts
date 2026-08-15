@@ -1,4 +1,4 @@
-﻿import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 
 export type QrFreeGenerationDocument = HydratedDocument<QrFreeGenerationSchema>;
@@ -57,19 +57,19 @@ export class QrFreeGenerationSchema {
 export const QrFreeGenerationSchemaDefinition =
   SchemaFactory.createForClass(QrFreeGenerationSchema);
 
-// Agregando Ã­ndices
+// Agregando índices
 QrFreeGenerationSchemaDefinition.index({ email: 1 });
 QrFreeGenerationSchemaDefinition.index({ 'information.typeQr': 1 });
 
-// Ãndice compuesto para bÃºsquedas frecuentes
+// Índice compuesto para búsquedas frecuentes
 QrFreeGenerationSchemaDefinition.index({ email: 1, 'information.typeQr': 1 });
 
-// Ãndice geoespacial para bÃºsquedas por ubicaciÃ³n
+// Índice geoespacial para búsquedas por ubicación
 QrFreeGenerationSchemaDefinition.index({ 'location.latitude': 1, 'location.longitude': 1 });
 
-// Ãndice para bÃºsquedas por dispositivo
+// Índice para búsquedas por dispositivo
 QrFreeGenerationSchemaDefinition.index({ 'device.platform': 1 });
 QrFreeGenerationSchemaDefinition.index({ 'device.browser': 1 });
 
-// Ãndice para fecha de creaciÃ³n
+// Índice para fecha de creación
 QrFreeGenerationSchemaDefinition.index({ createdAt: 1 });

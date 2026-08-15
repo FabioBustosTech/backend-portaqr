@@ -1,4 +1,4 @@
-﻿import {
+import {
   Controller,
   Get,
   Post,
@@ -83,36 +83,36 @@ export class UsersController {
   @Post(':id/resend-verification')
   @Public()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reenviar cÃ³digo de verificaciÃ³n' })
-  @ApiResponse({ status: 200, description: 'CÃ³digo reenviado exitosamente' })
+  @ApiOperation({ summary: 'Reenviar código de verificación' })
+  @ApiResponse({ status: 200, description: 'Código reenviado exitosamente' })
   async resendVerificationCode(
     @Param('id') id: string,
     @Tracking() tracking: TrackingContext,
   ) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'POST /users/:id/resend-verification', { id });
     await this.resendVerificationCodeUseCase.execute(id, tracking);
-    return { message: 'CÃ³digo de verificaciÃ³n reenviado exitosamente' };
+    return { message: 'Código de verificación reenviado exitosamente' };
   }
 
   @Post('forgot-password')
   @Public()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Solicitar recuperaciÃ³n de contraseÃ±a' })
-  @ApiResponse({ status: 200, description: 'CÃ³digo de recuperaciÃ³n enviado exitosamente' })
+  @ApiOperation({ summary: 'Solicitar recuperación de contraseña' })
+  @ApiResponse({ status: 200, description: 'Código de recuperación enviado exitosamente' })
   async forgotPassword(
     @Body('email') email: string,
     @Tracking() tracking: TrackingContext,
   ) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'POST /users/forgot-password', { email });
     await this.forgotPasswordUseCase.execute(email, tracking);
-    return { message: 'CÃ³digo de recuperaciÃ³n enviado exitosamente' };
+    return { message: 'Código de recuperación enviado exitosamente' };
   }
 
   @Post('reset-password')
   @Public()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Resetear contraseÃ±a' })
-  @ApiResponse({ status: 200, description: 'ContraseÃ±a actualizada exitosamente' })
+  @ApiOperation({ summary: 'Resetear contraseña' })
+  @ApiResponse({ status: 200, description: 'Contraseña actualizada exitosamente' })
   async resetPassword(
     @Body('email') email: string,
     @Body('code') code: string,
@@ -121,7 +121,7 @@ export class UsersController {
   ) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'POST /users/reset-password', { email });
     await this.resetPasswordUseCase.execute(email, code, newPassword, tracking);
-    return { message: 'ContraseÃ±a actualizada exitosamente' };
+    return { message: 'Contraseña actualizada exitosamente' };
   }
 
   @Post()
@@ -245,7 +245,7 @@ export class UsersController {
     }
 
     if (user.id !== id) {
-      throw new UnauthorizedException('No tiene permiso para cambiar la contraseÃ±a de otro usuario.');
+      throw new UnauthorizedException('No tiene permiso para cambiar la contraseña de otro usuario.');
     }
 
     await this.changePasswordUseCase.execute(id, changePasswordDto, tracking);

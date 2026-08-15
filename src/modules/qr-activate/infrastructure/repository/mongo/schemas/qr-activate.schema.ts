@@ -1,4 +1,4 @@
-﻿import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import {
   DocumentType,
@@ -102,7 +102,7 @@ export class QrActivateSchema {
 
 export const QrActivateSchemaDefinition = SchemaFactory.createForClass(QrActivateSchema);
 
-// Ãndices
+// Índices
 QrActivateSchemaDefinition.index({ userId: 1 });
 QrActivateSchemaDefinition.index({ methodActivation: 1 });
 QrActivateSchemaDefinition.index({ state: 1 });

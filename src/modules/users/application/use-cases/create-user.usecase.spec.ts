@@ -163,7 +163,7 @@ describe('CreateUserUseCase', () => {
       creator.create.mockRejectedValue(createDuplicateKeyError({ email: 1 }));
 
       await expect(useCase.execute(dto, tracking)).rejects.toThrow(
-        'El correo electrÃ³nico ya estÃ¡ registrado',
+        'El correo electrónico ya está registrado',
       );
       expect(traceService.warn).toHaveBeenCalledWith(
         tracking,
@@ -179,7 +179,7 @@ describe('CreateUserUseCase', () => {
       creator.create.mockRejectedValue(createDuplicateKeyError({ userName: 1 }));
 
       await expect(useCase.execute(dto, tracking)).rejects.toThrow(
-        'El nombre de usuario ya estÃ¡ en uso',
+        'El nombre de usuario ya está en uso',
       );
     });
 

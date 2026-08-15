@@ -8,7 +8,7 @@ import { QrActivateSchema, QrActivateDocument } from './schemas/qr-activate.sche
 import { QrActivateMongoMapper } from './mappers/qr-activate-mongo.mapper';
 import type { PaginatedResult } from '../../../../../common/dto/pagination.dto';
 import type { TrackingContext } from '../../../../../common/decorators/tracking.decorator';
-// SPEC-008 H3 (R2): input de b�squeda como literal, sin metacaracteres de regex (ReDoS)
+// SPEC-008 H3 (R2): input de búsqueda como literal, sin metacaracteres de regex (ReDoS)
 import escapeStringRegexp = require('escape-string-regexp');
 
 @Injectable()
@@ -112,7 +112,7 @@ export class MongoQrActivateRepository
       const doc = await this.model
         .findById(id)
         .populate('userId', '_id email name')
-        // NOTA: qrList.qrCode es UUID string (idQr), no ObjectId � no populable (fix 2026-08-07)
+        // NOTA: qrList.qrCode es UUID string (idQr), no ObjectId — no populable (fix 2026-08-07)
         .populate('qrList.plan', 'name description')
         .populate('adminId', '_id name')
         .lean()

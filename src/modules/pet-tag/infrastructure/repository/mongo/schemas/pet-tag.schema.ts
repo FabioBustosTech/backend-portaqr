@@ -1,4 +1,4 @@
-﻿import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
 @Schema({ timestamps: false, collection: 'pettags' })
@@ -52,7 +52,7 @@ export class PetDataSchema {
 
 export const PetDataSchemaDefinition = SchemaFactory.createForClass(PetDataSchema);
 
-// Agregando Ã­ndices para PetDataSchema
+// Agregando índices para PetDataSchema
 PetDataSchemaDefinition.index({ ownerName: 1 });
 PetDataSchemaDefinition.index({ breed: 1 });
 PetDataSchemaDefinition.index({ species: 1 });

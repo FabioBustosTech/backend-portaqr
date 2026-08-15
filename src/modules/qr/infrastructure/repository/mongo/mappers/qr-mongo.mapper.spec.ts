@@ -115,7 +115,7 @@ describe('QrMongoMapper', () => {
     });
   });
 });
-describe('QrMongoMapper � listImageUrl (SPEC-002)', () => {
+describe('QrMongoMapper — listImageUrl (SPEC-002)', () => {
   it('toEntity preserva data.listImageUrl', () => {
     const doc: any = {
       _id: { toString: () => 'qr-id-3' },

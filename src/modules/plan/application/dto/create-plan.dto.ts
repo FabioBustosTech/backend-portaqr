@@ -1,4 +1,4 @@
-﻿import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import { IsDate, IsNotEmpty, IsString, IsNumber, IsBoolean, IsArray, ValidateNested, IsOptional, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
 import { QrType } from 'src/modules/qr/application/dto/create-qr.dto';
@@ -25,8 +25,8 @@ export class CreatePlanDto {
   @IsString({ message: 'description debe ser una cadena de texto' })
   @IsNotEmpty({ message: 'description es requerido' })
   @ApiProperty({
-    description: 'DescripciÃ³n del plan',
-    example: 'Plan con caracterÃ­sticas premium'
+    description: 'Descripción del plan',
+    example: 'Plan con características premium'
   })
   readonly description: string;
 
@@ -39,28 +39,28 @@ export class CreatePlanDto {
   readonly status: string;
 
   @IsOptional()
-  @IsDate({ message: 'endDate debe ser una fecha vÃ¡lida' })
+  @IsDate({ message: 'endDate debe ser una fecha válida' })
   @Type(() => Date)
   @ApiProperty({
-    description: 'Fecha de finalizaciÃ³n del plan',
+    description: 'Fecha de finalización del plan',
     example: '2024-12-31T23:59:59.999Z'
   })
   readonly endDate: Date;
 
   @IsOptional()
-  @IsDate({ message: 'updatedDate debe ser una fecha vÃ¡lida' })
+  @IsDate({ message: 'updatedDate debe ser una fecha válida' })
   @Type(() => Date)
   @ApiProperty({
-    description: 'Fecha de Ãºltima actualizaciÃ³n',
+    description: 'Fecha de última actualización',
     example: '2024-01-01T00:00:00.000Z'
   })
   readonly updatedDate: Date;
 
   @IsOptional()
-  @IsDate({ message: 'createdDate debe ser una fecha vÃ¡lida' })
+  @IsDate({ message: 'createdDate debe ser una fecha válida' })
   @Type(() => Date)
   @ApiProperty({
-    description: 'Fecha de creaciÃ³n',
+    description: 'Fecha de creación',
     example: '2024-01-01T00:00:00.000Z'
   })
   readonly createdDate: Date;
@@ -75,7 +75,7 @@ export class CreatePlanDto {
   })
   readonly details: DetailDto[];
 
-  @IsNumber({}, { message: 'precio debe ser un nÃºmero' })
+  @IsNumber({}, { message: 'precio debe ser un número' })
   @IsNotEmpty({ message: 'precio es requerido' })
   @ApiProperty({
     description: 'Precio del plan',
@@ -85,7 +85,7 @@ export class CreatePlanDto {
 
   @IsBoolean({ message: 'active debe ser un booleano' })
   @ApiProperty({
-    description: 'Estado de activaciÃ³n del plan',
+    description: 'Estado de activación del plan',
     default: true,
     example: true
   })

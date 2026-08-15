@@ -1,4 +1,4 @@
-﻿import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
 import type { ICanGetUser } from '../../domain/ports/queries/get-user.port';
 import type { ICanUpdateUser } from '../../domain/ports/queries/create-user.port';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
@@ -25,11 +25,11 @@ export class VerifyEmailUseCase {
     }
 
     if (user.isEmailVerified) {
-      throw new BadRequestException('El email ya estÃ¡ verificado');
+      throw new BadRequestException('El email ya está verificado');
     }
 
     if (!user.verificationCode || !user.verificationCodeExpires) {
-      throw new BadRequestException('No hay cÃ³digo de verificaciÃ³n pendiente');
+      throw new BadRequestException('No hay código de verificación pendiente');
     }
 
     if (user.verificationCode !== code) {
@@ -41,14 +41,14 @@ export class VerifyEmailUseCase {
           verificationCodeExpires: undefined,
           verificationAttempts: 0,
         }, tracking);
-        throw new BadRequestException('El cÃ³digo de verificaciÃ³n ha expirado');
+        throw new BadRequestException('El código de verificación ha expirado');
       }
       await this.updater.update(userId, { verificationAttempts: attempts }, tracking);
-      throw new BadRequestException('CÃ³digo de verificaciÃ³n invÃ¡lido');
+      throw new BadRequestException('Código de verificación inválido');
     }
 
     if (new Date() > user.verificationCodeExpires) {
-      throw new BadRequestException('El cÃ³digo de verificaciÃ³n ha expirado');
+      throw new BadRequestException('El código de verificación ha expirado');
     }
 
     await this.updater.update(userId, {

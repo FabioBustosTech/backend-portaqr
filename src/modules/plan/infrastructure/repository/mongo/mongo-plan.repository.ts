@@ -13,7 +13,7 @@ import type {
 } from '../../../domain/ports/queries/plan.port';
 import { PlanSchema, PlanDocument } from './schemas/plan.schema';
 import { PlanMongoMapper } from './mappers/plan-mongo.mapper';
-// SPEC-008 H3 (R2): input de búsqueda como literal, sin metacaracteres de regex (ReDoS)
+// SPEC-008 H3 (R2): input de bÃºsqueda como literal, sin metacaracteres de regex (ReDoS)
 import escapeStringRegexp = require('escape-string-regexp');
 
 @Injectable()

@@ -1,4 +1,4 @@
-﻿import { Injectable, ConflictException, Inject, Logger } from '@nestjs/common';
+import { Injectable, ConflictException, Inject, Logger } from '@nestjs/common';
 import type { ICanCreateUser } from '../../domain/ports/queries/create-user.port';
 import { UserEntity } from '../../domain/entities/user.entity';
 import { CreateUserDto } from '../dto/create-user.dto';
@@ -40,7 +40,7 @@ export class CreateUserUseCase {
 
     const validacion = this.validationRules.validateForCreate(dto);
     if (!validacion.valid) {
-      this.traceService.warn(tracking, TraceLayer.USE_CASE, 'CreateUserUseCase - validaciÃ³n fallida', { errors: validacion.errors });
+      this.traceService.warn(tracking, TraceLayer.USE_CASE, 'CreateUserUseCase - validación fallida', { errors: validacion.errors });
       throw new ConflictException(validacion.errors);
     }
 
@@ -80,7 +80,7 @@ export class CreateUserUseCase {
     }
     this.traceService.log(tracking, TraceLayer.USE_CASE, 'CreateUserUseCase - created', { id: resultado.id });
 
-    // Enviar email de verificaciÃ³n (no bloquea la creaciÃ³n); usa el doc retornado
+    // Enviar email de verificación (no bloquea la creación); usa el doc retornado
     // del insert: sin update ni getById posteriores (1 round-trip, SPEC-007 H7)
     try {
       await this.emailService.sendVerificationEmail(
@@ -88,9 +88,9 @@ export class CreateUserUseCase {
         resultado.id,
         verificationCode,
       );
-      this.traceService.log(tracking, TraceLayer.USE_CASE, 'CreateUserUseCase - email verificaciÃ³n enviado', { id: resultado.id });
+      this.traceService.log(tracking, TraceLayer.USE_CASE, 'CreateUserUseCase - email verificación enviado', { id: resultado.id });
     } catch (error) {
-      this.logger.error(`Error al enviar email de verificaciÃ³n: ${error.message}`);
+      this.logger.error(`Error al enviar email de verificación: ${error.message}`);
     }
 
     const { password: _password, ...usuarioSinPassword } = resultado;
@@ -120,9 +120,9 @@ export class CreateUserUseCase {
   private mapDuplicateKeyError(error: unknown): ConflictException {
     const keyPattern = (error as MongoDuplicateKeyError).keyPattern ?? {};
     if (keyPattern.userName) {
-      return new ConflictException('El nombre de usuario ya estÃ¡ en uso');
+      return new ConflictException('El nombre de usuario ya está en uso');
     }
     // email (y cualquier otro índice único)
-    return new ConflictException('El correo electrÃ³nico ya estÃ¡ registrado');
+    return new ConflictException('El correo electrónico ya está registrado');
   }
 }

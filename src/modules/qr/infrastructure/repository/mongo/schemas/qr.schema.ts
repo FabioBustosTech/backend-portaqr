@@ -1,4 +1,4 @@
-﻿import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, SchemaTypes } from 'mongoose';
 import { QrType } from '../../../../application/dto/create-qr.dto';
 import { getMaxPdfItemsPerQr } from '../../../../application/pdf-limits.helper';
@@ -327,7 +327,7 @@ export class QrSchema {
 
 export const QrSchemaDefinition = SchemaFactory.createForClass(QrSchema);
 
-// Agregando Ã­ndices
+// Agregando índices
 QrSchemaDefinition.index({ userId: 1 });
 QrSchemaDefinition.index({ typeQr: 1 });
 QrSchemaDefinition.index({ userId: 1, typeQr: 1 });

@@ -1,4 +1,4 @@
-﻿import { Test, TestingModule } from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { HttpException } from '@nestjs/common';
@@ -28,7 +28,7 @@ const modelMock = jest.fn().mockImplementation((data: Record<string, unknown>) =
 (modelMock as unknown as Record<string, unknown>).countDocuments = mockCountDocuments;
 (modelMock as unknown as Record<string, unknown>).insertMany = mockInsertMany;
 
-/** Recolecta todos los valores $regex de un query Mongo (SPEC-008 H3 â€” verificaciÃ³n anti-ReDoS). */
+/** Recolecta todos los valores $regex de un query Mongo (SPEC-008 H3 ” verificación anti-ReDoS). */
 function collectRegexValues(node: unknown, out: string[] = []): string[] {
   if (Array.isArray(node)) {
     for (const item of node) collectRegexValues(item, out);
@@ -105,7 +105,7 @@ describe('MongoPetTagRepository', () => {
         assignedStoreName: storeName,
       }));
 
-    it('debe generar un lote de placas en 1 sola operaciÃ³n insertMany sin tienda asignada', async () => {
+    it('debe generar un lote de placas en 1 sola operación insertMany sin tienda asignada', async () => {
       const inserted = buildInsertedDocs(2);
       mockInsertMany.mockResolvedValue(inserted);
 
@@ -153,7 +153,7 @@ describe('MongoPetTagRepository', () => {
       expect(result[0].assignedStoreName).toBe('Tienda Central');
     });
 
-    it('debe generar ids Ãºnicos (uuid) y pins Ãºnicos (nanoid) por cada placa', async () => {
+    it('debe generar ids únicos (uuid) y pins únicos (nanoid) por cada placa', async () => {
       const inserted = buildInsertedDocs(3);
       mockInsertMany.mockResolvedValue(inserted);
 
@@ -250,7 +250,7 @@ describe('MongoPetTagRepository', () => {
       );
     });
 
-    it('debe escapar metacaracteres de search y storeName (SPEC-008 H3 â€” R2 ReDoS, CA-02)', async () => {
+    it('debe escapar metacaracteres de search y storeName (SPEC-008 H3 ” R2 ReDoS, CA-02)', async () => {
       mockFind.mockReturnValue(buildFindChain(results));
       mockCountDocuments.mockResolvedValue(1);
 
@@ -268,7 +268,7 @@ describe('MongoPetTagRepository', () => {
         $regex: escapedStore,
         $options: 'i',
       });
-      // Todos los $regex del $or usan el tÃ©rmino escapado (nunca '.*' crudo)
+      // Todos los $regex del $or usan el término escapado (nunca '.*' crudo)
       const regexValues = collectRegexValues(findCall.$or);
       expect(regexValues.length).toBeGreaterThan(0);
       expect(regexValues).not.toContain('.*');
@@ -412,7 +412,7 @@ describe('MongoPetTagRepository', () => {
       expect(result).toEqual(updatedTag);
     });
 
-    it('debe conservar los valores existentes cuando no se envÃ­an campos (solo campos presentes en $set)', async () => {
+    it('debe conservar los valores existentes cuando no se envían campos (solo campos presentes en $set)', async () => {
       const updatedTag = {
         idQr: 'qr-1',
         petData,

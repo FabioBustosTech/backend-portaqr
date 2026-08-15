@@ -11,7 +11,7 @@ import type {
 } from '../../../domain/ports/queries/qr-free-generation.port';
 import { QrFreeGenerationSchema, QrFreeGenerationDocument } from './schemas/qr-free-generation.schema';
 import { QrFreeGenerationMongoMapper } from './mappers/qr-free-generation-mongo.mapper';
-// SPEC-008 H3 (R2): input de búsqueda como literal, sin metacaracteres de regex (ReDoS)
+// SPEC-008 H3 (R2): input de bÃºsqueda como literal, sin metacaracteres de regex (ReDoS)
 import escapeStringRegexp = require('escape-string-regexp');
 
 @Injectable()

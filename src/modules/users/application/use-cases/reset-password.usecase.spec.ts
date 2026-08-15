@@ -1,4 +1,4 @@
-﻿import { Test, TestingModule } from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { ResetPasswordUseCase } from './reset-password.usecase';
 import { IncrementTokenVersionUseCase } from './increment-token-version.usecase';
@@ -159,7 +159,7 @@ describe('ResetPasswordUseCase', () => {
 
       await expect(
         useCase.execute('test@test.com', 'WRONG99', 'nueva123', tracking),
-      ).rejects.toThrow('El cÃ³digo de recuperaciÃ³n ha expirado');
+      ).rejects.toThrow('El código de recuperación ha expirado');
       expect(updater.update).toHaveBeenCalledWith(
         'user-1',
         {

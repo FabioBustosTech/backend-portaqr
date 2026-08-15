@@ -180,7 +180,7 @@ describe('UsersController', () => {
         tracking,
       );
       expect(result).toEqual({
-        message: 'CÃ³digo de verificaciÃ³n reenviado exitosamente',
+        message: 'Código de verificación reenviado exitosamente',
       });
     });
   });
@@ -196,7 +196,7 @@ describe('UsersController', () => {
         tracking,
       );
       expect(result).toEqual({
-        message: 'CÃ³digo de recuperaciÃ³n enviado exitosamente',
+        message: 'Código de recuperación enviado exitosamente',
       });
     });
   });
@@ -219,7 +219,7 @@ describe('UsersController', () => {
         tracking,
       );
       expect(result).toEqual({
-        message: 'ContraseÃ±a actualizada exitosamente',
+        message: 'Contraseña actualizada exitosamente',
       });
     });
   });

@@ -1,4 +1,4 @@
-﻿import { Injectable, Inject, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import type { ICanGetUser } from '../../domain/ports/queries/get-user.port';
 import type { ICanUpdateUser } from '../../domain/ports/queries/create-user.port';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
@@ -31,7 +31,7 @@ export class ResendVerificationCodeUseCase {
     }
 
     if (user.isEmailVerified) {
-      throw new BadRequestException('El email ya estÃ¡ verificado');
+      throw new BadRequestException('El email ya está verificado');
     }
 
     const verificationCode = generateVerificationCodeUtil() // SPEC-009 A5: CSPRNG;

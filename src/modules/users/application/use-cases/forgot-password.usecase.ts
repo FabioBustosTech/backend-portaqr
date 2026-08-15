@@ -1,4 +1,4 @@
-﻿import { Injectable, Inject, Logger } from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 import type { ICanGetUser } from '../../domain/ports/queries/get-user.port';
 import type { ICanUpdateUser } from '../../domain/ports/queries/create-user.port';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
@@ -51,6 +51,6 @@ export class ForgotPasswordUseCase {
     const nombreCompleto = `${user.firstName} ${user.paternalLastName} ${user.maternalLastName}`;
     await this.emailService.sendPasswordResetEmail(email, resetCode, nombreCompleto);
 
-    this.traceService.log(tracking, TraceLayer.USE_CASE, 'ForgotPasswordUseCase - cÃ³digo enviado', { email });
+    this.traceService.log(tracking, TraceLayer.USE_CASE, 'ForgotPasswordUseCase - código enviado', { email });
   }
 }

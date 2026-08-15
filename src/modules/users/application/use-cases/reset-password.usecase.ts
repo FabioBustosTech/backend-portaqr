@@ -1,4 +1,4 @@
-﻿import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
 import type { ICanGetUser } from '../../domain/ports/queries/get-user.port';
 import type { ICanUpdateUser } from '../../domain/ports/queries/create-user.port';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
@@ -34,7 +34,7 @@ export class ResetPasswordUseCase {
     }
 
     if (!user.passwordResetCode || !user.passwordResetExpires) {
-      throw new BadRequestException('No hay cÃ³digo de recuperaciÃ³n pendiente');
+      throw new BadRequestException('No hay código de recuperación pendiente');
     }
 
     if (user.passwordResetCode !== code) {
@@ -46,14 +46,14 @@ export class ResetPasswordUseCase {
           passwordResetExpires: undefined,
           passwordResetAttempts: 0,
         }, tracking);
-        throw new BadRequestException('El cÃ³digo de recuperaciÃ³n ha expirado');
+        throw new BadRequestException('El código de recuperación ha expirado');
       }
       await this.updater.update(user.id, { passwordResetAttempts: attempts }, tracking);
-      throw new BadRequestException('CÃ³digo de recuperaciÃ³n invÃ¡lido');
+      throw new BadRequestException('Código de recuperación inválido');
     }
 
     if (new Date() > user.passwordResetExpires) {
-      throw new BadRequestException('El cÃ³digo de recuperaciÃ³n ha expirado');
+      throw new BadRequestException('El código de recuperación ha expirado');
     }
 
     const passwordHash = await this.passwordService.hashPassword(newPassword);

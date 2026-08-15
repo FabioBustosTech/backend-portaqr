@@ -7,7 +7,7 @@ import type { ICanGetAllUser, ICanGetUser } from '../../../domain/ports/queries/
 import type { ICanCreateUser, ICanUpdateUser, ICanDeleteUser, ICanCheckUser } from '../../../domain/ports/queries/create-user.port';
 import { UserSchema, UserDocument } from './schemas/user.schema';
 import { UserMongoMapper } from './mappers/user-mongo.mapper';
-// SPEC-008 H3 (R2): input de b�squeda como literal, sin metacaracteres de regex (ReDoS)
+// SPEC-008 H3 (R2): input de búsqueda como literal, sin metacaracteres de regex (ReDoS)
 import escapeStringRegexp = require('escape-string-regexp');
 import type { PaginatedResult } from '../../../../../common/dto/pagination.dto';
 import type { TrackingContext } from '../../../../../common/decorators/tracking.decorator';

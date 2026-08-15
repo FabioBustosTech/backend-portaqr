@@ -1,4 +1,4 @@
-﻿import {
+import {
   Controller,
   Get,
   Post,
@@ -125,7 +125,7 @@ export class QrController {
   @Roles('admin', 'user')
   @ApiOperation({ summary: 'Crear un nuevo QR' })
   @ApiResponse({ status: 201, description: 'QR creado exitosamente', type: QrEntity })
-  @ApiResponse({ status: 400, description: 'Datos invÃ¡lidos' })
+  @ApiResponse({ status: 400, description: 'Datos inválidos' })
   @ApiResponse({ status: 401, description: 'No autorizado' })
   @ApiResponse({ status: 403, description: 'Prohibido - No tiene los permisos necesarios' })
   @HttpCode(HttpStatus.CREATED)
@@ -139,7 +139,7 @@ export class QrController {
       idQr: createQrDto.idQr,
     });
 
-    // Validar que el usuario solo pueda crear QRs para sÃ­ mismo a menos que sea admin
+    // Validar que el usuario solo pueda crear QRs para sí mismo a menos que sea admin
     const isAdmin = user.role === 'admin';
     if (!isAdmin && createQrDto.userId !== user.id) {
       this.traceService.warn(tracking, TraceLayer.CONTROLLER, 'POST /qr - forbidden owner', {
@@ -392,8 +392,8 @@ export class QrController {
   @SkipThrottle({ default: true })
   @Throttle(QR_SEO_THROTTLE)
   @UseGuards(QrPublicThrottlerGuard)
-  @ApiOperation({ summary: 'Obtener los Ãºltimos 500 QRs activos con formato SEO' })
-  @ApiResponse({ status: 200, description: 'Lista de los Ãºltimos 500 QRs activos con formato SEO', type: [QrSeoDto] })
+  @ApiOperation({ summary: 'Obtener los últimos 500 QRs activos con formato SEO' })
+  @ApiResponse({ status: 200, description: 'Lista de los últimos 500 QRs activos con formato SEO', type: [QrSeoDto] })
   @ApiResponse({ status: 400, description: 'Error en la solicitud' })
   @HttpCode(HttpStatus.OK)
   async getSeoQrs(@Tracking() tracking: TrackingContext) {
@@ -415,7 +415,7 @@ export class QrController {
 
   @Get()
   @Roles('admin')
-  @ApiOperation({ summary: 'Obtener todos los QRs con bÃºsqueda, paginaciÃ³n y filtros (SPEC-015)' })
+  @ApiOperation({ summary: 'Obtener todos los QRs con búsqueda, paginación y filtros (SPEC-015)' })
   @ApiResponse({ status: 200, description: 'Lista de QRs', type: [QrEntity] })
   @ApiResponse({ status: 401, description: 'No autorizado' })
   @ApiResponse({ status: 403, description: 'Prohibido - No tiene los permisos necesarios' })
@@ -467,7 +467,7 @@ export class QrController {
 
   @Get('user/favorites')
   @Roles('admin', 'user')
-  @ApiOperation({ summary: 'Obtener todos los QR del usuario ordenados por fecha de creaciÃ³n y si son favoritos' })
+  @ApiOperation({ summary: 'Obtener todos los QR del usuario ordenados por fecha de creación y si son favoritos' })
   @ApiResponse({ status: 200, description: 'QR encontrado', type: QrEntity })
   @ApiResponse({ status: 404, description: 'QR no encontrado' })
   @ApiResponse({ status: 401, description: 'No autorizado' })
@@ -728,8 +728,8 @@ export class QrController {
   @SkipThrottle({ default: true })
   @Throttle(QR_PUBLIC_THROTTLE)
   @UseGuards(QrPublicThrottlerGuard)
-  @ApiOperation({ summary: 'Obtener URL de redirecciÃ³n de un QR pÃºblico' })
-  @ApiResponse({ status: 200, description: 'URL de redirecciÃ³n', type: PublicRedirectUrlResponse })
+  @ApiOperation({ summary: 'Obtener URL de redirección de un QR público' })
+  @ApiResponse({ status: 200, description: 'URL de redirección', type: PublicRedirectUrlResponse })
   @ApiResponse({ status: 404, description: 'QR no encontrado' })
   async getPublicRedirectUrl(@Param('id') id: string, @Tracking() tracking: TrackingContext) {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'GET /qr/public/:id', { id });

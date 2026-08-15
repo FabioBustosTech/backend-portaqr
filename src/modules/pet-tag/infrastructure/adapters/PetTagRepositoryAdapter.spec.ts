@@ -108,7 +108,7 @@ describe('PetTagRepositoryAdapter', () => {
   });
 
   describe('activate', () => {
-    it('debe delegar la activaciÃ³n al repositorio mongo', async () => {
+    it('debe delegar la activación al repositorio mongo', async () => {
       const activated = { idQr: 'qr-1', status: 'ACTIVO' };
       mongoRepository.activate.mockResolvedValue(activated);
 
