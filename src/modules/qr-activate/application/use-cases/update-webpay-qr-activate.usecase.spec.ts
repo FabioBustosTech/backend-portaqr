@@ -409,7 +409,8 @@ describe('UpdateWebpayQrActivateUseCase', () => {
       expect(updater.update).not.toHaveBeenCalled();
     });
 
-    it('debe ser idempotente ante carrera: si el commit falla (422) pero la activación ya fue procesada, devuelve su estado sin error', async () => {
+    it('debe ser idempotente ante carrera: si el commit falla (422) y la otra request persiste PAYED, devuelve su estado sin error', async () => {
+      jest.useFakeTimers();
       const alreadyPayed: QrActivate = {
         ...mockActivation,
         state: ActivationState.PAYED,
@@ -417,28 +418,39 @@ describe('UpdateWebpayQrActivateUseCase', () => {
       };
       reader.getByWebpayToken
         .mockResolvedValueOnce(mockActivation) // 1ª lectura: PENDING
-        .mockResolvedValueOnce(alreadyPayed); // re-lectura tras el 422: PAYED
+        .mockResolvedValueOnce(mockActivation) // re-lectura 1: aún PENDING (la otra request no ha persistido)
+        .mockResolvedValueOnce(alreadyPayed); // re-lectura 2: PAYED
       commitTransactionUseCase.execute.mockRejectedValue(
         new Error('Request failed with status code 422'),
       );
 
-      const result = await useCase.execute('token-ws-1', tracking);
+      const promise = useCase.execute('token-ws-1', tracking);
+      await jest.advanceTimersByTimeAsync(500); // 1ª espera del polling
+      await jest.advanceTimersByTimeAsync(500); // 2ª espera del polling
+      const result = await promise;
+      jest.useRealTimers();
 
       expect(result.state).toBe(ActivationState.PAYED);
       expect(commitTransactionUseCase.execute).toHaveBeenCalledTimes(1);
-      expect(reader.getByWebpayToken).toHaveBeenCalledTimes(2);
+      expect(reader.getByWebpayToken).toHaveBeenCalledTimes(3);
       expect(updater.update).not.toHaveBeenCalled();
       expect(notificationService.notify).not.toHaveBeenCalled();
     });
 
-    it('debe re-lanzar el error si el commit falla y la activación sigue PENDING (fallo real)', async () => {
+    it('debe re-lanzar el error si el commit falla (422) y la activación sigue PENDING tras el polling (fallo real)', async () => {
+      jest.useFakeTimers();
       reader.getByWebpayToken.mockResolvedValue(mockActivation); // siempre PENDING
       commitTransactionUseCase.execute.mockRejectedValue(
         new Error('Request failed with status code 422'),
       );
 
-      await expect(useCase.execute('token-ws-1', tracking)).rejects.toThrow('422');
-      expect(reader.getByWebpayToken).toHaveBeenCalledTimes(2);
+      const promise = useCase.execute('token-ws-1', tracking);
+      const assertion = expect(promise).rejects.toThrow('422'); // adjunta el handler antes de avanzar timers
+      await jest.advanceTimersByTimeAsync(6000); // 10 intentos × 500ms
+      await assertion;
+      jest.useRealTimers();
+
+      expect(reader.getByWebpayToken).toHaveBeenCalledTimes(12); // 1 inicial + 1 re-lectura + 10 del polling
       expect(updater.update).not.toHaveBeenCalled();
     });
   });

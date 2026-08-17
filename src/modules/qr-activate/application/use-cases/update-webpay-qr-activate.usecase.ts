@@ -9,6 +9,11 @@ import { CommitTransactionUseCase } from '../../../webpay/application/use-cases/
 import type { CommitTransactionMapped } from '../../../webpay/application/use-cases/commit-transaction.usecase';
 import { QrActivatedNotificationService } from '../services/qr-activated-notification.service';
 
+/** Fix 2026-08-17: reintentos de re-lectura tras un 422 de Webpay (carrera de doble PATCH).
+ *  El commit + update de la request ganadora tarda ~2-5s; 10 × 500ms = 5s de ventana. */
+export const RACE_RECHECK_ATTEMPTS = 10;
+export const RACE_RECHECK_DELAY_MS = 500;
+
 @Injectable()
 export class UpdateWebpayQrActivateUseCase {
   private readonly logger = new Logger(UpdateWebpayQrActivateUseCase.name);
@@ -45,10 +50,27 @@ export class UpdateWebpayQrActivateUseCase {
       // Fix 2026-08-17 (idempotencia ante carrera — SPEC-007 RF-3): el frontend
       // (React StrictMode) dispara el PATCH dos veces casi simultáneas; ambas leen
       // PENDING y la 2ª recibe 422 de Webpay (token ya committeado por la 1ª).
-      // Si la activación ya fue procesada por la otra request, responder con su
-      // estado actual (200) — el pago fue exitoso y el QR ya está activo. NO
-      // propagar el error: el usuario vería "pago fallido" con el QR activado.
-      const current = await this.reader.getByWebpayToken(token_ws, tracking);
+      // El 422 indica que OTRA request ya está procesando esta transacción: se
+      // espera con polling hasta que persista su estado (el commit + update de la
+      // 1ª tarda ~2-5s) y se devuelve ese estado (200, idempotente). Si tras los
+      // reintentos sigue PENDING, se re-lanza (fallo real).
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      const isTokenConsumed =
+        status === 422 || String((error as Error)?.message ?? '').includes('422');
+      if (!isTokenConsumed) {
+        throw error;
+      }
+
+      let current = await this.reader.getByWebpayToken(token_ws, tracking);
+      for (
+        let attempt = 0;
+        attempt < RACE_RECHECK_ATTEMPTS && current && current.state === ActivationState.PENDING;
+        attempt++
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, RACE_RECHECK_DELAY_MS));
+        current = await this.reader.getByWebpayToken(token_ws, tracking);
+      }
+
       if (current && current.state !== ActivationState.PENDING) {
         this.traceService.warn(
           tracking,
