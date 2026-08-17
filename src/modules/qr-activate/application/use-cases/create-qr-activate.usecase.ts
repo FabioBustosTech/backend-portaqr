@@ -8,6 +8,7 @@ import { TraceService, TraceLayer } from '../../../../common/services/trace.serv
 import { QR_ACTIVATE_CREATE_PORT, QR_ACTIVATE_QR_PORT } from '../../domain/constants/qr-activate.tokens';
 import { GetPlanUseCase } from '../../../plan/application/use-cases/get-plan.usecase';
 import { GetQrUseCase } from '../../../qr/application/use-cases/get-qr.usecase';
+import { QrActivatedNotificationService } from '../services/qr-activated-notification.service';
 
 export interface QrActivateActor {
   id: string;
@@ -26,6 +27,7 @@ export class CreateQrActivateUseCase {
     private readonly qrActivator: ICanActivateQr,
     private readonly getPlanUseCase: GetPlanUseCase,
     private readonly getQrUseCase: GetQrUseCase,
+    private readonly notificationService: QrActivatedNotificationService, // SPEC-019 RF-6
     private readonly traceService: TraceService,
   ) {}
 
@@ -119,6 +121,9 @@ export class CreateQrActivateUseCase {
       invoiceData: dto.invoiceData,
       sendDocument: dto.sendDocument,
       createdAt: new Date(),
+      // SPEC-019 RF-8: la activación admin nace activa → activationDate desde el inicio
+      // (en Webpay se asigna en el update a PAYED — update-webpay-qr-activate.usecase)
+      activationDate: state === ActivationState.ADMIN ? new Date() : undefined,
     });
 
     return this.creator.create(activation, tracking);
@@ -153,6 +158,19 @@ export class CreateQrActivateUseCase {
           { total: codes.length, matchedCount, modifiedCount },
         );
       }
+    }
+
+    // SPEC-019 RF-6: correo de activación al CLIENTE (activation.userId = dto.userId, RN-3/ADR-019.4),
+    // no al admin. Best-effort (ADR-019.2) con try/catch defensivo — la respuesta al admin no cambia.
+    try {
+      await this.notificationService.notify(created, tracking);
+    } catch (error) {
+      this.traceService.error(
+        tracking,
+        TraceLayer.USE_CASE,
+        'CreateQrActivateUseCase - notify falló (best-effort)',
+        error,
+      );
     }
 
     return created;

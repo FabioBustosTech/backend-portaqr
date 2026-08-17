@@ -20,6 +20,7 @@ import type { QrActivate } from '../../domain/entities/qr-activate.entity';
 import { CreateQrActivateDto } from '../dto/create-qr-activate.dto';
 import { GetPlanUseCase } from '../../../plan/application/use-cases/get-plan.usecase';
 import { GetQrUseCase } from '../../../qr/application/use-cases/get-qr.usecase';
+import { QrActivatedNotificationService } from '../services/qr-activated-notification.service';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 
 describe('CreateQrActivateUseCase', () => {
@@ -29,6 +30,7 @@ describe('CreateQrActivateUseCase', () => {
   let traceService: jest.Mocked<TraceService>;
   let getPlanUseCase: jest.Mocked<GetPlanUseCase>; // SPEC-009 B12
   let getQrUseCase: jest.Mocked<GetQrUseCase>; // SPEC-009 B12
+  let notificationService: jest.Mocked<QrActivatedNotificationService>; // SPEC-019 RF-6
 
   const tracking: TrackingContext = { trackingId: 't-1', sessionId: 's-1' };
   // SPEC-009 A3: el actor (del token) decide userId/state por rol
@@ -99,6 +101,12 @@ describe('CreateQrActivateUseCase', () => {
           useValue: { execute: jest.fn() },
         },
         {
+          provide: QrActivatedNotificationService,
+          useValue: {
+            notify: jest.fn(),
+          },
+        },
+        {
           provide: TraceService,
           useValue: {
             log: jest.fn(),
@@ -116,6 +124,7 @@ describe('CreateQrActivateUseCase', () => {
     traceService = module.get(TraceService);
     getPlanUseCase = module.get(GetPlanUseCase);
     getQrUseCase = module.get(GetQrUseCase);
+    notificationService = module.get(QrActivatedNotificationService);
     // SPEC-009 B12: plan con precio y QR del dueño (user-1)
     getPlanUseCase.execute.mockResolvedValue({ id: 'plan-1', price: 100 } as never);
     getQrUseCase.execute.mockResolvedValue({ idQr: 'qr-1', userId: 'user-1' } as never);
@@ -171,6 +180,32 @@ describe('CreateQrActivateUseCase', () => {
       creator.create.mockRejectedValue(new Error('DB down'));
 
       await expect(useCase.execute(dto, actor, tracking)).rejects.toThrow('DB down');
+    });
+
+    it('debe setear activationDate en la creación admin (nace activa, SPEC-019 RF-8)', async () => {
+      const adminDto: CreateQrActivateDto = {
+        ...dto,
+        methodActivation: MethodActivation.ADMIN,
+        webpayToken: undefined,
+      };
+      const adminActor = { id: 'admin-1', role: 'admin' };
+      creator.create.mockResolvedValue(mockActivation);
+
+      await useCase.execute(adminDto, adminActor, tracking);
+
+      const createdEntity = creator.create.mock.calls[0][0];
+      expect(createdEntity.state).toBe(ActivationState.ADMIN);
+      expect(createdEntity.activationDate).toBeInstanceOf(Date);
+    });
+
+    it('no debe setear activationDate en activaciones PENDING (Webpay, SPEC-019 RF-8)', async () => {
+      creator.create.mockResolvedValue(mockActivation);
+
+      await useCase.execute(dto, actor, tracking);
+
+      const createdEntity = creator.create.mock.calls[0][0];
+      expect(createdEntity.state).toBe(ActivationState.PENDING);
+      expect(createdEntity.activationDate).toBeUndefined();
     });
   });
 
@@ -265,6 +300,28 @@ describe('CreateQrActivateUseCase', () => {
       qrActivator.activateMany.mockRejectedValue(new Error('DB down'));
 
       await expect(useCase.executeAdmin(dto, actor, tracking)).rejects.toThrow('DB down');
+    });
+
+    it('debe notificar el correo de activación al cliente tras activar los QRs (SPEC-019 RF-6)', async () => {
+      creator.create.mockResolvedValue(mockActivation);
+      qrActivator.activateMany.mockResolvedValue({ matchedCount: 1, modifiedCount: 1 });
+
+      const result = await useCase.executeAdmin(dto, actor, tracking);
+
+      expect(notificationService.notify).toHaveBeenCalledTimes(1);
+      expect(notificationService.notify).toHaveBeenCalledWith(mockActivation, tracking);
+      expect(result).toEqual(mockActivation);
+    });
+
+    it('debe responder igual al admin si el correo falla (best-effort, ADR-019.2)', async () => {
+      creator.create.mockResolvedValue(mockActivation);
+      qrActivator.activateMany.mockResolvedValue({ matchedCount: 1, modifiedCount: 1 });
+      notificationService.notify.mockRejectedValue(new Error('SMTP caído'));
+
+      const result = await useCase.executeAdmin(dto, actor, tracking);
+
+      expect(qrActivator.activateMany).toHaveBeenCalledTimes(1);
+      expect(result).toEqual(mockActivation);
     });
   });
 });
