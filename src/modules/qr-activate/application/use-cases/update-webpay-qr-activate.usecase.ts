@@ -6,6 +6,7 @@ import type { TrackingContext } from '../../../../common/decorators/tracking.dec
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import { QR_ACTIVATE_GET_PORT, QR_ACTIVATE_UPDATE_PORT, QR_ACTIVATE_QR_PORT } from '../../domain/constants/qr-activate.tokens';
 import { CommitTransactionUseCase } from '../../../webpay/application/use-cases/commit-transaction.usecase';
+import { QrActivatedNotificationService } from '../services/qr-activated-notification.service';
 
 @Injectable()
 export class UpdateWebpayQrActivateUseCase {
@@ -19,6 +20,7 @@ export class UpdateWebpayQrActivateUseCase {
     @Inject(QR_ACTIVATE_QR_PORT)
     private readonly qrActivator: ICanActivateQr,
     private readonly commitTransactionUseCase: CommitTransactionUseCase,
+    private readonly notificationService: QrActivatedNotificationService, // SPEC-019 RF-5
     private readonly traceService: TraceService,
   ) {}
 
@@ -82,20 +84,41 @@ export class UpdateWebpayQrActivateUseCase {
       updatedState = ActivationState.FAILED;
     }
 
-    const updated = await this.updater.update(
-      activation.id,
-      {
-        state: updatedState,
-        WebpayTransaction: {
-          ...activation.WebpayTransaction,
-          state: commitResult.status as WebpayState,
-        },
+    const updateData: Partial<QrActivate> = {
+      state: updatedState,
+      WebpayTransaction: {
+        ...activation.WebpayTransaction,
+        state: commitResult.status as WebpayState,
       },
-      tracking,
-    );
+    };
+
+    // SPEC-019 RF-8: la fecha de activación se persiste SOLO en PAYED (en FAILED no se re-escribe — RN-8)
+    if (updatedState === ActivationState.PAYED) {
+      updateData.activationDate = new Date();
+    }
+
+    const updated = await this.updater.update(activation.id, updateData, tracking);
 
     if (!updated) {
       throw new Error('Error al guardar la activación');
+    }
+
+    // SPEC-019 RF-5: correo de activación al dueño (best-effort — ADR-019.2, nunca bloquea la
+    // persistencia). Se invoca DESPUÉS del update con `updated` para que el correo lea el
+    // `activationDate` ya persistido (ADR-019.6). Solo en PAYED (CA-05: FAILED no notifica).
+    // Defensa en profundidad: aunque el servicio de notificación nunca re-throw (contrato),
+    // un fallo aquí jamás debe romper el callback de Webpay (RN-2).
+    if (updatedState === ActivationState.PAYED) {
+      try {
+        await this.notificationService.notify(updated, tracking);
+      } catch (error) {
+        this.traceService.error(
+          tracking,
+          TraceLayer.USE_CASE,
+          'UpdateWebpayQrActivateUseCase - notify falló (best-effort)',
+          error,
+        );
+      }
     }
 
     return updated;

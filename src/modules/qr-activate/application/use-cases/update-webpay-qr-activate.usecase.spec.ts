@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { UpdateWebpayQrActivateUseCase } from './update-webpay-qr-activate.usecase';
 import { CommitTransactionUseCase } from '../../../webpay/application/use-cases/commit-transaction.usecase';
+import { QrActivatedNotificationService } from '../services/qr-activated-notification.service';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import {
   QR_ACTIVATE_GET_PORT,
@@ -29,6 +30,7 @@ describe('UpdateWebpayQrActivateUseCase', () => {
   let updater: jest.Mocked<ICanUpdateQrActivate>;
   let qrActivator: jest.Mocked<ICanActivateQr>;
   let commitTransactionUseCase: jest.Mocked<CommitTransactionUseCase>;
+  let notificationService: jest.Mocked<QrActivatedNotificationService>;
   let traceService: jest.Mocked<TraceService>;
 
   const tracking: TrackingContext = { trackingId: 't-1', sessionId: 's-1' };
@@ -101,6 +103,12 @@ describe('UpdateWebpayQrActivateUseCase', () => {
           },
         },
         {
+          provide: QrActivatedNotificationService,
+          useValue: {
+            notify: jest.fn(),
+          },
+        },
+        {
           provide: TraceService,
           useValue: {
             log: jest.fn(),
@@ -117,6 +125,7 @@ describe('UpdateWebpayQrActivateUseCase', () => {
     updater = module.get(QR_ACTIVATE_UPDATE_PORT);
     qrActivator = module.get(QR_ACTIVATE_QR_PORT);
     commitTransactionUseCase = module.get(CommitTransactionUseCase);
+    notificationService = module.get(QrActivatedNotificationService);
     traceService = module.get(TraceService);
   });
 
@@ -166,6 +175,7 @@ describe('UpdateWebpayQrActivateUseCase', () => {
         'act-1',
         {
           state: ActivationState.PAYED,
+          activationDate: expect.any(Date), // SPEC-019 RF-8
           WebpayTransaction: {
             ...mockActivation.WebpayTransaction,
             state: WebpayState.ACTIVE,
@@ -173,6 +183,43 @@ describe('UpdateWebpayQrActivateUseCase', () => {
         },
         tracking,
       );
+      expect(result.state).toBe(ActivationState.PAYED);
+    });
+
+    it('debe notificar el correo de activación con la activación actualizada (SPEC-019 RF-5)', async () => {
+      reader.getByWebpayToken.mockResolvedValue(mockActivation);
+      commitTransactionUseCase.execute.mockResolvedValue(mockCommitAuthorized);
+      qrActivator.activateMany.mockResolvedValue({ matchedCount: 1, modifiedCount: 1 });
+      const updatedActivation: QrActivate = {
+        ...mockActivation,
+        state: ActivationState.PAYED,
+        activationDate: new Date('2026-08-17T12:00:00Z'),
+        WebpayTransaction: { ...mockActivation.WebpayTransaction, state: WebpayState.ACTIVE },
+      };
+      updater.update.mockResolvedValue(updatedActivation);
+
+      const result = await useCase.execute('token-ws-1', tracking);
+
+      expect(notificationService.notify).toHaveBeenCalledTimes(1);
+      expect(notificationService.notify).toHaveBeenCalledWith(updatedActivation, tracking);
+      expect(result).toEqual(updatedActivation);
+    });
+
+    it('debe persistir PAYED y no fallar si el correo de activación falla (best-effort, ADR-019.2)', async () => {
+      reader.getByWebpayToken.mockResolvedValue(mockActivation);
+      commitTransactionUseCase.execute.mockResolvedValue(mockCommitAuthorized);
+      qrActivator.activateMany.mockResolvedValue({ matchedCount: 1, modifiedCount: 1 });
+      updater.update.mockResolvedValue({
+        ...mockActivation,
+        state: ActivationState.PAYED,
+        activationDate: new Date(),
+        WebpayTransaction: { ...mockActivation.WebpayTransaction, state: WebpayState.ACTIVE },
+      });
+      notificationService.notify.mockRejectedValue(new Error('SMTP caído'));
+
+      const result = await useCase.execute('token-ws-1', tracking);
+
+      expect(updater.update).toHaveBeenCalledTimes(1);
       expect(result.state).toBe(ActivationState.PAYED);
     });
 
@@ -295,6 +342,7 @@ describe('UpdateWebpayQrActivateUseCase', () => {
         },
         tracking,
       );
+      expect(notificationService.notify).not.toHaveBeenCalled(); // CA-05: FAILED no notifica
       expect(result.state).toBe(ActivationState.FAILED);
     });
 
