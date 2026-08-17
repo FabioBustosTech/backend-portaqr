@@ -1,10 +1,30 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import * as QRCode from 'qrcode';
 import { CustomLogger } from '../utils/logger.util';
 import * as fs from 'fs';
 import * as ejs from 'ejs';
 import * as path from 'path';
+
+/** SPEC-019 RF-2: payload del correo de activación de QRs (contrato del puerto ICanSendQrActivatedEmail) */
+export interface QrActivatedEmailPayload {
+  to: string;
+  userName: string;
+  qrItems: Array<{
+    code: string;
+    name?: string;
+    typeQr: string; // enum QrType: dynamic | static | whatsapp | email | call | wifi | texto | list | vcard | pet | phone | map
+    typeLabel: string; // label legible (RF-1.1): 'QR Dinámico', 'QR Multi links', ...
+    plan?: string;
+    duration?: string;
+    activationDate?: Date;
+    expirationDate?: Date;
+    landingUrl: string; // {FRONTEND_URL}/qr/{idQr}?origen=qr
+  }>;
+  methodActivation: string; // 'WEBPAY' | 'TRANSFER' | 'ADMIN'
+  totalPrice: number;
+}
 
 @Injectable()
 export class EmailService {
@@ -94,6 +114,56 @@ export class EmailService {
         error.stack,
         EmailService.name,
         'sendPasswordResetEmail'
+      );
+      throw error;
+    }
+  }
+
+  /** SPEC-019 RF-2: correo de activación de QRs (implementa estructuralmente ICanSendQrActivatedEmail — ADR-019.8) */
+  async sendQrActivatedEmail(payload: QrActivatedEmailPayload): Promise<void> {
+    try {
+      this.logger.log(`Enviando email de activación a: ${payload.to}`, EmailService.name, 'sendQrActivatedEmail');
+
+      const templatePath = path.join(__dirname, '..', '..', 'templateEmail', 'qrActivated.ejs');
+      const template = fs.readFileSync(templatePath, 'utf-8');
+      const baseUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+      const html = ejs.render(template, {
+        ...payload,
+        baseUrl,
+        dashboardUrl: `${baseUrl}/dashboard/qr`,
+      });
+
+      // Generar el PNG del QR por cada item (SPEC-019 ADR-019.5: nivel H, mismo que el frontend QrDisplay)
+      const attachments: Array<{ filename: string; content: Buffer; cid: string }> = [];
+      for (const item of payload.qrItems) {
+        const png = await QRCode.toBuffer(item.landingUrl, {
+          width: 200,
+          margin: 2,
+          errorCorrectionLevel: 'H',
+        });
+        attachments.push({
+          filename: `qr-${item.code}.png`,
+          content: png,
+          cid: `qr-${item.code}`,
+        });
+      }
+
+      const mailOptions = {
+        from: this.configService.get('EMAIL_FROM'),
+        to: payload.to,
+        subject: 'Tus códigos QR han sido activados | Porta QR',
+        html,
+        attachments,
+      };
+
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Email de activación enviado exitosamente a: ${payload.to}`, EmailService.name, 'sendQrActivatedEmail');
+    } catch (error) {
+      this.logger.error(
+        `Error al enviar email de activación a ${payload.to}: ${error.message}`,
+        error.stack,
+        EmailService.name,
+        'sendQrActivatedEmail'
       );
       throw error;
     }

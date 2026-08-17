@@ -19,10 +19,15 @@ jest.mock('fs', () => ({
 }));
 
 jest.mock('ejs', () => ({
-  render: jest.fn(
-    (template: string, data: Record<string, unknown>) =>
-      `<html>rendered-${String(data.verificationCode ?? '')}</html>`,
-  ),
+  render: jest.fn((template: string, data: Record<string, unknown>) => {
+    const items = (data.qrItems as Array<{ code: string }>) ?? [];
+    const cids = items.map((i) => `cid:qr-${i.code}`).join(',');
+    return `<html>rendered-${String(data.verificationCode ?? '')}${cids ? `-${cids}` : ''}</html>`;
+  }),
+}));
+
+jest.mock('qrcode', () => ({
+  toBuffer: jest.fn(() => Promise.resolve(Buffer.from('png-buffer-fake'))),
 }));
 
 describe('EmailService', () => {
@@ -32,6 +37,7 @@ describe('EmailService', () => {
   const createTransportMock = nodemailer.createTransport as unknown as jest.Mock;
   const readFileSyncMock = fs.readFileSync as unknown as jest.Mock;
   const renderMock = ejs.render as unknown as jest.Mock;
+  const qrCodeToBufferMock = (require('qrcode') as { toBuffer: jest.Mock }).toBuffer;
 
   const baseConfig: Record<string, unknown> = {
     SMTP_HOST: 'smtp.ejemplo.com',
@@ -174,6 +180,103 @@ describe('EmailService', () => {
       await expect(
         service.sendPasswordResetEmail('user@example.com', 'RESET123', 'Juan'),
       ).rejects.toThrow('SMTP caído');
+    });
+  });
+
+  describe('sendQrActivatedEmail (SPEC-019 RF-2)', () => {
+    const payload = {
+      to: 'cliente@example.com',
+      userName: 'Juan Pérez',
+      qrItems: [
+        {
+          code: 'abc123',
+          typeQr: 'dynamic',
+          typeLabel: 'QR Dinámico',
+          landingUrl: 'http://localhost:3000/qr/xyz?origen=qr',
+          activationDate: new Date('2026-08-17T12:00:00Z'),
+          expirationDate: new Date('2027-08-17T12:00:00Z'),
+        },
+        {
+          code: 'def456',
+          name: 'Mi QR Multi links',
+          typeQr: 'list',
+          typeLabel: 'QR Multi links',
+          landingUrl: 'http://localhost:3000/qr/uvw?origen=qr',
+        },
+      ],
+      methodActivation: 'WEBPAY',
+      totalPrice: 9990,
+    };
+
+    it('debe renderizar qrActivated.ejs y enviar con to/subject/html conteniendo cid y landingUrl', async () => {
+      mockSendMail.mockResolvedValue({ messageId: 'abc-789' });
+
+      await service.sendQrActivatedEmail(payload);
+
+      expect(readFileSyncMock).toHaveBeenCalledWith(
+        expect.stringContaining('qrActivated.ejs'),
+        'utf-8',
+      );
+      expect(renderMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          to: 'cliente@example.com',
+          userName: 'Juan Pérez',
+          qrItems: expect.arrayContaining([
+            expect.objectContaining({ code: 'abc123', landingUrl: 'http://localhost:3000/qr/xyz?origen=qr' }),
+            expect.objectContaining({ code: 'def456', landingUrl: 'http://localhost:3000/qr/uvw?origen=qr' }),
+          ]),
+          methodActivation: 'WEBPAY',
+          totalPrice: 9990,
+          baseUrl: 'http://localhost:3000',
+          dashboardUrl: 'http://localhost:3000/dashboard/qr',
+        }),
+      );
+      expect(mockSendMail).toHaveBeenCalledTimes(1);
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.from).toBe('no-reply@portaqr.cl');
+      expect(mailOptions.to).toBe('cliente@example.com');
+      expect(mailOptions.subject).toBe('Tus códigos QR han sido activados | Porta QR');
+      expect(mailOptions.html).toContain('cid:qr-abc123');
+      expect(mailOptions.html).toContain('cid:qr-def456');
+    });
+
+    it('debe generar un attachment PNG por QR con cid único y buffer no vacío', async () => {
+      mockSendMail.mockResolvedValue({ messageId: 'abc-789' });
+
+      await service.sendQrActivatedEmail(payload);
+
+      expect(qrCodeToBufferMock).toHaveBeenCalledTimes(2);
+      expect(qrCodeToBufferMock).toHaveBeenCalledWith('http://localhost:3000/qr/xyz?origen=qr', {
+        width: 200,
+        margin: 2,
+        errorCorrectionLevel: 'H',
+      });
+      expect(qrCodeToBufferMock).toHaveBeenCalledWith('http://localhost:3000/qr/uvw?origen=qr', {
+        width: 200,
+        margin: 2,
+        errorCorrectionLevel: 'H',
+      });
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.attachments).toHaveLength(2);
+      expect(mailOptions.attachments[0]).toEqual({
+        filename: 'qr-abc123.png',
+        content: Buffer.from('png-buffer-fake'),
+        cid: 'qr-abc123',
+      });
+      expect(mailOptions.attachments[1]).toEqual({
+        filename: 'qr-def456.png',
+        content: Buffer.from('png-buffer-fake'),
+        cid: 'qr-def456',
+      });
+      expect(mailOptions.attachments[0].content.length).toBeGreaterThan(0);
+    });
+
+    it('debe trazar el error y re-lanzarlo si el envío falla', async () => {
+      mockSendMail.mockRejectedValue(new Error('SMTP caído'));
+
+      await expect(service.sendQrActivatedEmail(payload)).rejects.toThrow('SMTP caído');
     });
   });
 });
