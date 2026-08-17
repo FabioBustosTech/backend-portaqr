@@ -278,5 +278,25 @@ describe('EmailService', () => {
 
       await expect(service.sendQrActivatedEmail(payload)).rejects.toThrow('SMTP caído');
     });
+
+    it('no debe enviar cuando EMAIL_ACTIVATION_ENABLED=false (RF-2.1)', async () => {
+      configServiceMock.get.mockImplementation((key: string) =>
+        key === 'EMAIL_ACTIVATION_ENABLED' ? 'false' : baseConfig[key],
+      );
+
+      await service.sendQrActivatedEmail(payload);
+
+      expect(mockSendMail).not.toHaveBeenCalled();
+      expect(readFileSyncMock).not.toHaveBeenCalled();
+      expect(qrCodeToBufferMock).not.toHaveBeenCalled();
+    });
+
+    it('debe enviar por defecto cuando EMAIL_ACTIVATION_ENABLED no está definida (RF-2.1)', async () => {
+      mockSendMail.mockResolvedValue({ messageId: 'abc-790' });
+
+      await service.sendQrActivatedEmail(payload);
+
+      expect(mockSendMail).toHaveBeenCalledTimes(1);
+    });
   });
 });

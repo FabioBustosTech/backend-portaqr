@@ -121,6 +121,19 @@ export class EmailService {
 
   /** SPEC-019 RF-2: correo de activación de QRs (implementa estructuralmente ICanSendQrActivatedEmail — ADR-019.8) */
   async sendQrActivatedEmail(payload: QrActivatedEmailPayload): Promise<void> {
+    // SPEC-019 RF-2.1: EMAIL_ACTIVATION_ENABLED (default true) — permite desactivar el envío
+    // en local (tests manuales) sin tocar código. Solo 'false' explícito desactiva.
+    const activationEmailEnabled =
+      (this.configService.get<string>('EMAIL_ACTIVATION_ENABLED') ?? 'true') !== 'false';
+    if (!activationEmailEnabled) {
+      this.logger.log(
+        `Envío de email de activación DESACTIVADO (EMAIL_ACTIVATION_ENABLED=false) — destinatario: ${payload.to}`,
+        EmailService.name,
+        'sendQrActivatedEmail',
+      );
+      return;
+    }
+
     try {
       this.logger.log(`Enviando email de activación a: ${payload.to}`, EmailService.name, 'sendQrActivatedEmail');
 
