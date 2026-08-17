@@ -408,5 +408,38 @@ describe('UpdateWebpayQrActivateUseCase', () => {
       );
       expect(updater.update).not.toHaveBeenCalled();
     });
+
+    it('debe ser idempotente ante carrera: si el commit falla (422) pero la activación ya fue procesada, devuelve su estado sin error', async () => {
+      const alreadyPayed: QrActivate = {
+        ...mockActivation,
+        state: ActivationState.PAYED,
+        activationDate: new Date('2026-08-17T21:37:03.556Z'),
+      };
+      reader.getByWebpayToken
+        .mockResolvedValueOnce(mockActivation) // 1ª lectura: PENDING
+        .mockResolvedValueOnce(alreadyPayed); // re-lectura tras el 422: PAYED
+      commitTransactionUseCase.execute.mockRejectedValue(
+        new Error('Request failed with status code 422'),
+      );
+
+      const result = await useCase.execute('token-ws-1', tracking);
+
+      expect(result.state).toBe(ActivationState.PAYED);
+      expect(commitTransactionUseCase.execute).toHaveBeenCalledTimes(1);
+      expect(reader.getByWebpayToken).toHaveBeenCalledTimes(2);
+      expect(updater.update).not.toHaveBeenCalled();
+      expect(notificationService.notify).not.toHaveBeenCalled();
+    });
+
+    it('debe re-lanzar el error si el commit falla y la activación sigue PENDING (fallo real)', async () => {
+      reader.getByWebpayToken.mockResolvedValue(mockActivation); // siempre PENDING
+      commitTransactionUseCase.execute.mockRejectedValue(
+        new Error('Request failed with status code 422'),
+      );
+
+      await expect(useCase.execute('token-ws-1', tracking)).rejects.toThrow('422');
+      expect(reader.getByWebpayToken).toHaveBeenCalledTimes(2);
+      expect(updater.update).not.toHaveBeenCalled();
+    });
   });
 });

@@ -6,6 +6,7 @@ import type { TrackingContext } from '../../../../common/decorators/tracking.dec
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import { QR_ACTIVATE_GET_PORT, QR_ACTIVATE_UPDATE_PORT, QR_ACTIVATE_QR_PORT } from '../../domain/constants/qr-activate.tokens';
 import { CommitTransactionUseCase } from '../../../webpay/application/use-cases/commit-transaction.usecase';
+import type { CommitTransactionMapped } from '../../../webpay/application/use-cases/commit-transaction.usecase';
 import { QrActivatedNotificationService } from '../services/qr-activated-notification.service';
 
 @Injectable()
@@ -37,7 +38,28 @@ export class UpdateWebpayQrActivateUseCase {
       return activation;
     }
 
-    const commitResult = await this.commitTransactionUseCase.execute(token_ws, tracking);
+    let commitResult: CommitTransactionMapped | null;
+    try {
+      commitResult = await this.commitTransactionUseCase.execute(token_ws, tracking);
+    } catch (error) {
+      // Fix 2026-08-17 (idempotencia ante carrera — SPEC-007 RF-3): el frontend
+      // (React StrictMode) dispara el PATCH dos veces casi simultáneas; ambas leen
+      // PENDING y la 2ª recibe 422 de Webpay (token ya committeado por la 1ª).
+      // Si la activación ya fue procesada por la otra request, responder con su
+      // estado actual (200) — el pago fue exitoso y el QR ya está activo. NO
+      // propagar el error: el usuario vería "pago fallido" con el QR activado.
+      const current = await this.reader.getByWebpayToken(token_ws, tracking);
+      if (current && current.state !== ActivationState.PENDING) {
+        this.traceService.warn(
+          tracking,
+          TraceLayer.USE_CASE,
+          'UpdateWebpayQrActivateUseCase - carrera: transacción ya procesada por otra request',
+          { token_ws, state: current.state },
+        );
+        return current;
+      }
+      throw error;
+    }
 
     if (!commitResult) {
       throw new Error('Error al actualizar Webpay transaction');
