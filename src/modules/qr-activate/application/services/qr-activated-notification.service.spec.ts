@@ -124,7 +124,8 @@ describe('QrActivatedNotificationService (SPEC-019 RF-4)', () => {
       duration: '12 meses',
       activationDate: mockActivation.activationDate,
       expirationDate: mockActivation.qrList[0].expirationDate,
-      landingUrl: 'http://localhost:3000/qr/qr-doc-1?origen=qr',
+      // FIX 2026-08-17: la landing usa idQr (UUID público) — no el _id de Mongo
+      landingUrl: 'http://localhost:3000/qr/abc123?origen=qr',
     });
   });
 

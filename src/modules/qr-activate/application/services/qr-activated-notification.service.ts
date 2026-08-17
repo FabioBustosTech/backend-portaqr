@@ -62,7 +62,9 @@ export class QrActivatedNotificationService {
           duration: qr.duration,
           activationDate: activation.activationDate ?? activation.createdAt,
           expirationDate: qr.expirationDate,
-          landingUrl: `${frontendUrl}/qr/${qrDoc.id}?origen=qr`,
+          // FIX 2026-08-17: la landing usa `idQr` (UUID público, SPEC-009 A10) — la página
+          // pública /qr/[id] busca por idQr, NO por el _id de Mongo (`qrDoc.id` daba 404).
+          landingUrl: `${frontendUrl}/qr/${qrDoc.idQr}?origen=qr`,
         });
       }
 
