@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>¡Tu QR está activado! | Porta QR</title>
+  <style>
+    /* Reset para clientes de correo */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #4B5563; /* Gris oscuro para texto */
+      background-color: #E5E7EB; /* Fondo gris claro */
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 600px;
+      margin: 20px auto; /* Margen superior de 20px */
+    }
+    a {
+      color: #1E3A8A; /* Azul oscuro para enlaces */
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    /* Contenedor principal */
+    .container {
+      background-color: #F9FAFB; /* Fondo gris claro, casi blanco */
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    /* Encabezado */
+    .header {
+      text-align: center;
+      padding: 20px 0;
+    }
+    .header img.logo {
+      max-width: 200px;
+      height: auto;
+    }
+    .header h1 {
+      font-size: 24px;
+      color: #1E3A8A; /* Azul oscuro para el título */
+      margin: 16px 0 0;
+    }
+    .header p.subtitle {
+      font-size: 16px;
+      color: #4B5563; /* Gris oscuro para texto */
+      margin: 8px 0 0;
+    }
+    /* Contenido */
+    .content {
+      padding: 20px;
+      text-align: center;
+    }
+    .content p {
+      font-size: 16px;
+      color: #4B5563; /* Gris oscuro para texto */
+      margin: 10px 0;
+    }
+    /* Tarjeta por QR */
+    .qr-card {
+      background-color: #FFFFFF;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+      text-align: center;
+    }
+    .qr-card img.qr-image {
+      width: 160px;
+      height: 160px;
+      background-color: #FFFFFF;
+      border: 1px solid #E5E7EB;
+      border-radius: 4px;
+    }
+    .qr-card h2 {
+      font-size: 18px;
+      color: #1E3A8A; /* Azul oscuro para el título del QR */
+      margin: 12px 0 8px;
+    }
+    /* Badge del tipo de QR (RF-1.1) */
+    .badge {
+      display: inline-block;
+      background-color: #DBEAFE; /* Azul muy claro */
+      color: #1E3A8A; /* Azul oscuro */
+      font-size: 12px;
+      font-weight: bold;
+      padding: 4px 12px;
+      border-radius: 12px;
+      margin: 4px 0 12px;
+    }
+    .qr-card .detail {
+      font-size: 14px;
+      color: #374151; /* Gris oscuro con contraste alto sobre blanco */
+      margin: 6px 0;
+      word-break: break-word;
+    }
+    .qr-card .detail a {
+      color: #1E3A8A; /* Azul oscuro para links */
+      word-break: break-all;
+    }
+    .qr-card .detail strong {
+      color: #374151;
+    }
+    /* Resumen */
+    .summary {
+      background-color: #E5E7EB; /* Fondo gris claro */
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 16px 0;
+      text-align: center;
+    }
+    .summary p {
+      font-size: 14px;
+      color: #374151;
+      margin: 4px 0;
+    }
+    /* Botón CTA */
+    .button {
+      display: inline-block;
+      padding: 12px 24px;
+      background-color: #1E3A8A; /* Azul oscuro para el botón */
+      color: #F9FAFB !important; /* Blanco grisáceo para texto del botón */
+      text-decoration: none;
+      border-radius: 5px;
+      font-size: 16px;
+      font-weight: bold;
+      margin: 20px 0;
+    }
+    .button:hover {
+      background-color: #1E40AF; /* Azul más claro para hover */
+    }
+    /* Pie de página */
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      color: #9CA3AF; /* Gris medio para pie de página */
+      padding: 20px;
+      border-top: 1px solid #D1D5DB; /* Gris claro para línea */
+    }
+    .footer a {
+      color: #9CA3AF; /* Gris medio para enlaces */
+    }
+    /* Responsividad */
+    @media only screen and (max-width: 600px) {
+      .container {
+        padding: 15px;
+      }
+      .header h1 {
+        font-size: 20px;
+      }
+      .content p {
+        font-size: 14px;
+      }
+      .qr-card img.qr-image {
+        width: 140px;
+        height: 140px;
+      }
+      .button {
+        padding: 10px 20px;
+        font-size: 14px;
+      }
+    }
+    /* SOLO MODO CLARO: sin @media (prefers-color-scheme: dark) — decisión usuario 2026-08-17 */
+  </style>
+</head>
+<body>
+  <% const fmtDate = (d) => { if (!d) return '—'; const dt = new Date(d); if (isNaN(dt.getTime())) return '—'; const dd = String(dt.getDate()).padStart(2, '0'); const mm = String(dt.getMonth() + 1).padStart(2, '0'); const yyyy = dt.getFullYear(); return `${dd}/${mm}/${yyyy}`; }; %>
+  <% const fmtPrice = (n) => { const v = Number(n) || 0; return '$' + v.toLocaleString('es-CL') + ' CLP'; }; %>
+  <% const fmtMethod = (m) => m === 'WEBPAY' ? 'Webpay' : m === 'ADMIN' ? 'Admin' : m === 'TRANSFER' ? 'Transferencia' : m; %>
+  <table role="presentation" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center">
+        <div class="container">
+          <div class="header">
+            <a href="<%= baseUrl %>"><img src="<%= baseUrl %>/PORTA_QR_LOGO_HORIZONTAL.png" alt="Porta QR" width="200" class="logo"></a>
+            <h1>¡Tu QR está activado!</h1>
+            <p class="subtitle">Hola <%= userName %>, tus códigos QR ya están activos y listos para usarse.</p>
+          </div>
+          <div class="content">
+            <% qrItems.forEach(function(qr) { %>
+              <div class="qr-card">
+                <img src="cid:qr-<%= qr.code %>" alt="Código QR <%= qr.code %>" class="qr-image">
+                <h2><%= qr.name ? qr.name : 'QR #' + qr.code %></h2>
+                <span class="badge"><%= qr.typeLabel %></span>
+                <p class="detail"><strong>Página de aterrizaje:</strong> <a href="<%= qr.landingUrl %>"><%= qr.landingUrl %></a></p>
+                <p class="detail"><strong>Fecha de activación:</strong> <%= fmtDate(qr.activationDate) %></p>
+                <p class="detail"><strong>Fecha de cierre:</strong> <%= fmtDate(qr.expirationDate) %></p>
+              </div>
+            <% }); %>
+            <div class="summary">
+              <p><strong>Método de activación:</strong> <%= fmtMethod(methodActivation) %></p>
+              <p><strong>Total:</strong> <%= fmtPrice(totalPrice) %></p>
+            </div>
+            <p>
+              <a href="<%= dashboardUrl %>" class="button">Ver mis QRs</a>
+            </p>
+          </div>
+          <div class="footer">
+            <p>¿Necesitas ayuda? Contacta a <a href="mailto:soporte@portaqr.cl">soporte@portaqr.cl</a></p>
+            <p>Porta QR © 2025</p>
+          </div>
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
