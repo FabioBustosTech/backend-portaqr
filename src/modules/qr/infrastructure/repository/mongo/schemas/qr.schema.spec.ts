@@ -104,6 +104,44 @@ describe('isValidQrData — case list (SPEC-005 RF-4/RF-5)', () => {
     })).toBe(false);
   });
 
+  // SPEC-022 RF-4: exclusividad del título — solo items pdf
+  it('acepta item pdf con title (SPEC-022 RF-4)', () => {
+    expect(isValidQrData({
+      ...base,
+      urlList: [
+        { itemId: 'i1', typeUrl: 'pdf', documentUrl: VALID_PDF_URL, title: 'Menú' },
+      ],
+    })).toBe(true);
+  });
+
+  it('acepta 2 items pdf con titles independientes (SPEC-022 CA-11)', () => {
+    expect(isValidQrData({
+      ...base,
+      urlList: [
+        { itemId: 'i1', typeUrl: 'pdf', documentUrl: VALID_PDF_URL, title: 'Menú' },
+        { itemId: 'i2', typeUrl: 'pdf', documentUrl: VALID_PDF_URL, title: 'Catálogo' },
+      ],
+    })).toBe(true);
+  });
+
+  it('rechaza item url/web con title (SPEC-022 RF-4)', () => {
+    expect(isValidQrData({
+      ...base,
+      urlList: [
+        { itemId: 'i1', typeUrl: 'web', url: 'https://a.cl', title: 'Menú' },
+      ],
+    })).toBe(false);
+  });
+
+  it('rechaza item vcard con title (SPEC-022 RF-4)', () => {
+    expect(isValidQrData({
+      ...base,
+      urlList: [
+        { itemId: 'i1', typeUrl: 'vcard', vcard: { fn: 'X' }, title: 'Menú' },
+      ],
+    })).toBe(false);
+  });
+
   it('rechaza item url/web con vcard (exclusividad de campos)', () => {
     expect(isValidQrData({
       ...base,
