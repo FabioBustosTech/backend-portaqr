@@ -26,6 +26,13 @@ export class UrlListItem {
   })
   documentUrl?: string | null;
 
+  @ApiProperty({
+    type: String,
+    required: false,
+    description: "Texto descriptivo del contenido del PDF (solo typeUrl === 'pdf', máx. 60 caracteres)"
+  })
+  title?: string; // SPEC-022 RF-1: título del documento (solo typeUrl === 'pdf')
+
   @ApiProperty({ 
     required: true,
     description: 'Tipo de URL o vCard'

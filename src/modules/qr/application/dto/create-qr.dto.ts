@@ -161,6 +161,12 @@ export class ListUrlData {
   @IsUrl({}, { message: 'La URL del documento debe ser válida' })
   documentUrl?: string | null; // SPEC-005 RF-2: URL pública R2 del PDF (solo typeUrl === 'pdf')
 
+  @ValidateIf((o) => o.typeUrl === 'pdf')
+  @IsOptional()
+  @IsString({ message: 'El título del documento debe ser una cadena de texto' })
+  @MaxLength(60, { message: 'El título del documento no puede exceder los 60 caracteres' })
+  title?: string; // SPEC-022 RF-1/RF-3: texto descriptivo del contenido (solo typeUrl === 'pdf')
+
   @IsOptional()
   @Matches(/^((https?:\/\/[^\s]+|tel:\+\d{1,3}\d{4,14}))$/, {
     message: 'Debe comenzar con http://, https:// o tel: seguido de un número telefónico válido'
