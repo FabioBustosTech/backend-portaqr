@@ -11,6 +11,7 @@ export interface QrUrlListItem {
   vcard?: unknown;
   url?: string;
   documentUrl?: string | null; // SPEC-005 RF-2: URL pública R2 del PDF (solo typeUrl === 'pdf')
+  title?: string;             // SPEC-022 RF-1: texto descriptivo del contenido (solo typeUrl === 'pdf', opcional)
   typeUrl: string;
 }
 

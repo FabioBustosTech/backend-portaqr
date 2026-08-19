@@ -407,6 +407,143 @@ describe('QrController — POST /qr/list-pdf (SPEC-005)', () => {
     expect(mocks.storageService.uploadPdf).not.toHaveBeenCalled();
     expect(mocks.updateQrUseCase.execute).not.toHaveBeenCalled();
   });
+
+  // SPEC-022 RF-6: el título viaja en el multipart y el item se crea con él
+  it('200 (SPEC-022 RF-6): item nuevo con title → persiste el título en el item', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(makeQr('list', { data: { typeQr: 'list', urlList: [] } }));
+    mocks.pdfSanitizer.sanitize.mockResolvedValue({ buffer: Buffer.from('s'), size: 1 });
+    mocks.storageService.uploadPdf.mockResolvedValue({ publicUrl: PDF_URL, key: 'k', size: 1 });
+
+    const result = await controller.uploadListPdf(
+      makePdfFile(), '89302960-7799-43fe-b5a0-45d2295d539f', 'item-1', makeUser(), tracking, 'Menú',
+    );
+
+    expect(result).toEqual({ documentUrl: PDF_URL, size: 1, itemId: 'item-1', title: 'Menú' });
+    expect(mocks.updateQrUseCase.execute).toHaveBeenCalledWith(
+      '89302960-7799-43fe-b5a0-45d2295d539f',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          urlList: [{ itemId: 'item-1', typeUrl: 'pdf', documentUrl: PDF_URL, title: 'Menú' }],
+        }),
+      }),
+      tracking,
+    );
+  });
+
+  it('200 (SPEC-022 RF-6): item nuevo sin title → se crea sin el campo', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(makeQr('list', { data: { typeQr: 'list', urlList: [] } }));
+    mocks.pdfSanitizer.sanitize.mockResolvedValue({ buffer: Buffer.from('s'), size: 1 });
+    mocks.storageService.uploadPdf.mockResolvedValue({ publicUrl: PDF_URL, key: 'k', size: 1 });
+
+    const result = await controller.uploadListPdf(
+      makePdfFile(), '89302960-7799-43fe-b5a0-45d2295d539f', 'item-1', makeUser(), tracking,
+    );
+
+    expect(result.title).toBeUndefined();
+    expect(mocks.updateQrUseCase.execute).toHaveBeenCalledWith(
+      '89302960-7799-43fe-b5a0-45d2295d539f',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          urlList: [{ itemId: 'item-1', typeUrl: 'pdf', documentUrl: PDF_URL, title: undefined }],
+        }),
+      }),
+      tracking,
+    );
+  });
+
+  it('200 (SPEC-022 RF-7): reemplazo con title → reemplaza el título existente', async () => {
+    const { controller, mocks } = createController();
+    const existing = [
+      { itemId: 'item-1', typeUrl: 'pdf', documentUrl: 'https://x.cl/old.pdf', title: 'Menú' },
+    ];
+    mocks.getQrUseCase.execute.mockResolvedValue(makeQr('list', { data: { typeQr: 'list', urlList: existing } }));
+    mocks.pdfSanitizer.sanitize.mockResolvedValue({ buffer: Buffer.from('s'), size: 1 });
+    mocks.storageService.uploadPdf.mockResolvedValue({ publicUrl: PDF_URL, key: 'k', size: 1 });
+
+    await controller.uploadListPdf(
+      makePdfFile(), '89302960-7799-43fe-b5a0-45d2295d539f', 'item-1', makeUser(), tracking, 'Catálogo',
+    );
+
+    expect(mocks.updateQrUseCase.execute).toHaveBeenCalledWith(
+      '89302960-7799-43fe-b5a0-45d2295d539f',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          urlList: [{ itemId: 'item-1', typeUrl: 'pdf', documentUrl: PDF_URL, title: 'Catálogo' }],
+        }),
+      }),
+      tracking,
+    );
+  });
+
+  it('200 (SPEC-022 RF-7): reemplazo sin title → conserva el título existente', async () => {
+    const { controller, mocks } = createController();
+    const existing = [
+      { itemId: 'item-1', typeUrl: 'pdf', documentUrl: 'https://x.cl/old.pdf', title: 'Menú' },
+    ];
+    mocks.getQrUseCase.execute.mockResolvedValue(makeQr('list', { data: { typeQr: 'list', urlList: existing } }));
+    mocks.pdfSanitizer.sanitize.mockResolvedValue({ buffer: Buffer.from('s'), size: 1 });
+    mocks.storageService.uploadPdf.mockResolvedValue({ publicUrl: PDF_URL, key: 'k', size: 1 });
+
+    await controller.uploadListPdf(
+      makePdfFile(), '89302960-7799-43fe-b5a0-45d2295d539f', 'item-1', makeUser(), tracking,
+    );
+
+    expect(mocks.updateQrUseCase.execute).toHaveBeenCalledWith(
+      '89302960-7799-43fe-b5a0-45d2295d539f',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          urlList: [{ itemId: 'item-1', typeUrl: 'pdf', documentUrl: PDF_URL, title: 'Menú' }],
+        }),
+      }),
+      tracking,
+    );
+  });
+
+  it('200 (SPEC-022 RF-5): title con HTML/scripts → persistido escapado (escape-html)', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(makeQr('list', { data: { typeQr: 'list', urlList: [] } }));
+    mocks.pdfSanitizer.sanitize.mockResolvedValue({ buffer: Buffer.from('s'), size: 1 });
+    mocks.storageService.uploadPdf.mockResolvedValue({ publicUrl: PDF_URL, key: 'k', size: 1 });
+
+    await controller.uploadListPdf(
+      makePdfFile(), '89302960-7799-43fe-b5a0-45d2295d539f', 'item-1', makeUser(), tracking,
+      '<script>alert(1)</script>',
+    );
+
+    expect(mocks.updateQrUseCase.execute).toHaveBeenCalledWith(
+      '89302960-7799-43fe-b5a0-45d2295d539f',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          urlList: [{ itemId: 'item-1', typeUrl: 'pdf', documentUrl: PDF_URL, title: '&lt;script&gt;alert(1)&lt;/script&gt;' }],
+        }),
+      }),
+      tracking,
+    );
+  });
+
+  it('200 (SPEC-022 RF-5): title con solo espacios → undefined (no se persiste)', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(makeQr('list', { data: { typeQr: 'list', urlList: [] } }));
+    mocks.pdfSanitizer.sanitize.mockResolvedValue({ buffer: Buffer.from('s'), size: 1 });
+    mocks.storageService.uploadPdf.mockResolvedValue({ publicUrl: PDF_URL, key: 'k', size: 1 });
+
+    const result = await controller.uploadListPdf(
+      makePdfFile(), '89302960-7799-43fe-b5a0-45d2295d539f', 'item-1', makeUser(), tracking, '   ',
+    );
+
+    expect(result.title).toBeUndefined();
+    expect(mocks.updateQrUseCase.execute).toHaveBeenCalledWith(
+      '89302960-7799-43fe-b5a0-45d2295d539f',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          urlList: [{ itemId: 'item-1', typeUrl: 'pdf', documentUrl: PDF_URL, title: undefined }],
+        }),
+      }),
+      tracking,
+    );
+  });
 });
 
 describe('QrController — PATCH /qr/:id con items PDF (SPEC-005 RF-15/RF-16)', () => {
@@ -474,6 +611,29 @@ describe('QrController — PATCH /qr/:id con items PDF (SPEC-005 RF-15/RF-16)', 
     await controller.update('uuid', dto as any, makeUser(), tracking);
 
     expect(mocks.storageService.deleteObject).not.toHaveBeenCalled();
+  });
+
+  it('SPEC-022 RF-8: cambiar solo el title NO dispara operaciones R2 (deleteObject)', async () => {
+    const { controller, mocks } = createController();
+    mocks.getQrUseCase.execute.mockResolvedValue(
+      makeQr('list', {
+        data: {
+          typeQr: 'list',
+          urlList: [{ itemId: 'pdf-1', typeUrl: 'pdf', documentUrl: 'https://x.cl/same.pdf', title: 'Menú' }],
+        },
+      }),
+    );
+
+    const dto = {
+      data: {
+        typeQr: 'list' as const,
+        urlList: [{ itemId: 'pdf-1', typeUrl: 'pdf', documentUrl: 'https://x.cl/same.pdf', title: 'Catálogo' }],
+      },
+    };
+    await controller.update('uuid', dto as any, makeUser(), tracking);
+
+    expect(mocks.storageService.deleteObject).not.toHaveBeenCalled();
+    expect(mocks.updateQrUseCase.execute).toHaveBeenCalledWith('uuid', dto, tracking);
   });
 
   it('RF-15/RF-16: si deleteObject falla NO aborta el PATCH (mejor esfuerzo)', async () => {

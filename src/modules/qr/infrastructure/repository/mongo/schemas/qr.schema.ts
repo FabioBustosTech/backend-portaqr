@@ -8,9 +8,9 @@ export type QrDocument = HydratedDocument<QrSchema>;
 
 /**
  * Validación de exclusividad por tipo de item + límite de PDFs (SPEC-005 RF-4/RF-5).
- * - `typeUrl === 'pdf'` → exige `documentUrl`, prohíbe `url` y `vcard`.
- * - `typeUrl === 'vcard'` → exige `vcard`, prohíbe `url` y `documentUrl`.
- * - resto (URL/red social) → exige `url`, prohíbe `vcard` y `documentUrl`.
+ * - `typeUrl === 'pdf'` → exige `documentUrl`, prohíbe `url` y `vcard`; permite `title` (SPEC-022 RF-4).
+ * - `typeUrl === 'vcard'` → exige `vcard`, prohíbe `url`, `documentUrl` y `title` (SPEC-022 RF-4).
+ * - resto (URL/red social) → exige `url`, prohíbe `vcard`, `documentUrl` y `title` (SPEC-022 RF-4).
  * - El conteo de items PDF no puede superar `MAX_PDF_ITEMS_PER_QR` (default 2).
  */
 export function isValidQrData(value: any): boolean {
@@ -44,15 +44,15 @@ function validateQrDataFields(value: any): boolean | undefined {
       // Exclusividad a nivel de item (RF-4) + conteo de items PDF (RF-5)
       for (const item of value.urlList) {
         if (item.typeUrl === 'pdf') {
-          // PDF: exige documentUrl, prohíbe url y vcard
+          // PDF: exige documentUrl, prohíbe url y vcard; title PERMITIDO (opcional, SPEC-022 RF-4)
           if (!item.documentUrl || item.url || item.vcard) return false;
           pdfCount += 1;
         } else if (item.typeUrl === 'vcard') {
-          // vCard: exige vcard, prohíbe url y documentUrl
-          if (!item.vcard || item.url || item.documentUrl) return false;
+          // vCard: exige vcard, prohíbe url, documentUrl y title (SPEC-022 RF-4)
+          if (!item.vcard || item.url || item.documentUrl || item.title) return false;
         } else {
-          // URL/red social: exige url, prohíbe vcard y documentUrl
-          if (!item.url || item.vcard || item.documentUrl) return false;
+          // URL/red social: exige url, prohíbe vcard, documentUrl y title (SPEC-022 RF-4)
+          if (!item.url || item.vcard || item.documentUrl || item.title) return false;
         }
       }
       // RF-5: límite de items PDF por QR (env MAX_PDF_ITEMS_PER_QR, default 2).
@@ -120,6 +120,7 @@ export class QrSchema {
           vcard: { type: SchemaTypes.Mixed }, // Usar la estructura completa de vCardData
           url: { type: String },
           documentUrl: { type: String, required: false, default: null }, // SPEC-005 RF-2
+          title: { type: String, required: false }, // SPEC-022 RF-1: título del documento (solo typeUrl === 'pdf')
           typeUrl: { 
             type: String,
           }
@@ -244,6 +245,7 @@ export class QrSchema {
       vcard?: unknown;
       url?: string;
       documentUrl?: string | null; // SPEC-005 RF-2 (solo typeUrl === 'pdf')
+      title?: string; // SPEC-022 RF-1 (solo typeUrl === 'pdf')
       typeUrl: string;
     }>;
     listImageUrl?: string | null; // SPEC-002: portada QR multilink

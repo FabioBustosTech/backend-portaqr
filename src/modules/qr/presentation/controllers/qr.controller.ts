@@ -58,6 +58,8 @@ import { StorageService } from 'src/modules/storage/storage.service';
 import { ImageProcessorService } from 'src/modules/storage/image-processor.service';
 import { PdfSanitizerService } from 'src/modules/storage/pdf-sanitizer.service';
 import { getMaxPdfItemsPerQr } from '../../application/pdf-limits.helper';
+// SPEC-022 RF-5: sanitización del título del PDF (patrón SPEC-008 — defensa en profundidad)
+import { escapeHtml } from 'src/common/utils/escape-html.util';
 
 // SPEC-002: MIME types aceptados en el fileFilter (RF-5). La salida siempre es WebP.
 const LIST_IMAGE_ALLOWED_MIME = [
@@ -82,6 +84,15 @@ function getListImageMaxUploadSize(): number {
 
 // SPEC-005 RF-6: MIME types aceptados en el fileFilter (solo application/pdf).
 const LIST_PDF_ALLOWED_MIME = ['application/pdf'];
+
+// SPEC-022 RF-5: sanitiza el título del PDF (escape-html, patrón SPEC-008) y
+// normaliza vacíos a undefined (el item se crea sin title si viene vacío).
+function sanitizePdfTitle(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  return escapeHtml(trimmed);
+}
 
 // SPEC-005 RF-7: límite de entrada desde PDF_MAX_UPLOAD_SIZE (default 2 MB).
 // Se evalúa al definir la clase (decorador) — misma técnica que list-image.
@@ -267,11 +278,12 @@ export class QrController {
         idQr: { type: 'string', description: 'UUID v4 del QR (typeQr: list)' },
         itemId: { type: 'string', description: 'Identificador único del item dentro de urlList[]' },
         file: { type: 'string', format: 'binary', description: 'PDF (application/pdf, máx PDF_MAX_UPLOAD_SIZE default 2 MB)' },
+        title: { type: 'string', description: 'Texto descriptivo del contenido (opcional, máx. 60)' }, // SPEC-022 RF-6
       },
     },
   })
   @ApiOperation({ summary: 'Subir PDF de un item de QR multilink (sanitiza con gs y sube a R2)' })
-  @ApiResponse({ status: 200, description: 'PDF subido. Retorna { documentUrl, size, itemId }' })
+  @ApiResponse({ status: 200, description: 'PDF subido. Retorna { documentUrl, size, itemId, title }' })
   @ApiResponse({ status: 403, description: 'Prohibido - no es el propietario' })
   @ApiResponse({ status: 400, description: 'El QR no es de tipo list, falta idQr/itemId, o límite excedido' })
   @ApiResponse({ status: 413, description: 'Archivo mayor al límite configurado (PDF_MAX_UPLOAD_SIZE, default 2 MB)' })
@@ -300,11 +312,14 @@ export class QrController {
     @Body('itemId') itemId: string,
     @GetUser() user: User,
     @Tracking() tracking: TrackingContext,
-  ): Promise<{ documentUrl: string; size: number; itemId: string }> {
+    @Body('title') title?: string, // SPEC-022 RF-6/RF-7: título descriptivo del contenido (opcional, al final)
+  ): Promise<{ documentUrl: string; size: number; itemId: string; title?: string }> {
     this.traceService.log(tracking, TraceLayer.CONTROLLER, 'POST /qr/list-pdf', {
       idQr,
       itemId,
       userId: user.id,
+      // SPEC-022: no loguear el texto del usuario — solo indicar presencia
+      hasTitle: title !== undefined && title.trim() !== '',
     });
 
     if (!file) throw new BadRequestException('El archivo es requerido (campo "file")');
@@ -360,9 +375,22 @@ export class QrController {
     });
 
     // 5. Actualizar el item en urlList (RF-13 paso 9): reemplazo por itemId o append
+    const sanitizedTitle = sanitizePdfTitle(title); // SPEC-022 RF-5
     const updatedUrlList = isReplacement
-      ? urlList.map((it) => (it.itemId === itemId ? { ...it, documentUrl: publicUrl } : it))
-      : [...urlList, { itemId, typeUrl: 'pdf', documentUrl: publicUrl }];
+      ? urlList.map((it) => (it.itemId === itemId
+          ? {
+              ...it,
+              documentUrl: publicUrl,
+              // SPEC-022 RF-7: si el body trae título, reemplaza; si no, conserva el existente
+              title: sanitizedTitle !== undefined ? sanitizedTitle : it.title,
+            }
+          : it))
+      : [...urlList, {
+          itemId,
+          typeUrl: 'pdf',
+          documentUrl: publicUrl,
+          title: sanitizedTitle, // SPEC-022 RF-6: el item se crea con su título (o sin él)
+        }];
 
     await this.updateQrUseCase.execute(
       qr.idQr,
@@ -381,9 +409,10 @@ export class QrController {
       itemId,
       documentUrl: publicUrl,
       size,
+      hasTitle: sanitizedTitle !== undefined, // SPEC-022
     });
 
-    return { documentUrl: publicUrl, size, itemId };
+    return { documentUrl: publicUrl, size, itemId, title: sanitizedTitle };
   }
 
   @Get('seo-idqr')
