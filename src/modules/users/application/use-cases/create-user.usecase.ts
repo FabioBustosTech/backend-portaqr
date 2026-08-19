@@ -1,4 +1,5 @@
 import { Injectable, ConflictException, Inject, Logger } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import type { ICanCreateUser } from '../../domain/ports/queries/create-user.port';
 import { UserEntity } from '../../domain/entities/user.entity';
 import { CreateUserDto } from '../dto/create-user.dto';
@@ -44,58 +45,112 @@ export class CreateUserUseCase {
       throw new ConflictException(validacion.errors);
     }
 
-    const datosNormalizados = this.validationRules.normalize(dto);
+const datosNormalizados = this.validationRules.normalize(dto);
 
     const passwordHash = await this.passwordService.hashPassword(dto.password);
 
-    // SPEC-007 H7: verificationCode generado ANTES del insert (1 round-trip total)
-    const verificationCode = this.generateVerificationCode();
-    const verificationCodeExpires = this.calculateExpiry();
+    // SPEC-020 RF-3 (ADR-020.1): userName generado automáticamente si no se provee
+    // (signup simplificado u onboarding omitido). CSPRNG: 8 hex = 4.3×10⁹ combinaciones.
+    // `userNameGenerado` distingue el caso auto-generado (reintentable ante E11000)
+    // del userName elegido por el usuario (conflicto real → 409).
+    const userNameProveido = datosNormalizados.userName?.trim();
+    const userNameGenerado = !userNameProveido;
+    const userName = userNameProveido || this.generateUserName();
 
-    const usuario = new UserEntity({
-      email: datosNormalizados.email,
-      userName: datosNormalizados.userName,
-      password: passwordHash,
-      firstName: datosNormalizados.firstName!,
-      paternalLastName: datosNormalizados.paternalLastName!,
-      maternalLastName: datosNormalizados.maternalLastName!,
-      role: 'user',
-      isEmailVerified: false,
-      phone: dto.phone,
-      verificationCode,
-      verificationCodeExpires,
-    });
+    // SPEC-007 H7: verificationCode generado ANTES del insert (1 round-trip total).
+    // SPEC-020 RF-8: si el email ya está verificado (usuario Google), NO se genera
+    // código de verificación ni se envía el correo.
+    const emailVerificado = dto.isEmailVerified === true;
+    const verificationCode = emailVerificado ? undefined : this.generateVerificationCode();
+    const verificationCodeExpires = emailVerificado ? undefined : this.calculateExpiry();
 
+    // SPEC-020 RF-3: reintento ante E11000 por userName GENERADO (defensa en
+    // profundidad — 8 hex = 4.3×10⁹ combinaciones, colisión prácticamente imposible).
+    const MAX_USERNAME_RETRIES = 3;
     let resultado: User;
-    try {
-      // Índices únicos en email/userName (ya existen en el schema): el E11000
-      // reemplaza los pre-checks checkEmailExists/checkUserNameExists (SPEC-007 H7)
-      resultado = await this.creator.create(usuario, tracking);
-    } catch (error) {
-      if (this.isDuplicateKeyError(error)) {
-        this.traceService.warn(tracking, TraceLayer.USE_CASE, 'CreateUserUseCase - duplicado (E11000)', { email: datosNormalizados.email });
-        throw this.mapDuplicateKeyError(error);
+    let ultimoError: unknown;
+
+    for (let intento = 0; intento < MAX_USERNAME_RETRIES; intento++) {
+      const usuario = new UserEntity({
+        email: datosNormalizados.email,
+        userName: intento === 0 ? userName : this.generateUserName(),
+        password: passwordHash,
+        firstName: datosNormalizados.firstName ?? '',
+        paternalLastName: datosNormalizados.paternalLastName ?? '',
+        maternalLastName: datosNormalizados.maternalLastName ?? '',
+        role: 'user',
+        isEmailVerified: emailVerificado,
+        phone: dto.phone,
+        verificationCode,
+        verificationCodeExpires,
+        // SPEC-020 RF-9: campos Google (solo los setea GoogleAuthService)
+        googleId: dto.googleId,
+        provider: dto.provider ?? 'local',
+        // SPEC-020: las cuentas Google nacen sin contraseña real (hash aleatorio
+        // inutilizable — ADR-020.7) → hasPassword: false hasta el primer set-password
+        hasPassword: dto.provider === 'google' ? false : true,
+        avatarUrl: dto.avatarUrl,
+      });
+
+      try {
+        // Índices únicos en email/userName (ya existen en el schema): el E11000
+        // reemplaza los pre-checks checkEmailExists/checkUserNameExists (SPEC-007 H7)
+        resultado = await this.creator.create(usuario, tracking);
+        break;
+      } catch (error) {
+        if (!this.isDuplicateKeyError(error)) {
+          throw error;
+        }
+        // E11000: distinguir email duplicado (real) de userName duplicado
+        const keyPattern = (error as MongoDuplicateKeyError).keyPattern ?? {};
+        if (keyPattern.email) {
+          this.traceService.warn(tracking, TraceLayer.USE_CASE, 'CreateUserUseCase - email duplicado (E11000)', { email: datosNormalizados.email });
+          throw new ConflictException('El correo electrónico ya está registrado');
+        }
+        if (keyPattern.userName) {
+          // userName elegido por el usuario → conflicto real (409)
+          if (!userNameGenerado) {
+            this.traceService.warn(tracking, TraceLayer.USE_CASE, 'CreateUserUseCase - userName duplicado (E11000)', { userName });
+            throw new ConflictException('El nombre de usuario ya está en uso');
+          }
+          // userName GENERADO → colisión astronómicamente improbable; reintentar
+          this.traceService.warn(tracking, TraceLayer.USE_CASE, 'CreateUserUseCase - userName generado colisionó, reintentando', { intento });
+          ultimoError = error;
+          continue;
+        }
+        throw error;
       }
-      throw error;
+    }
+
+    if (!resultado) {
+      throw new ConflictException('No se pudo crear el usuario (conflicto de nombre de usuario)');
     }
     this.traceService.log(tracking, TraceLayer.USE_CASE, 'CreateUserUseCase - created', { id: resultado.id });
 
     // Enviar email de verificación (no bloquea la creación); usa el doc retornado
-    // del insert: sin update ni getById posteriores (1 round-trip, SPEC-007 H7)
-    try {
-      await this.emailService.sendVerificationEmail(
-        resultado.email,
-        resultado.id,
-        verificationCode,
-      );
-      this.traceService.log(tracking, TraceLayer.USE_CASE, 'CreateUserUseCase - email verificación enviado', { id: resultado.id });
-    } catch (error) {
-      this.logger.error(`Error al enviar email de verificación: ${error.message}`);
+    // del insert: sin update ni getById posteriores (1 round-trip, SPEC-007 H7).
+    // SPEC-020 RF-8: NO se envía si el email ya está verificado (usuario Google).
+    if (!emailVerificado) {
+      try {
+        await this.emailService.sendVerificationEmail(
+          resultado.email,
+          resultado.id,
+          verificationCode!,
+        );
+        this.traceService.log(tracking, TraceLayer.USE_CASE, 'CreateUserUseCase - email verificación enviado', { id: resultado.id });
+      } catch (error) {
+        this.logger.error(`Error al enviar email de verificación: ${error.message}`);
+      }
     }
 
     const { password: _password, ...usuarioSinPassword } = resultado;
     void _password;
     return usuarioSinPassword;
+  }
+
+  /** SPEC-020 RF-3 (ADR-020.1): genera `user_<8 hex>` con CSPRNG (nunca colisiona en la práctica). */
+  private generateUserName(): string {
+    return `user_${randomBytes(4).toString('hex')}`;
   }
 
   private generateVerificationCode(): string {

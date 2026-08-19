@@ -34,6 +34,9 @@ describe('JwtAuthService', () => {
     role: 'user',
     isEmailVerified: true,
     tokenVersion: 0,
+    // SPEC-020 RF-9: claims agregados al JWT
+    provider: 'local',
+    hasPassword: true,
   };
 
   beforeEach(async () => {

@@ -1,12 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from '../../domain/services/auth.service';
+import { GoogleAuthService } from '../../domain/services/google-auth.service';
 import { TraceService } from '../../../../common/services/trace.service';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 
 describe('AuthController', () => {
   let controller: AuthController;
   let authService: jest.Mocked<AuthService>;
+  let googleAuthService: jest.Mocked<GoogleAuthService>;
 
   const tracking: TrackingContext = { trackingId: 't-1', sessionId: 's-1' };
 
@@ -25,6 +27,12 @@ describe('AuthController', () => {
           },
         },
         {
+          provide: GoogleAuthService,
+          useValue: {
+            authenticate: jest.fn(),
+          },
+        },
+        {
           provide: TraceService,
           useValue: {
             log: jest.fn(),
@@ -38,6 +46,7 @@ describe('AuthController', () => {
 
     controller = module.get<AuthController>(AuthController);
     authService = module.get(AuthService);
+    googleAuthService = module.get(GoogleAuthService);
   });
 
   it('debe estar definido', () => {
@@ -99,6 +108,43 @@ describe('AuthController', () => {
 
       expect(authService.logout).toHaveBeenCalledWith('user-1', tracking);
       expect(result).toEqual({ success: true });
+    });
+  });
+
+  describe('googleCallback (SPEC-020 RF-7)', () => {
+    it('debe delegar el perfil de Google al GoogleAuthService y retornar tokens', async () => {
+      const req = {
+        user: {
+          email: 'user@gmail.com',
+          googleId: 'google-123',
+          givenName: 'Juan',
+          familyName: 'Pérez',
+        },
+        headers: { cookie: 'oauth_mode=signup' },
+      };
+      const expected = {
+        user: { id: 'user-1', email: 'user@gmail.com' },
+        accessToken: 'at',
+        refreshToken: 'rt',
+      };
+      googleAuthService.authenticate.mockResolvedValue(expected as never);
+
+      const result = await controller.googleCallback(req, tracking);
+
+      expect(googleAuthService.authenticate).toHaveBeenCalledWith(req.user, 'signup', tracking);
+      expect(result).toEqual(expected);
+    });
+
+    it('debe pasar mode "login" cuando la cookie oauth_mode lo indica', async () => {
+      const req = {
+        user: { email: 'user@gmail.com', googleId: 'google-123' },
+        headers: { cookie: 'oauth_mode=login' },
+      };
+      googleAuthService.authenticate.mockResolvedValue({} as never);
+
+      await controller.googleCallback(req, tracking);
+
+      expect(googleAuthService.authenticate).toHaveBeenCalledWith(req.user, 'login', tracking);
     });
   });
 });

@@ -17,24 +17,16 @@ export class UserValidationRules {
       errors.push('El formato del email es inválido');
     }
 
-    if (!data.userName || !data.userName.trim()) {
-      errors.push('El nombre de usuario es requerido');
+    // SPEC-020 RF-2: userName/nombre/apellidos NO se exigen en la creación —
+    // el userName se genera automáticamente (RF-3) y el perfil se captura en el onboarding.
+    if (data.userName !== undefined && data.userName !== null && !data.userName.trim()) {
+      errors.push('El nombre de usuario no puede estar vacío');
     }
 
     if (!data.password) {
       errors.push('La contraseña es requerida');
     } else if (data.password.length < 6) {
       errors.push('La contraseña debe tener al menos 6 caracteres');
-    }
-
-    if (!data.firstName || !data.firstName.trim()) {
-      errors.push('El nombre es requerido');
-    }
-    if (!data.paternalLastName || !data.paternalLastName.trim()) {
-      errors.push('El apellido paterno es requerido');
-    }
-    if (!data.maternalLastName || !data.maternalLastName.trim()) {
-      errors.push('El apellido materno es requerido');
     }
 
     return { valid: errors.length === 0, errors };

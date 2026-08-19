@@ -11,8 +11,9 @@ import type { User } from '../../../users/domain/entities/user.entity';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import { Types } from 'mongoose';
-import { REFRESH_TOKEN_STORE_PORT } from '../constants/auth.tokens';
+import { REFRESH_TOKEN_STORE_PORT, AUTH_EMAIL_PORT } from '../constants/auth.tokens';
 import type { IRefreshTokenStore } from '../ports/refresh-token.port';
+import type { ICanSendWelcomeEmail } from '../ports/out/email-sender.port';
 import { sha256Hex } from '../../../../common/utils/hash.util';
 
 @Injectable()
@@ -29,6 +30,9 @@ export class AuthService implements IAuthService {
     private readonly configService: ConfigService,
     @Inject(REFRESH_TOKEN_STORE_PORT)
     private readonly refreshTokenStore: IRefreshTokenStore,
+    // SPEC-020 RF-27: puerto de envío del correo de bienvenida (ADR-019.8)
+    @Inject(AUTH_EMAIL_PORT)
+    private readonly welcomeEmailSender: ICanSendWelcomeEmail,
   ) {}
 
   async login(dto: LoginDto, tracking: TrackingContext): Promise<AuthResponse> {
@@ -57,6 +61,13 @@ export class AuthService implements IAuthService {
     const tokens = await this.jwtAuthService.generateTokens(user);
     // SPEC-009 A8: persistir el refresh token (hash) al emitirlo
     await this.persistRefreshToken(user.id, tokens.refreshToken, tracking);
+
+    // SPEC-020 RF-23/RF-27: correo de bienvenida en el PRIMER login con cuenta verificada.
+    // Best-effort: un fallo de SMTP nunca rompe el login; si falla, el flag queda
+    // `false` y se reintenta en el próximo login.
+    if (!user.welcomeEmailSent) {
+      await this.sendWelcomeEmailBestEffort(user, tracking);
+    }
 
     this.traceService.log(tracking, TraceLayer.USE_CASE, 'AuthService.login - éxito', {
       id: user.id,
@@ -181,6 +192,28 @@ export class AuthService implements IAuthService {
     } catch (error) {
       this.logger.error('Error al validar usuario del JWT', error);
       return null;
+    }
+  }
+
+  /** SPEC-020 RF-27: envía el correo de bienvenida best-effort y marca el flag si el envío fue exitoso. */
+  private async sendWelcomeEmailBestEffort(
+    user: User,
+    tracking: TrackingContext,
+  ): Promise<void> {
+    try {
+      await this.welcomeEmailSender.sendWelcomeEmail(user.email);
+      // Solo marcar el flag si el envío fue exitoso (si SMTP falla, se reintenta en el próximo login)
+      await this.updateUserUseCase.execute(
+        user.id,
+        { welcomeEmailSent: true },
+        { id: user.id, role: user.role },
+        tracking,
+      );
+      this.logger.log(`Correo de bienvenida enviado a ${user.email} (flag marcado)`);
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo enviar el correo de bienvenida a ${user.email} (best-effort, se reintentará): ${error.message}`,
+      );
     }
   }
 

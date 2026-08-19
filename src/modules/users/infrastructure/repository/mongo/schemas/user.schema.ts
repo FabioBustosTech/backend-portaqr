@@ -31,21 +31,24 @@ export class UserSchema {
     description: 'Nombre del usuario',
     example: 'Juan',
   })
-  @Prop({ required: true, trim: true })
+  // SPEC-020 RF-4: opcional — se captura en el onboarding post-primer-login
+  @Prop({ required: false, default: '', trim: true })
   firstName: string;
 
   @ApiProperty({
     description: 'Apellido paterno del usuario',
     example: 'Pérez',
   })
-  @Prop({ required: true, trim: true })
+  // SPEC-020 RF-4: opcional — se captura en el onboarding post-primer-login
+  @Prop({ required: false, default: '', trim: true })
   paternalLastName: string;
 
   @ApiProperty({
     description: 'Apellido materno del usuario',
     example: 'García',
   })
-  @Prop({ required: true, trim: true })
+  // SPEC-020 RF-4: opcional — se captura en el onboarding post-primer-login
+  @Prop({ required: false, default: '', trim: true })
   maternalLastName: string;
 
   @ApiProperty({
@@ -113,6 +116,26 @@ export class UserSchema {
   // SPEC-009 A5: intentos fallidos de reset-password (tras 5 → se invalida el código)
   @Prop({ type: Number, default: 0 })
   passwordResetAttempts: number;
+
+  // SPEC-020 RF-27: flag de correo de bienvenida enviado (primer login con cuenta verificada)
+  @Prop({ default: false })
+  welcomeEmailSent: boolean;
+
+  // SPEC-020 RF-9: campos Google OAuth
+  @Prop({ unique: true, sparse: true })
+  googleId?: string;
+
+  @Prop({ default: 'local', enum: ['local', 'google'] })
+  provider: string;
+
+  // SPEC-020: false solo para cuentas Google que aún no asignan contraseña
+  // (ADR-020.7: nacen con hash aleatorio inutilizable). true para locales y
+  // para Google que ya la asignaron (primer set-password).
+  @Prop({ default: true })
+  hasPassword: boolean;
+
+  @Prop()
+  avatarUrl?: string;
 }
 
 export const UserSchemaDefinition = SchemaFactory.createForClass(UserSchema);

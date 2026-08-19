@@ -22,6 +22,11 @@ export class UserMongoMapper {
       passwordResetCode: doc.passwordResetCode,
       passwordResetExpires: doc.passwordResetExpires,
       passwordResetAttempts: doc.passwordResetAttempts ?? 0,
+      welcomeEmailSent: doc.welcomeEmailSent ?? false,
+      googleId: doc.googleId,
+      provider: (doc.provider ?? 'local') as 'local' | 'google',
+      hasPassword: doc.hasPassword ?? true,
+      avatarUrl: doc.avatarUrl,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     };
@@ -46,6 +51,11 @@ export class UserMongoMapper {
       passwordResetCode: user.passwordResetCode,
       passwordResetExpires: user.passwordResetExpires,
       passwordResetAttempts: user.passwordResetAttempts,
+      welcomeEmailSent: user.welcomeEmailSent,
+      googleId: user.googleId,
+      provider: user.provider,
+      hasPassword: user.hasPassword,
+      avatarUrl: user.avatarUrl,
     };
   }
 }

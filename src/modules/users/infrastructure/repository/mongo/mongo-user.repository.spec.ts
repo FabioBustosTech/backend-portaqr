@@ -63,6 +63,7 @@ describe('MongoUserRepository', () => {
     passwordResetExpires: new Date('2024-08-03T12:00:00.000Z'),
         verificationAttempts: 0,
         passwordResetAttempts: 0,
+    welcomeEmailSent: false,
     createdAt: new Date('2024-08-01T10:00:00.000Z'),
     updatedAt: new Date('2024-08-01T11:00:00.000Z'),
   };
@@ -86,6 +87,11 @@ describe('MongoUserRepository', () => {
     passwordResetCode: 'prc-1',
     passwordResetExpires: doc.passwordResetExpires,
     passwordResetAttempts: 0,
+    welcomeEmailSent: false,
+    googleId: undefined,
+    provider: 'local',
+    hasPassword: true,
+    avatarUrl: undefined,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };

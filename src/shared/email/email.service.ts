@@ -119,6 +119,49 @@ export class EmailService {
     }
   }
 
+  /** SPEC-020 RF-23: correo de bienvenida (primer login con cuenta verificada — implementa estructuralmente ICanSendWelcomeEmail, ADR-019.8) */
+  async sendWelcomeEmail(email: string): Promise<void> {
+    // SPEC-020: WELCOME_EMAIL_ENABLED (default true) — permite desactivar el envío
+    // en local (tests manuales) sin tocar código. Solo 'false' explícito desactiva.
+    const welcomeEmailEnabled =
+      (this.configService.get<string>('WELCOME_EMAIL_ENABLED') ?? 'true') !== 'false';
+    if (!welcomeEmailEnabled) {
+      this.logger.log(
+        `Envío de email de bienvenida DESACTIVADO (WELCOME_EMAIL_ENABLED=false) — destinatario: ${email}`,
+        EmailService.name,
+        'sendWelcomeEmail',
+      );
+      return;
+    }
+
+    try {
+      this.logger.log(`Enviando email de bienvenida a: ${email}`, EmailService.name, 'sendWelcomeEmail');
+
+      const templatePath = path.join(__dirname, '..', '..', 'templateEmail', 'welcomeEmail.ejs');
+      const template = fs.readFileSync(templatePath, 'utf-8');
+      const baseUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+      const html = ejs.render(template, { baseUrl });
+
+      const mailOptions = {
+        from: this.configService.get('EMAIL_FROM'),
+        to: email,
+        subject: '¡Bienvenido(a) a Porta QR!',
+        html,
+      };
+
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Email de bienvenida enviado exitosamente a: ${email}`, EmailService.name, 'sendWelcomeEmail');
+    } catch (error) {
+      this.logger.error(
+        `Error al enviar email de bienvenida a ${email}: ${error.message}`,
+        error.stack,
+        EmailService.name,
+        'sendWelcomeEmail'
+      );
+      throw error;
+    }
+  }
+
   /** SPEC-019 RF-2: correo de activación de QRs (implementa estructuralmente ICanSendQrActivatedEmail — ADR-019.8) */
   async sendQrActivatedEmail(payload: QrActivatedEmailPayload): Promise<void> {
     // SPEC-019 RF-2.1: EMAIL_ACTIVATION_ENABLED (default true) — permite desactivar el envío

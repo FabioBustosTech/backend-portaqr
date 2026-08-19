@@ -168,7 +168,7 @@ describe('CreateUserUseCase', () => {
       expect(traceService.warn).toHaveBeenCalledWith(
         tracking,
         TraceLayer.USE_CASE,
-        'CreateUserUseCase - duplicado (E11000)',
+        'CreateUserUseCase - email duplicado (E11000)',
         { email: 'juan@ejemplo.com' },
       );
       expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
@@ -181,6 +181,43 @@ describe('CreateUserUseCase', () => {
       await expect(useCase.execute(dto, tracking)).rejects.toThrow(
         'El nombre de usuario ya está en uso',
       );
+    });
+
+    it('debe reintentar con otro userName si el GENERADO colisiona (E11000 userName, RF-3)', async () => {
+      passwordService.hashPassword.mockResolvedValue('hashed-password');
+      const dtoSinUserName: CreateUserDto = {
+        email: 'juan@ejemplo.com',
+        password: 'password123',
+      };
+      // 1er intento: colisión por userName generado → 2do intento: éxito
+      creator.create
+        .mockRejectedValueOnce(createDuplicateKeyError({ userName: 1 }))
+        .mockResolvedValueOnce(createdUser);
+      emailService.sendVerificationEmail.mockResolvedValue(undefined);
+
+      const result = await useCase.execute(dtoSinUserName, tracking);
+
+      expect(creator.create).toHaveBeenCalledTimes(2);
+      const primerIntento = creator.create.mock.calls[0][0] as User;
+      const segundoIntento = creator.create.mock.calls[1][0] as User;
+      expect(primerIntento.userName).toMatch(/^user_[0-9a-f]{8}$/);
+      expect(segundoIntento.userName).toMatch(/^user_[0-9a-f]{8}$/);
+      expect(segundoIntento.userName).not.toBe(primerIntento.userName);
+      expect(result.id).toBe('user-1');
+    });
+
+    it('debe lanzar ConflictException si el userName GENERADO colisiona en todos los reintentos', async () => {
+      passwordService.hashPassword.mockResolvedValue('hashed-password');
+      const dtoSinUserName: CreateUserDto = {
+        email: 'juan@ejemplo.com',
+        password: 'password123',
+      };
+      creator.create.mockRejectedValue(createDuplicateKeyError({ userName: 1 }));
+
+      await expect(useCase.execute(dtoSinUserName, tracking)).rejects.toThrow(
+        'No se pudo crear el usuario (conflicto de nombre de usuario)',
+      );
+      expect(creator.create).toHaveBeenCalledTimes(3);
     });
 
     it('debe usar 3600 segundos de expiración por defecto si no hay configuración', async () => {

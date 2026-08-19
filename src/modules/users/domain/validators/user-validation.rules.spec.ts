@@ -45,11 +45,34 @@ describe('UserValidationRules', () => {
       expect(result.errors).toContain('El formato del email es inválido');
     });
 
-    it('debe retornar error si el nombre de usuario es requerido', () => {
+    it('debe retornar error si el nombre de usuario viene vacío explícitamente', () => {
       const result = rules.validateForCreate({ ...validData, userName: '  ' });
 
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain('El nombre de usuario es requerido');
+      expect(result.errors).toContain('El nombre de usuario no puede estar vacío');
+    });
+
+    it('SPEC-020 RF-2: debe ser VÁLIDO sin nombre/apellidos (se capturan en el onboarding)', () => {
+      const result = rules.validateForCreate({
+        email: 'juan@ejemplo.com',
+        password: 'password123',
+      });
+
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('SPEC-020 RF-2: debe ser VÁLIDO sin userName (el backend lo genera — RF-3)', () => {
+      const result = rules.validateForCreate({
+        email: 'juan@ejemplo.com',
+        password: 'password123',
+        firstName: 'Juan',
+        paternalLastName: 'Pérez',
+        maternalLastName: 'Gómez',
+      });
+
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
     });
 
     it('debe retornar error si la contraseña es requerida', () => {
@@ -68,45 +91,39 @@ describe('UserValidationRules', () => {
       );
     });
 
-    it('debe retornar error si el nombre es requerido', () => {
+    it('SPEC-020 RF-2: firstName vacío NO es error de creación', () => {
       const result = rules.validateForCreate({ ...validData, firstName: '' });
 
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('El nombre es requerido');
+      expect(result.valid).toBe(true);
     });
 
-    it('debe retornar error si el apellido paterno es requerido', () => {
+    it('SPEC-020 RF-2: paternalLastName vacío NO es error de creación', () => {
       const result = rules.validateForCreate({
         ...validData,
         paternalLastName: '',
       });
 
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('El apellido paterno es requerido');
+      expect(result.valid).toBe(true);
     });
 
-    it('debe retornar error si el apellido materno es requerido', () => {
+    it('SPEC-020 RF-2: maternalLastName vacío NO es error de creación', () => {
       const result = rules.validateForCreate({
         ...validData,
         maternalLastName: '',
       });
 
-      expect(result.valid).toBe(false);
-      expect(result.errors).toContain('El apellido materno es requerido');
+      expect(result.valid).toBe(true);
     });
 
-    it('debe acumular múltiples errores a la vez', () => {
+    it('debe acumular múltiples errores a la vez (email + password)', () => {
       const result = rules.validateForCreate({
         email: '',
-        userName: '',
         password: '',
-        firstName: '',
-        paternalLastName: '',
-        maternalLastName: '',
       });
 
       expect(result.valid).toBe(false);
-      expect(result.errors.length).toBeGreaterThan(1);
+      expect(result.errors).toContain('El email es requerido');
+      expect(result.errors).toContain('La contraseña es requerida');
     });
   });
 

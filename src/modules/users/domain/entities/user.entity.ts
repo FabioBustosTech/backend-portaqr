@@ -21,6 +21,16 @@ export interface User {
   passwordResetExpires?: Date;
   /** SPEC-009 A5: intentos fallidos de reset-password (tras 5 → se invalida el código) */
   passwordResetAttempts?: number;
+  /** SPEC-020 RF-27: true si el correo de bienvenida ya fue enviado (primer login verificado) */
+  welcomeEmailSent?: boolean;
+  /** SPEC-020 RF-9: id del usuario en Google (unique sparse — solo cuentas Google) */
+  googleId?: string;
+  /** SPEC-020 RF-9: proveedor de autenticación ('local' | 'google') */
+  provider?: 'local' | 'google';
+  /** SPEC-020: false solo para cuentas Google sin contraseña asignada (ADR-020.7) */
+  hasPassword?: boolean;
+  /** SPEC-020 RF-9: URL del avatar (Google) */
+  avatarUrl?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -44,6 +54,11 @@ export class UserEntity implements User {
   passwordResetCode?: string;
   passwordResetExpires?: Date;
   passwordResetAttempts?: number;
+  welcomeEmailSent?: boolean;
+  googleId?: string;
+  provider?: 'local' | 'google';
+  hasPassword?: boolean;
+  avatarUrl?: string;
   createdAt?: Date;
   updatedAt?: Date;
 
@@ -66,6 +81,11 @@ export class UserEntity implements User {
     this.passwordResetCode = data.passwordResetCode;
     this.passwordResetExpires = data.passwordResetExpires;
     this.passwordResetAttempts = data.passwordResetAttempts ?? 0;
+    this.welcomeEmailSent = data.welcomeEmailSent ?? false;
+    this.googleId = data.googleId;
+    this.provider = data.provider;
+    this.hasPassword = data.hasPassword ?? true;
+    this.avatarUrl = data.avatarUrl;
     this.createdAt = data.createdAt;
     this.updatedAt = data.updatedAt;
   }

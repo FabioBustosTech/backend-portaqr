@@ -9,8 +9,9 @@ import { GetUserUseCase } from '../../../users/application/use-cases/get-user.us
 import { UpdateUserUseCase } from '../../../users/application/use-cases/update-user.usecase';
 import { IncrementTokenVersionUseCase } from '../../../users/application/use-cases/increment-token-version.usecase';
 import { TraceService } from '../../../../common/services/trace.service';
-import { REFRESH_TOKEN_STORE_PORT } from '../constants/auth.tokens';
+import { REFRESH_TOKEN_STORE_PORT, AUTH_EMAIL_PORT } from '../constants/auth.tokens';
 import type { IRefreshTokenStore } from '../ports/refresh-token.port';
+import type { ICanSendWelcomeEmail } from '../ports/out/email-sender.port';
 import type { User } from '../../../users/domain/entities/user.entity';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 
@@ -22,6 +23,7 @@ describe('AuthService', () => {
   let updateUserUseCase: jest.Mocked<UpdateUserUseCase>;
   let incrementTokenVersionUseCase: jest.Mocked<IncrementTokenVersionUseCase>;
   let refreshTokenStore: jest.Mocked<IRefreshTokenStore>;
+  let welcomeEmailSender: jest.Mocked<ICanSendWelcomeEmail>;
 
   const tracking: TrackingContext = { trackingId: 't-1', sessionId: 's-1' };
 
@@ -101,6 +103,12 @@ describe('AuthService', () => {
           },
         },
         {
+          provide: AUTH_EMAIL_PORT,
+          useValue: {
+            sendWelcomeEmail: jest.fn(),
+          },
+        },
+        {
           provide: TraceService,
           useValue: {
             log: jest.fn(),
@@ -119,6 +127,7 @@ describe('AuthService', () => {
     getUserUseCase = module.get(GetUserUseCase);
     updateUserUseCase = module.get(UpdateUserUseCase);
     incrementTokenVersionUseCase = module.get(IncrementTokenVersionUseCase);
+    welcomeEmailSender = module.get(AUTH_EMAIL_PORT);
   });
 
   it('debe estar definido', () => {
@@ -161,6 +170,63 @@ describe('AuthService', () => {
         service.login({ username: 'nobody', password: 'password123' }, tracking),
       ).rejects.toThrow(UnauthorizedException);
       expect(passwordService.comparePassword).not.toHaveBeenCalled();
+    });
+
+    it('SPEC-020 RF-27: primer login (welcomeEmailSent false) → envía welcome email y marca el flag', async () => {
+      getUserUseCase.executeByUsername.mockResolvedValue({
+        ...mockUser,
+        welcomeEmailSent: false,
+      });
+      passwordService.comparePassword.mockResolvedValue(true);
+      jwtAuthService.generateTokens.mockResolvedValue(mockTokens);
+      welcomeEmailSender.sendWelcomeEmail.mockResolvedValue(undefined);
+      updateUserUseCase.execute.mockResolvedValue({ ...mockUser, welcomeEmailSent: true } as never);
+
+      const result = await service.login(
+        { username: 'testuser', password: 'password123' },
+        tracking,
+      );
+
+      expect(welcomeEmailSender.sendWelcomeEmail).toHaveBeenCalledWith(mockUser.email);
+      expect(updateUserUseCase.execute).toHaveBeenCalledWith(
+        mockUser.id,
+        { welcomeEmailSent: true },
+        { id: mockUser.id, role: mockUser.role },
+        tracking,
+      );
+      expect(result.accessToken).toBe('access-token');
+    });
+
+    it('SPEC-020 RF-27: login con welcomeEmailSent true → NO reenvía el correo', async () => {
+      getUserUseCase.executeByUsername.mockResolvedValue({
+        ...mockUser,
+        welcomeEmailSent: true,
+      });
+      passwordService.comparePassword.mockResolvedValue(true);
+      jwtAuthService.generateTokens.mockResolvedValue(mockTokens);
+
+      await service.login({ username: 'testuser', password: 'password123' }, tracking);
+
+      expect(welcomeEmailSender.sendWelcomeEmail).not.toHaveBeenCalled();
+      expect(updateUserUseCase.execute).not.toHaveBeenCalled();
+    });
+
+    it('SPEC-020 RF-27: si SMTP falla → el login NO se rompe y el flag queda sin marcar', async () => {
+      getUserUseCase.executeByUsername.mockResolvedValue({
+        ...mockUser,
+        welcomeEmailSent: false,
+      });
+      passwordService.comparePassword.mockResolvedValue(true);
+      jwtAuthService.generateTokens.mockResolvedValue(mockTokens);
+      welcomeEmailSender.sendWelcomeEmail.mockRejectedValue(new Error('SMTP down'));
+
+      const result = await service.login(
+        { username: 'testuser', password: 'password123' },
+        tracking,
+      );
+
+      expect(result.accessToken).toBe('access-token');
+      expect(updateUserUseCase.execute).not.toHaveBeenCalled();
     });
 
     it('debe lanzar UnauthorizedException si el usuario no tiene password', async () => {

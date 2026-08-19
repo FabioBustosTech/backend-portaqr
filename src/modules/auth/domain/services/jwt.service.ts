@@ -29,6 +29,11 @@ export class JwtAuthService implements IJwtService {
       role: user.role,
       isEmailVerified: user.isEmailVerified,
       tokenVersion: user.tokenVersion ?? 0,
+      // SPEC-020 RF-9: el frontend necesita provider/hasPassword para decidir
+      // si muestra "Agregar contraseña" (Google sin contraseña) o "Cambio de
+      // Contraseña" (ADR-020.7). Viajan en el JWT (claims frescos en cada login).
+      provider: user.provider ?? 'local',
+      hasPassword: user.hasPassword ?? true,
     };
 
     const [accessToken, refreshToken] = await Promise.all([

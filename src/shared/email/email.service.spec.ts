@@ -299,4 +299,52 @@ describe('EmailService', () => {
       expect(mockSendMail).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('sendWelcomeEmail (SPEC-020 RF-23)', () => {
+    it('debe renderizar welcomeEmail.ejs y enviar el correo de bienvenida', async () => {
+      mockSendMail.mockResolvedValue({ messageId: 'abc-991' });
+
+      await service.sendWelcomeEmail('user@example.com');
+
+      expect(readFileSyncMock).toHaveBeenCalledWith(
+        expect.stringContaining('welcomeEmail.ejs'),
+        'utf-8',
+      );
+      expect(renderMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ baseUrl: 'http://localhost:3000' }),
+      );
+      expect(mockSendMail).toHaveBeenCalledTimes(1);
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.from).toBe('no-reply@portaqr.cl');
+      expect(mailOptions.to).toBe('user@example.com');
+      expect(mailOptions.subject).toBe('¡Bienvenido(a) a Porta QR!');
+      expect(mailOptions.html).toContain('rendered-');
+    });
+
+    it('no debe enviar cuando WELCOME_EMAIL_ENABLED=false (RF-23)', async () => {
+      configServiceMock.get.mockImplementation((key: string) =>
+        key === 'WELCOME_EMAIL_ENABLED' ? 'false' : baseConfig[key],
+      );
+
+      await service.sendWelcomeEmail('user@example.com');
+
+      expect(mockSendMail).not.toHaveBeenCalled();
+      expect(readFileSyncMock).not.toHaveBeenCalled();
+    });
+
+    it('debe enviar por defecto cuando WELCOME_EMAIL_ENABLED no está definida (default true)', async () => {
+      mockSendMail.mockResolvedValue({ messageId: 'abc-992' });
+
+      await service.sendWelcomeEmail('user@example.com');
+
+      expect(mockSendMail).toHaveBeenCalledTimes(1);
+    });
+
+    it('debe trazar el error y re-lanzarlo si el envío falla', async () => {
+      mockSendMail.mockRejectedValue(new Error('SMTP caído'));
+
+      await expect(service.sendWelcomeEmail('user@example.com')).rejects.toThrow('SMTP caído');
+    });
+  });
 });

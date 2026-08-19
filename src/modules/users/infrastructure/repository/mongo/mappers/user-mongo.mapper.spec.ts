@@ -21,6 +21,9 @@ describe('UserMongoMapper', () => {
     passwordResetExpires: new Date('2024-08-03T12:00:00.000Z'),
     verificationAttempts: 0,
     passwordResetAttempts: 0,
+    welcomeEmailSent: false,
+    provider: 'local',
+    hasPassword: true,
     createdAt: new Date('2024-08-01T10:00:00.000Z'),
     updatedAt: new Date('2024-08-01T11:00:00.000Z'),
   };
@@ -48,6 +51,9 @@ describe('UserMongoMapper', () => {
         passwordResetCode: 'prc-1',
         passwordResetExpires: docCompleto.passwordResetExpires,
         passwordResetAttempts: 0,
+        welcomeEmailSent: false,
+        provider: 'local',
+        hasPassword: true,
         createdAt: docCompleto.createdAt,
         updatedAt: docCompleto.updatedAt,
       });
@@ -96,6 +102,8 @@ describe('UserMongoMapper', () => {
       expect(entity.createdAt).toBeUndefined();
       expect(entity.updatedAt).toBeUndefined();
       expect(entity.tokenVersion).toBe(0);
+      expect(entity.welcomeEmailSent).toBe(false);
+      expect(entity.provider).toBe('local');
     });
   });
 
@@ -118,6 +126,9 @@ describe('UserMongoMapper', () => {
         verificationCodeExpires: docCompleto.verificationCodeExpires,
         passwordResetCode: 'prc-1',
         passwordResetExpires: docCompleto.passwordResetExpires,
+        welcomeEmailSent: false,
+        provider: 'local',
+        hasPassword: true,
         createdAt: docCompleto.createdAt,
         updatedAt: docCompleto.updatedAt,
       };
@@ -140,6 +151,9 @@ describe('UserMongoMapper', () => {
         verificationCodeExpires: docCompleto.verificationCodeExpires,
         passwordResetCode: 'prc-1',
         passwordResetExpires: docCompleto.passwordResetExpires,
+        welcomeEmailSent: false,
+        provider: 'local',
+        hasPassword: true,
       });
     });
 
@@ -168,6 +182,11 @@ describe('UserMongoMapper', () => {
         verificationCodeExpires: undefined,
         passwordResetCode: undefined,
         passwordResetExpires: undefined,
+        welcomeEmailSent: undefined,
+        googleId: undefined,
+        provider: undefined,
+        hasPassword: undefined,
+        avatarUrl: undefined,
       });
     });
   });

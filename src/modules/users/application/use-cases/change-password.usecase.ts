@@ -34,20 +34,36 @@ export class ChangePasswordUseCase {
       throw new UnauthorizedException('Usuario no encontrado.');
     }
 
-    if (!usuario.password) {
-      throw new UnauthorizedException('La contraseña actual es incorrecta.');
-    }
+    // SPEC-020: cuentas Google sin contraseña asignada (hasPassword false,
+    // ADR-020.7) → primer set-password: NO hay contraseña anterior que verificar.
+    // El hash aleatorio inutilizable hace que comparePassword siempre falle, por
+    // eso se salta la verificación SOLO en este caso (y solo la primera vez).
+    const esPrimerSetPassword = usuario.provider === 'google' && !usuario.hasPassword;
 
-    const isMatch = await this.passwordService.comparePassword(currentPassword, usuario.password);
-    if (!isMatch) {
-      throw new UnauthorizedException('La contraseña actual es incorrecta.');
+    if (!esPrimerSetPassword) {
+      if (!usuario.password) {
+        throw new UnauthorizedException('La contraseña actual es incorrecta.');
+      }
+
+      const isMatch = await this.passwordService.comparePassword(currentPassword ?? '', usuario.password);
+      if (!isMatch) {
+        throw new UnauthorizedException('La contraseña actual es incorrecta.');
+      }
     }
 
     const hashedPassword = await this.passwordService.hashPassword(newPassword);
-    await this.updater.update(usuarioId, { password: hashedPassword }, tracking);
+    await this.updater.update(
+      usuarioId,
+      { password: hashedPassword, hasPassword: true },
+      tracking,
+    );
 
-    // SPEC-009 A8: cambiar la contraseña invalida las sesiones previas (tokenVersion++)
-    await this.incrementTokenVersionUseCase.execute(usuarioId, tracking);
+    // SPEC-009 A8: cambiar la contraseña invalida las sesiones previas (tokenVersion++).
+    // En el primer set-password de una cuenta Google NO se incrementa: el usuario
+    // está logueado (vía Google) y no hay sesiones previas con contraseña que invalidar.
+    if (!esPrimerSetPassword) {
+      await this.incrementTokenVersionUseCase.execute(usuarioId, tracking);
+    }
 
     this.traceService.log(tracking, TraceLayer.USE_CASE, 'ChangePasswordUseCase - cambiada', { usuarioId });
   }

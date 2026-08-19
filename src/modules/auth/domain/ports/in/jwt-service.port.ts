@@ -8,6 +8,10 @@ export interface JwtPayload {
   isEmailVerified: boolean;
   /** Versión del token del usuario; se incrementa al hacer logout para invalidar tokens */
   tokenVersion?: number;
+  /** SPEC-020 RF-9: proveedor de autenticación ('local' | 'google') */
+  provider?: 'local' | 'google';
+  /** SPEC-020: false solo para cuentas Google sin contraseña asignada (ADR-020.7) */
+  hasPassword?: boolean;
 }
 
 export interface AuthTokenResponse {

@@ -17,6 +17,7 @@ describe('ChangePasswordUseCase', () => {
   let updater: jest.Mocked<ICanUpdateUser>;
   let passwordService: jest.Mocked<PasswordService>;
   let traceService: jest.Mocked<TraceService>;
+  let incrementTokenVersionUseCase: jest.Mocked<IncrementTokenVersionUseCase>;
 
   const tracking: TrackingContext = { trackingId: 't-1', sessionId: 's-1' };
 
@@ -87,6 +88,7 @@ describe('ChangePasswordUseCase', () => {
     updater = module.get(USER_UPDATE_PORT) as jest.Mocked<ICanUpdateUser>;
     passwordService = module.get(PasswordService);
     traceService = module.get(TraceService);
+    incrementTokenVersionUseCase = module.get(IncrementTokenVersionUseCase);
   });
 
   it('debe estar definido', () => {
@@ -112,7 +114,7 @@ describe('ChangePasswordUseCase', () => {
       );
       expect(updater.update).toHaveBeenCalledWith(
         'user-1',
-        { password: 'hashed-new' },
+        { password: 'hashed-new', hasPassword: true },
         tracking,
       );
       expect(traceService.log).toHaveBeenCalledWith(
@@ -121,6 +123,46 @@ describe('ChangePasswordUseCase', () => {
         'ChangePasswordUseCase - cambiada',
         { usuarioId: 'user-1' },
       );
+    });
+
+    it('debe permitir el primer set-password de una cuenta Google sin verificar contraseña anterior (SPEC-020)', async () => {
+      const googleUser: User = {
+        ...mockUser,
+        provider: 'google',
+        hasPassword: false,
+        password: 'hash-aleatorio-inutilizable',
+      };
+      reader.getById.mockResolvedValue(googleUser);
+      passwordService.hashPassword.mockResolvedValue('hashed-new');
+      updater.update.mockResolvedValue({ ...googleUser, password: 'hashed-new' });
+
+      await useCase.execute('user-1', { newPassword: 'newpassword123' }, tracking);
+
+      // NO se verifica la contraseña anterior
+      expect(passwordService.comparePassword).not.toHaveBeenCalled();
+      expect(updater.update).toHaveBeenCalledWith(
+        'user-1',
+        { password: 'hashed-new', hasPassword: true },
+        tracking,
+      );
+      // NO se incrementa tokenVersion (el usuario está logueado vía Google)
+      expect(incrementTokenVersionUseCase.execute).not.toHaveBeenCalled();
+    });
+
+    it('debe exigir contraseña anterior si la cuenta Google YA tiene contraseña asignada', async () => {
+      const googleUserConPassword: User = {
+        ...mockUser,
+        provider: 'google',
+        hasPassword: true,
+        password: 'hashed-real',
+      };
+      reader.getById.mockResolvedValue(googleUserConPassword);
+      passwordService.comparePassword.mockResolvedValue(false);
+
+      await expect(
+        useCase.execute('user-1', { currentPassword: 'wrong', newPassword: 'newpassword123' }, tracking),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(updater.update).not.toHaveBeenCalled();
     });
 
     it('debe lanzar UnauthorizedException si el usuario no existe', async () => {
