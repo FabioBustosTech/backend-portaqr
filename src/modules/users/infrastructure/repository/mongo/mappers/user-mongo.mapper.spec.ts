@@ -24,6 +24,8 @@ describe('UserMongoMapper', () => {
     welcomeEmailSent: false,
     provider: 'local',
     hasPassword: true,
+    newsletterOptIn: true,
+    newsletterSyncedAt: new Date('2024-08-04T12:00:00.000Z'),
     createdAt: new Date('2024-08-01T10:00:00.000Z'),
     updatedAt: new Date('2024-08-01T11:00:00.000Z'),
   };
@@ -54,6 +56,8 @@ describe('UserMongoMapper', () => {
         welcomeEmailSent: false,
         provider: 'local',
         hasPassword: true,
+        newsletterOptIn: true,
+        newsletterSyncedAt: docCompleto.newsletterSyncedAt,
         createdAt: docCompleto.createdAt,
         updatedAt: docCompleto.updatedAt,
       });
@@ -129,6 +133,8 @@ describe('UserMongoMapper', () => {
         welcomeEmailSent: false,
         provider: 'local',
         hasPassword: true,
+        newsletterOptIn: true,
+        newsletterSyncedAt: docCompleto.newsletterSyncedAt,
         createdAt: docCompleto.createdAt,
         updatedAt: docCompleto.updatedAt,
       };
@@ -154,6 +160,8 @@ describe('UserMongoMapper', () => {
         welcomeEmailSent: false,
         provider: 'local',
         hasPassword: true,
+        newsletterOptIn: true,
+        newsletterSyncedAt: docCompleto.newsletterSyncedAt,
       });
     });
 
@@ -187,6 +195,8 @@ describe('UserMongoMapper', () => {
         provider: undefined,
         hasPassword: undefined,
         avatarUrl: undefined,
+        newsletterOptIn: undefined,
+        newsletterSyncedAt: undefined,
       });
     });
   });

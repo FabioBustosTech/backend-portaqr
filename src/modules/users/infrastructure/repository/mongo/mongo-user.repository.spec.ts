@@ -92,6 +92,8 @@ describe('MongoUserRepository', () => {
     provider: 'local',
     hasPassword: true,
     avatarUrl: undefined,
+    newsletterOptIn: false,
+    newsletterSyncedAt: undefined,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
