@@ -2,12 +2,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CreateUserUseCase } from './create-user.usecase';
-import { USER_CREATE_PORT } from '../../domain/constants/user.tokens';
-import type { ICanCreateUser } from '../../domain/ports/queries/create-user.port';
+import { USER_CREATE_PORT, USER_UPDATE_PORT } from '../../domain/constants/user.tokens';
+import type { ICanCreateUser, ICanUpdateUser } from '../../domain/ports/queries/create-user.port';
 import type { User } from '../../domain/entities/user.entity';
 import { UserValidationRules } from '../../domain/validators/user-validation.rules';
 import { PasswordService } from '../../domain/services/password.service';
 import { EmailService } from '../../../../shared/email/email.service';
+import { NewsletterSyncService } from '../services/newsletter-sync.service';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
 import type { CreateUserDto } from '../dto/create-user.dto';
@@ -23,6 +24,8 @@ describe('CreateUserUseCase', () => {
   let traceService: jest.Mocked<TraceService>;
   let emailService: jest.Mocked<EmailService>;
   let configService: { get: jest.Mock };
+  let newsletterSync: jest.Mocked<NewsletterSyncService>;
+  let updater: jest.Mocked<ICanUpdateUser>;
 
   const tracking: TrackingContext = { trackingId: 't-1', sessionId: 's-1' };
 
@@ -93,6 +96,19 @@ describe('CreateUserUseCase', () => {
             get: jest.fn(),
           },
         },
+        {
+          provide: NewsletterSyncService,
+          useValue: {
+            syncSubscribe: jest.fn(),
+            syncUnsubscribe: jest.fn(),
+          },
+        },
+        {
+          provide: USER_UPDATE_PORT,
+          useValue: {
+            update: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -102,6 +118,8 @@ describe('CreateUserUseCase', () => {
     traceService = module.get(TraceService);
     emailService = module.get(EmailService);
     configService = module.get(ConfigService) as { get: jest.Mock };
+    newsletterSync = module.get(NewsletterSyncService);
+    updater = module.get(USER_UPDATE_PORT) as jest.Mocked<ICanUpdateUser>;
   });
 
   it('debe estar definido', () => {
@@ -255,6 +273,59 @@ describe('CreateUserUseCase', () => {
 
       expect(result.id).toBe('user-1');
       expect(result).not.toHaveProperty('password');
+    });
+
+    it('SPEC-030 CA-03: opt-in true sincroniza al CMS (source signup) y audita syncedAt', async () => {
+      passwordService.hashPassword.mockResolvedValue('hashed-password');
+      creator.create.mockResolvedValue(createdUser);
+      emailService.sendVerificationEmail.mockResolvedValue(undefined);
+      configService.get.mockReturnValue('3600');
+      newsletterSync.syncSubscribe.mockResolvedValue(true);
+      updater.update.mockResolvedValue(createdUser);
+
+      const result = await useCase.execute({ ...dto, newsletterOptIn: true }, tracking);
+
+      const creado = creator.create.mock.calls[0][0] as User;
+      expect(creado.newsletterOptIn).toBe(true);
+      expect(newsletterSync.syncSubscribe).toHaveBeenCalledWith({
+        email: 'juan@ejemplo.com',
+        name: 'Juan Pérez',
+        userId: 'user-1',
+        source: 'signup',
+      });
+      expect(updater.update).toHaveBeenCalledWith(
+        'user-1',
+        { newsletterSyncedAt: expect.any(Date) },
+        tracking,
+      );
+      expect(result.id).toBe('user-1');
+    });
+
+    it('SPEC-030 CA-04: sin opt-in no llama al CMS (cero llamadas)', async () => {
+      passwordService.hashPassword.mockResolvedValue('hashed-password');
+      creator.create.mockResolvedValue(createdUser);
+      emailService.sendVerificationEmail.mockResolvedValue(undefined);
+      configService.get.mockReturnValue('3600');
+
+      await useCase.execute(dto, tracking);
+
+      const creado = creator.create.mock.calls[0][0] as User;
+      expect(creado.newsletterOptIn).toBe(false);
+      expect(newsletterSync.syncSubscribe).not.toHaveBeenCalled();
+      expect(updater.update).not.toHaveBeenCalled();
+    });
+
+    it('SPEC-030 CA-09 (RN-2): CMS caido → 201 igual, sin syncedAt', async () => {
+      passwordService.hashPassword.mockResolvedValue('hashed-password');
+      creator.create.mockResolvedValue(createdUser);
+      emailService.sendVerificationEmail.mockResolvedValue(undefined);
+      configService.get.mockReturnValue('3600');
+      newsletterSync.syncSubscribe.mockResolvedValue(false);
+
+      const result = await useCase.execute({ ...dto, newsletterOptIn: true }, tracking);
+
+      expect(result.id).toBe('user-1');
+      expect(updater.update).not.toHaveBeenCalled();
     });
   });
 });

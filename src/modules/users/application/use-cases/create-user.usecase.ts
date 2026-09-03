@@ -8,10 +8,12 @@ import type { TrackingContext } from '../../../../common/decorators/tracking.dec
 import { UserValidationRules } from '../../domain/validators/user-validation.rules';
 import { PasswordService } from '../../domain/services/password.service';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
-import { USER_CREATE_PORT } from '../../domain/constants/user.tokens';
+import { USER_CREATE_PORT, USER_UPDATE_PORT } from '../../domain/constants/user.tokens';
 import { generateVerificationCode as generateVerificationCodeUtil } from '../../../../common/utils/code-generator.util';
 import { EmailService } from '../../../../shared/email/email.service';
 import { ConfigService } from '@nestjs/config';
+import { NewsletterSyncService } from '../services/newsletter-sync.service';
+import type { ICanUpdateUser } from '../../domain/ports/queries/create-user.port';
 
 /** Error de índice único de MongoDB (E11000) */
 interface MongoDuplicateKeyError {
@@ -31,6 +33,9 @@ export class CreateUserUseCase {
     private readonly traceService: TraceService,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
+    private readonly newsletterSync: NewsletterSyncService,
+    @Inject(USER_UPDATE_PORT)
+    private readonly updater: ICanUpdateUser,
   ) {}
 
   async execute(
@@ -68,7 +73,6 @@ const datosNormalizados = this.validationRules.normalize(dto);
     // profundidad — 8 hex = 4.3×10⁹ combinaciones, colisión prácticamente imposible).
     const MAX_USERNAME_RETRIES = 3;
     let resultado: User;
-    let ultimoError: unknown;
 
     for (let intento = 0; intento < MAX_USERNAME_RETRIES; intento++) {
       const usuario = new UserEntity({
@@ -90,6 +94,8 @@ const datosNormalizados = this.validationRules.normalize(dto);
         // inutilizable — ADR-020.7) → hasPassword: false hasta el primer set-password
         hasPassword: dto.provider === 'google' ? false : true,
         avatarUrl: dto.avatarUrl,
+        // SPEC-030 RF-8: copia local del intent (la fuente de verdad es qr-cms)
+        newsletterOptIn: dto.newsletterOptIn ?? false,
       });
 
       try {
@@ -115,7 +121,6 @@ const datosNormalizados = this.validationRules.normalize(dto);
           }
           // userName GENERADO → colisión astronómicamente improbable; reintentar
           this.traceService.warn(tracking, TraceLayer.USE_CASE, 'CreateUserUseCase - userName generado colisionó, reintentando', { intento });
-          ultimoError = error;
           continue;
         }
         throw error;
@@ -145,6 +150,33 @@ const datosNormalizados = this.validationRules.normalize(dto);
 
     const { password: _password, ...usuarioSinPassword } = resultado;
     void _password;
+
+    // SPEC-030 RF-8: sync best-effort al CMS si aceptó la newsletter.
+    // Nunca bloquea el 201 (RN-2); si falla, newsletterSyncedAt queda null.
+    if (dto.newsletterOptIn === true) {
+      try {
+        const name = [resultado.firstName, resultado.paternalLastName]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+        const synced = await this.newsletterSync.syncSubscribe({
+          email: resultado.email,
+          name: name || undefined,
+          userId: resultado.id,
+          source: 'signup',
+        });
+        if (synced) {
+          try {
+            await this.updater.update(resultado.id, { newsletterSyncedAt: new Date() }, tracking);
+          } catch {
+            this.logger.warn(`newsletter_sync_failed { userId: ${resultado.id}, reason: audit-update }`);
+          }
+        }
+      } catch {
+        this.logger.warn(`newsletter_sync_failed { userId: ${resultado.id}, reason: inesperado }`);
+      }
+    }
+
     return usuarioSinPassword;
   }
 

@@ -31,6 +31,10 @@ export interface User {
   hasPassword?: boolean;
   /** SPEC-020 RF-9: URL del avatar (Google) */
   avatarUrl?: string;
+  /** SPEC-030 RF-8: intent de newsletter (copia local; fuente de verdad: qr-cms) */
+  newsletterOptIn?: boolean;
+  /** SPEC-030 RF-8: última sincronización exitosa al CMS (null = pendiente/reintentar) */
+  newsletterSyncedAt?: Date;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -59,6 +63,8 @@ export class UserEntity implements User {
   provider?: 'local' | 'google';
   hasPassword?: boolean;
   avatarUrl?: string;
+  newsletterOptIn?: boolean;
+  newsletterSyncedAt?: Date;
   createdAt?: Date;
   updatedAt?: Date;
 
@@ -86,6 +92,8 @@ export class UserEntity implements User {
     this.provider = data.provider;
     this.hasPassword = data.hasPassword ?? true;
     this.avatarUrl = data.avatarUrl;
+    this.newsletterOptIn = data.newsletterOptIn ?? false;
+    this.newsletterSyncedAt = data.newsletterSyncedAt;
     this.createdAt = data.createdAt;
     this.updatedAt = data.updatedAt;
   }

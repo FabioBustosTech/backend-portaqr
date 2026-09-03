@@ -23,6 +23,7 @@ import { ResendVerificationCodeUseCase } from './application/use-cases/resend-ve
 import { ForgotPasswordUseCase } from './application/use-cases/forgot-password.usecase';
 import { ResetPasswordUseCase } from './application/use-cases/reset-password.usecase';
 import { ChangePasswordUseCase } from './application/use-cases/change-password.usecase';
+import { NewsletterSyncService } from './application/services/newsletter-sync.service';
 import { EmailModule } from '../../shared/email/email.module';
 
 import {
@@ -50,6 +51,8 @@ import {
     // Domain Services
     PasswordService,
     UserValidationRules,
+    // SPEC-030 RF-8: sync best-effort de newsletter al CMS
+    NewsletterSyncService,
 
     // Use Cases
     CreateUserUseCase,
@@ -107,6 +110,7 @@ import {
     ResetPasswordUseCase,
     ChangePasswordUseCase,
     PasswordService,
+    NewsletterSyncService,
   ],
 })
 export class UsersModule {}
