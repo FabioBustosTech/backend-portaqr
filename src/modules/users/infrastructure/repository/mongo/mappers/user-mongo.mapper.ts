@@ -27,6 +27,9 @@ export class UserMongoMapper {
       provider: (doc.provider ?? 'local') as 'local' | 'google',
       hasPassword: doc.hasPassword ?? true,
       avatarUrl: doc.avatarUrl,
+      // SPEC-030 RF-8: copia local del intent de newsletter
+      newsletterOptIn: doc.newsletterOptIn ?? false,
+      newsletterSyncedAt: doc.newsletterSyncedAt,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     };
@@ -56,6 +59,8 @@ export class UserMongoMapper {
       provider: user.provider,
       hasPassword: user.hasPassword,
       avatarUrl: user.avatarUrl,
+      newsletterOptIn: user.newsletterOptIn,
+      newsletterSyncedAt: user.newsletterSyncedAt,
     };
   }
 }

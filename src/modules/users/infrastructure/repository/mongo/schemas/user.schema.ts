@@ -136,6 +136,14 @@ export class UserSchema {
 
   @Prop()
   avatarUrl?: string;
+
+  // SPEC-030 RF-8: copia local del intent de newsletter (auditoría/reintento).
+  // La fuente de verdad vive en qr-cms (colección subscribers).
+  @Prop({ default: false })
+  newsletterOptIn?: boolean;
+
+  @Prop()
+  newsletterSyncedAt?: Date;
 }
 
 export const UserSchemaDefinition = SchemaFactory.createForClass(UserSchema);

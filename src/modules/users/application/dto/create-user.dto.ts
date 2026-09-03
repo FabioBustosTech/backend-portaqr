@@ -59,6 +59,13 @@ export class CreateUserDto {
   @IsOptional()
   lastLogin?: Date;
 
+  // SPEC-030 RF-8: intent de suscripción a la newsletter (checkbox signup).
+  // Efímero: el backend lo sincroniza al CMS (fuente de verdad) y persiste
+  // copia local solo para auditoría (newsletterOptIn en schema).
+  @IsBoolean({ message: 'La suscripción a la newsletter debe ser verdadera o falsa.' })
+  @IsOptional()
+  newsletterOptIn?: boolean;
+
   @IsOptional()
   createdAt?: Date;
 
