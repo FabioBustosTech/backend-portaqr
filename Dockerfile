@@ -1,5 +1,5 @@
 # Etapa de construcción
-FROM node:20-alpine AS builder
+FROM node:24.20-alpine AS builder
 
 # Instalar dependencias necesarias para bcrypt
 RUN apk add --no-cache python3 make g++
@@ -19,7 +19,7 @@ COPY . .
 RUN npm run build
 
 # Etapa de desarrollo
-FROM node:20-alpine AS development
+FROM node:24.20-alpine AS development
 
 # Instalar dependencias necesarias
 RUN apk add --no-cache python3 make g++
@@ -40,7 +40,7 @@ COPY . .
 CMD ["npm", "run", "dev"]
 
 # Etapa de producción
-FROM node:20-alpine AS production
+FROM node:24.20-alpine AS production
 
 # Instalar dependencias necesarias para producción
 RUN apk add --no-cache python3 make g++
@@ -53,13 +53,13 @@ WORKDIR /app
 COPY package*.json ./
 
 # Instalar solo dependencias de producción
-RUN npm install --only=production
+RUN npm install --omit=dev
 
 # Copiar archivos compilados desde la etapa de construcción
 COPY --from=builder /app/dist ./dist
 
 # Exponer el puerto de la aplicación
-EXPOSE 3001
+EXPOSE 3004
 
 # Comando para iniciar la aplicación
 CMD ["node", "dist/main.js"]
