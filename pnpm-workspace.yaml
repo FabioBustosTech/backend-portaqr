@@ -1,0 +1,15 @@
+# SPEC-033 (pnpm 11): settings y overrides viven AQUÍ.
+# - pnpm 11 IGNORA el campo "pnpm" de package.json y el formato v10
+#   (onlyBuiltDependencies). El formato v11 es el mapa `allowBuilds`
+#   (gestionado con `pnpm approve-builds`) y `overrides` a nivel de workspace.
+# - overrides js-yaml: migrado desde el campo npm "overrides" de package.json
+#   (forzaba ^5.2.3 por seguridad; pnpm ignora el campo npm).
+# - bcrypt: necesita postinstall (binding nativo) -> true.
+# - @scarf/scarf (telemetría de un transitivo): negado explícito con `false`.
+#   OJO: `ignoredBuiltDependencies` NO sirve en v11 (el install sigue fallando
+#   con ERR_PNPM_IGNORED_BUILDS); la negación va dentro de `allowBuilds`.
+overrides:
+  js-yaml: ^5.2.3
+allowBuilds:
+  bcrypt: true
+  '@scarf/scarf': false

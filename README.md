@@ -18,15 +18,17 @@ Elimina la duplicación de código (~40%), el borde HTTP interno con `any` (`@ne
 
 ## Requisitos previos
 
-- Node.js **20+**
+- Node.js **24.20.0** (ver `.nvmrc`)
 - MongoDB (local o vía Docker Compose)
-- npm 10+
+- pnpm **11.9.0** vía corepack (SPEC-033): `corepack enable && corepack prepare pnpm@11.9.0 --activate`
 
 ## Instalación
 
 ```bash
-npm install
+pnpm install --frozen-lockfile
 ```
+
+> Notas Windows (SPEC-033): activar el **Modo desarrollador** (symlinks de pnpm) y excluir `node_modules/.pnpm` del sync de OneDrive, o mover el store con `pnpm config set store-dir`. No borrar `node_modules` con servidores corriendo (binarios `.node` bloqueados); `pnpm install` convierte in-place sin problema.
 
 ## Configuración
 
@@ -66,7 +68,7 @@ El backend firma los JWT con **RS256** (par de llaves asimétricas RSA 2048):
 **Opción A — Script del proyecto (recomendado):**
 
 ```bash
-npm run generate:jwt-env
+pnpm generate:jwt-env
 ```
 
 Genera el par RSA 2048, lo guarda en `keys/` (`jwt-private.pem` + `jwt-public.pem`) e imprime ambas variables en **una sola línea** (con `\n` literales) listas para pegar en el `.env`:
@@ -79,7 +81,7 @@ JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\nMIIBIj...\n-----END PUBLIC KEY-----"
 Para solo formatear las llaves existentes sin rotar:
 
 ```bash
-npm run generate:jwt-env -- --use-existing
+pnpm generate:jwt-env -- --use-existing
 ```
 
 **Opción B — Manual con OpenSSL:**
@@ -105,7 +107,7 @@ Los `\n` literales del formato a) se normalizan automáticamente a saltos de lí
 ### Consideraciones de seguridad
 
 1. **La llave privada nunca se commitea**: `keys/` y `*.pem` están en `.gitignore`; el `.env` también.
-2. **Rotación de llaves**: al ejecutar `npm run generate:jwt-env` (sin `--use-existing`) se genera un par nuevo → **todos los tokens emitidos quedan inválidos** (los usuarios deben volver a iniciar sesión). Tras rotar:
+2. **Rotación de llaves**: al ejecutar `pnpm generate:jwt-env` (sin `--use-existing`) se genera un par nuevo → **todos los tokens emitidos quedan inválidos** (los usuarios deben volver a iniciar sesión). Tras rotar:
    - Actualizar `JWT_PRIVATE_KEY` y `JWT_PUBLIC_KEY` en el backend (`.env` / Railway).
    - Actualizar `JWT_PUBLIC_KEY` en el **frontend** `qr-app/.env` con la nueva llave pública.
    - Reiniciar ambos servicios.
@@ -117,17 +119,17 @@ Los `\n` literales del formato a) se normalizan automáticamente a saltos de lí
 
 | Comando | Descripción |
 | --- | --- |
-| `npm run dev` | Desarrollo con hot-reload (`nest start --watch`) |
-| `npm run build` | Compilación TypeScript + copia de assets (`templateEmail`) |
-| `npm run start` | Inicia la app compilada |
-| `npm run prod` | Ejecuta `dist/main` en producción |
-| `npm run lint` | ESLint + Prettier (auto-fix) |
-| `npm run format` | Formatea el código con Prettier |
-| `npm run test` | Ejecuta los tests unitarios (Jest) |
-| `npm run test:cov` | Tests con reporte de cobertura |
-| `npm run test:e2e` | Tests end-to-end |
-| `npm run create:admin` | CLI para crear un usuario administrador |
-| `npm run generate:jwt-env` | Genera el par de llaves RSA y lo imprime en una línea para `.env` (ver [Creación de llaves JWT](#creación-de-llaves-jwt-rs256)) |
+| `pnpm dev` | Desarrollo con hot-reload (`nest start --watch`) |
+| `pnpm build` | Compilación TypeScript + copia de assets (`templateEmail`) |
+| `pnpm start` | Inicia la app compilada |
+| `pnpm prod` | Ejecuta `dist/main` en producción |
+| `pnpm lint` | ESLint + Prettier (auto-fix) |
+| `pnpm format` | Formatea el código con Prettier |
+| `pnpm test` | Ejecuta los tests unitarios (Jest) |
+| `pnpm test:cov` | Tests con reporte de cobertura |
+| `pnpm test:e2e` | Tests end-to-end |
+| `pnpm create:admin` | CLI para crear un usuario administrador |
+| `pnpm generate:jwt-env` | Genera el par de llaves RSA y lo imprime en una línea para `.env` (ver [Creación de llaves JWT](#creación-de-llaves-jwt-rs256)) |
 
 ## Estructura del proyecto
 
@@ -302,7 +304,7 @@ Todas las rutas (excepto las marcadas como públicas) requieren `Authorization: 
 El `Dockerfile` es multi-stage:
 
 - **builder**: compila la aplicación
-- **development**: hot-reload (`npm run dev`)
+- **development**: hot-reload (`pnpm dev`)
 - **production**: solo dependencias de producción + `dist/`
 
 ```bash
@@ -318,9 +320,9 @@ docker run -p 3001:3001 --env-file .env backend-portaqr
 ## Testing
 
 ```bash
-npm run test          # Tests unitarios
-npm run test:cov      # Cobertura
-npm run test:e2e      # Tests end-to-end
+pnpm test          # Tests unitarios
+pnpm test:cov      # Cobertura
+pnpm test:e2e      # Tests end-to-end
 ```
 
 Los tests unitarios (`.spec.ts`) viven junto al código que prueban.
