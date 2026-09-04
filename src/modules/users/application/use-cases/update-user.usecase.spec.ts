@@ -187,6 +187,16 @@ describe('UpdateUserUseCase', () => {
 
       expect(result).toEqual(updatedUser);
     });
+
+    it('SPEC-030 timing verificado: email sin verificar no toca el CMS (difiere a verify)', async () => {
+      const updatedUser: User = { ...mockUser, isEmailVerified: false, newsletterOptIn: true };
+      updater.update.mockResolvedValue(updatedUser);
+
+      await useCase.execute('user-1', { newsletterOptIn: true }, ownerActor, tracking);
+
+      expect(newsletterSync.syncSubscribe).not.toHaveBeenCalled();
+      expect(newsletterSync.syncUnsubscribe).not.toHaveBeenCalled();
+    });
   });
 
   describe('updateLastLogin', () => {

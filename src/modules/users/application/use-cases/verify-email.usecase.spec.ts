@@ -7,12 +7,14 @@ import type { ICanUpdateUser } from '../../domain/ports/queries/create-user.port
 import type { User } from '../../domain/entities/user.entity';
 import type { TrackingContext } from '../../../../common/decorators/tracking.decorator';
 import { TraceService, TraceLayer } from '../../../../common/services/trace.service';
+import { NewsletterSyncService } from '../services/newsletter-sync.service';
 
 describe('VerifyEmailUseCase', () => {
   let useCase: VerifyEmailUseCase;
   let reader: jest.Mocked<ICanGetUser>;
   let updater: jest.Mocked<ICanUpdateUser>;
   let traceService: jest.Mocked<TraceService>;
+  let newsletterSync: jest.Mocked<NewsletterSyncService>;
 
   const tracking: TrackingContext = { trackingId: 't-1', sessionId: 's-1' };
 
@@ -59,6 +61,13 @@ describe('VerifyEmailUseCase', () => {
             warn: jest.fn(),
           },
         },
+        {
+          provide: NewsletterSyncService,
+          useValue: {
+            syncSubscribe: jest.fn(),
+            syncUnsubscribe: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -66,6 +75,7 @@ describe('VerifyEmailUseCase', () => {
     reader = module.get(USER_GET_PORT) as jest.Mocked<ICanGetUser>;
     updater = module.get(USER_UPDATE_PORT) as jest.Mocked<ICanUpdateUser>;
     traceService = module.get(TraceService);
+    newsletterSync = module.get(NewsletterSyncService);
   });
 
   it('debe estar definido', () => {
@@ -174,6 +184,62 @@ describe('VerifyEmailUseCase', () => {
         useCase.execute('user-1', 'ABC123', tracking),
       ).rejects.toThrow(BadRequestException);
       expect(updater.update).not.toHaveBeenCalled();
+    });
+
+    it('SPEC-030 timing verificado: con opt-in pendiente sincroniza al verificar (source signup)', async () => {
+      reader.getById.mockResolvedValue({ ...baseUser, newsletterOptIn: true });
+      updater.update.mockResolvedValue({ ...baseUser, isEmailVerified: true });
+      newsletterSync.syncSubscribe.mockResolvedValue(true);
+
+      await useCase.execute('user-1', 'ABC123', tracking);
+
+      expect(newsletterSync.syncSubscribe).toHaveBeenCalledWith({
+        email: 'test@test.com',
+        name: 'Test Apellido',
+        userId: 'user-1',
+        source: 'signup',
+      });
+      expect(updater.update).toHaveBeenCalledWith(
+        'user-1',
+        { newsletterSyncedAt: expect.any(Date) },
+        tracking,
+      );
+    });
+
+    it('SPEC-030 timing verificado: sin opt-in o ya sincronizado no toca el CMS', async () => {
+      reader.getById.mockResolvedValue(baseUser);
+      updater.update.mockResolvedValue({ ...baseUser, isEmailVerified: true });
+
+      await useCase.execute('user-1', 'ABC123', tracking);
+      expect(newsletterSync.syncSubscribe).not.toHaveBeenCalled();
+
+      reader.getById.mockResolvedValue({
+        ...baseUser,
+        newsletterOptIn: true,
+        newsletterSyncedAt: new Date(),
+      });
+
+      await useCase.execute('user-1', 'ABC123', tracking);
+      expect(newsletterSync.syncSubscribe).not.toHaveBeenCalled();
+    });
+
+    it('SPEC-030 timing verificado (RN-2): CMS caído no rompe la verificación', async () => {
+      reader.getById.mockResolvedValue({ ...baseUser, newsletterOptIn: true });
+      updater.update.mockResolvedValue({ ...baseUser, isEmailVerified: true });
+      newsletterSync.syncSubscribe.mockResolvedValue(false);
+
+      await useCase.execute('user-1', 'ABC123', tracking);
+
+      expect(updater.update).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({ isEmailVerified: true }),
+        tracking,
+      );
+      expect(updater.update).not.toHaveBeenCalledWith(
+        'user-1',
+        { newsletterSyncedAt: expect.any(Date) },
+        tracking,
+      );
     });
   });
 });
