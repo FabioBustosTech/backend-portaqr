@@ -5,6 +5,9 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
+  "engines": {
+    "node": "24.20.0"
+  },
   "scripts": {
     "build": "nest build && npm run copy-assets",
     "copy-assets": "node scripts/copy-assets.js",
