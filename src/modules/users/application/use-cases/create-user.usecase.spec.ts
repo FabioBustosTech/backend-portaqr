@@ -275,18 +275,33 @@ describe('CreateUserUseCase', () => {
       expect(result).not.toHaveProperty('password');
     });
 
-    it('SPEC-030 CA-03: opt-in true sincroniza al CMS (source signup) y audita syncedAt', async () => {
+    it('SPEC-030 timing verificado: signup email con opt-in NO sincroniza (difiere a verify)', async () => {
       passwordService.hashPassword.mockResolvedValue('hashed-password');
       creator.create.mockResolvedValue(createdUser);
       emailService.sendVerificationEmail.mockResolvedValue(undefined);
       configService.get.mockReturnValue('3600');
-      newsletterSync.syncSubscribe.mockResolvedValue(true);
-      updater.update.mockResolvedValue(createdUser);
 
       const result = await useCase.execute({ ...dto, newsletterOptIn: true }, tracking);
 
       const creado = creator.create.mock.calls[0][0] as User;
       expect(creado.newsletterOptIn).toBe(true);
+      expect(newsletterSync.syncSubscribe).not.toHaveBeenCalled();
+      expect(updater.update).not.toHaveBeenCalled();
+      expect(result.id).toBe('user-1');
+    });
+
+    it('SPEC-030 timing verificado: cuenta Google (email verificado) sí sincroniza en creación', async () => {
+      passwordService.hashPassword.mockResolvedValue('hashed-password');
+      creator.create.mockResolvedValue(createdUser);
+      configService.get.mockReturnValue('3600');
+      newsletterSync.syncSubscribe.mockResolvedValue(true);
+      updater.update.mockResolvedValue(createdUser);
+
+      const result = await useCase.execute(
+        { ...dto, newsletterOptIn: true, isEmailVerified: true },
+        tracking,
+      );
+
       expect(newsletterSync.syncSubscribe).toHaveBeenCalledWith({
         email: 'juan@ejemplo.com',
         name: 'Juan Pérez',
@@ -322,7 +337,10 @@ describe('CreateUserUseCase', () => {
       configService.get.mockReturnValue('3600');
       newsletterSync.syncSubscribe.mockResolvedValue(false);
 
-      const result = await useCase.execute({ ...dto, newsletterOptIn: true }, tracking);
+      const result = await useCase.execute(
+        { ...dto, newsletterOptIn: true, isEmailVerified: true },
+        tracking,
+      );
 
       expect(result.id).toBe('user-1');
       expect(updater.update).not.toHaveBeenCalled();

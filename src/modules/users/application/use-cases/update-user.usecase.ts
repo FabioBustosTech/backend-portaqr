@@ -70,7 +70,12 @@ export class UpdateUserUseCase {
     optIn: boolean,
     source: NewsletterSyncSource,
   ): Promise<void> {
-    try {
+    // SPEC-030 RF-8 (timing verificado): sin email verificado no se toca el
+    // CMS (el alta llegará en VerifyEmailUseCase; la baja no tiene qué quitar).
+    if (!user.isEmailVerified) {
+      this.logger.log(`newsletter_sync_diferido { userId: ${user.id}, reason: email-sin-verificar }`);
+      return;
+    }    try {
       if (optIn) {
         const name = [user.firstName, user.paternalLastName].filter(Boolean).join(' ').trim();
         const synced = await this.newsletterSync.syncSubscribe({

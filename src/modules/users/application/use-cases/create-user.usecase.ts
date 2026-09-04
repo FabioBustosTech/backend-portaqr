@@ -151,9 +151,11 @@ const datosNormalizados = this.validationRules.normalize(dto);
     const { password: _password, ...usuarioSinPassword } = resultado;
     void _password;
 
-    // SPEC-030 RF-8: sync best-effort al CMS si aceptó la newsletter.
-    // Nunca bloquea el 201 (RN-2); si falla, newsletterSyncedAt queda null.
-    if (dto.newsletterOptIn === true) {
+    // SPEC-030 RF-8 (timing verificado): el sync al CMS ocurre SOLO con email
+    // verificado. Cuentas Google (emailVerificado=true) sincronizan aquí;
+    // signup email difiere el sync a VerifyEmailUseCase (el CMS no debe ver
+    // `subscribed` antes de la verificación). Nunca bloquea el 201 (RN-2).
+    if (dto.newsletterOptIn === true && emailVerificado) {
       try {
         const name = [resultado.firstName, resultado.paternalLastName]
           .filter(Boolean)
@@ -175,6 +177,8 @@ const datosNormalizados = this.validationRules.normalize(dto);
       } catch {
         this.logger.warn(`newsletter_sync_failed { userId: ${resultado.id}, reason: inesperado }`);
       }
+    } else if (dto.newsletterOptIn === true) {
+      this.logger.log(`newsletter_sync_diferido { userId: ${resultado.id}, reason: email-sin-verificar }`);
     }
 
     return usuarioSinPassword;
