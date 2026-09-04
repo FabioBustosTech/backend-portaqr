@@ -6,17 +6,18 @@ RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
-# Copiar archivos de dependencias
-COPY package*.json ./
+# Copiar archivos de dependencias (SPEC-033: pnpm — incluye pnpm-workspace.yaml
+# con allowBuilds/overrides; sin él pnpm falla con ERR_PNPM_IGNORED_BUILDS)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 # Instalar todas las dependencias para desarrollo
-RUN npm install
+RUN corepack enable && corepack prepare pnpm@11.9.0 --activate && pnpm install --frozen-lockfile
 
 # Copiar el resto del código
 COPY . .
 
 # Compilar la aplicación
-RUN npm run build
+RUN pnpm build
 
 # Etapa de desarrollo
 FROM node:24.20-alpine AS development
@@ -28,16 +29,16 @@ RUN apk add --no-cache ghostscript
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 # Instalar todas las dependencias incluyendo las de desarrollo
-RUN npm install
+RUN corepack enable && corepack prepare pnpm@11.9.0 --activate && pnpm install --frozen-lockfile
 
 # Copiar el código fuente
 COPY . .
 
 # Comando para desarrollo con hot-reload
-CMD ["npm", "run", "dev"]
+CMD ["pnpm", "dev"]
 
 # Etapa de producción
 FROM node:24.20-alpine AS production
@@ -49,11 +50,11 @@ RUN apk add --no-cache ghostscript
 
 WORKDIR /app
 
-# Copiar archivos de dependencias
-COPY package*.json ./
+# Copiar archivos de dependencias (SPEC-033: pnpm)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 # Instalar solo dependencias de producción
-RUN npm install --omit=dev
+RUN corepack enable && corepack prepare pnpm@11.9.0 --activate && pnpm install --frozen-lockfile --prod
 
 # Copiar archivos compilados desde la etapa de construcción
 COPY --from=builder /app/dist ./dist
